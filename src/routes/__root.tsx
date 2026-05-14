@@ -5,6 +5,7 @@ import {
   HeadContent,
   Scripts,
   useLocation,
+  useRouter,
 } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { 
@@ -35,7 +36,7 @@ import {
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
-import { useTelegramUser } from "@/lib/telegram";
+import { useTelegramUser, haptic, useTelegramBackButton } from "@/lib/telegram";
 import { api, driveImg, type Artist } from "@/lib/api";
 
 function GlobalLinkModal({ onClose }: { onClose: () => void }) {
@@ -217,8 +218,12 @@ function BottomNav() {
     { to: "/ranking", label: "Rank", icon: Star },
   ];
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-white/5 bg-background/85 backdrop-blur-xl">
-      <div className="mx-auto max-w-md flex items-center justify-around px-2 py-0.5 pb-[max(0.15rem,env(safe-area-inset-bottom))]">
+    <nav
+      className="fixed bottom-0 inset-x-0 z-40 border-t border-white/5 bg-background/90 backdrop-blur-xl"
+      role="navigation"
+      aria-label="Navegação principal"
+    >
+      <div className="mx-auto max-w-md flex items-stretch justify-around px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {items.map((it) => {
           const active = pathname === it.to || (it.to !== "/" && pathname.startsWith(it.to));
           const Icon = it.icon;
@@ -227,15 +232,20 @@ function BottomNav() {
               key={it.to}
               to={it.to}
               search={it.search}
-              className={`flex flex-col items-center gap-0 px-3 py-1 transition-all ${
-                active ? "text-primary opacity-100" : "text-muted-foreground opacity-60"
+              onClick={() => haptic.selection()}
+              aria-label={it.label}
+              aria-current={active ? "page" : undefined}
+              className={`relative flex flex-col items-center justify-center gap-0.5 min-h-11 min-w-11 flex-1 rounded-2xl transition-colors ${
+                active ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              <Icon
-                className={`size-4.5 ${active ? "scale-105" : ""}`}
-                strokeWidth={active ? 3 : 2}
-              />
-              <span className={`text-[7px] font-black uppercase tracking-tighter ${active ? 'visible' : 'visible'}`}>{it.label}</span>
+              {active && (
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-primary" />
+              )}
+              <Icon className="size-[22px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${active ? "opacity-100" : "opacity-80"}`}>
+                {it.label}
+              </span>
             </Link>
           );
         })}
@@ -259,38 +269,53 @@ function RootInner() {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [manualId, setManualId] = useState("");
   const { user, ready, setUserManually } = useTelegramUser();
+  const router = useRouter();
+  const { pathname } = useLocation();
 
   useEffect(() => {
     (window as any).setShowIdModal = setShowIdModal;
     (window as any).setShowLinkModal = setShowLinkModal;
   }, []);
 
+  // Sincroniza cores do header/background do Telegram com o tema do app
+  useEffect(() => {
+    const w = window.Telegram?.WebApp;
+    if (!w) return;
+    try {
+      w.setHeaderColor?.("#000000");
+      w.setBackgroundColor?.("#000000");
+    } catch {}
+  }, []);
+
+  // BackButton nativo do Telegram em rotas internas
+  const isHome = pathname === "/";
+  const handleBack = () => {
+    haptic.light();
+    router.history.back();
+  };
+  useTelegramBackButton(!isHome, handleBack);
+
   const handleManualIdSubmit = () => {
     if (!manualId.trim()) return;
     setUserManually(manualId.trim(), "Magnata");
     setShowIdModal(false);
+    haptic.success();
     toast.success("ID Definido", { description: `Conectado como ${manualId}` });
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-background pb-24 pt-16">
-      {/* Filtro SVG global */}
-      <svg style={{ position: "absolute", width: 0, height: 0 }} aria-hidden="true">
-        <filter id="charcoal-filter">
-          <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="3" result="noise" />
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" />
-        </filter>
-      </svg>
-
       {/* Top Bar */}
       <nav className="fixed top-0 inset-x-0 z-[60] h-16 bg-background/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6">
-         <Link to="/" className="flex items-center gap-2">
+         <Link to="/" className="flex items-center gap-2" onClick={() => haptic.selection()}>
             <div className="size-8 rounded-lg bg-primary text-primary-foreground grid place-items-center font-black italic tracking-tighter">E</div>
             <span className="font-black italic uppercase tracking-tighter text-base">Empire Hub</span>
          </Link>
          <button 
-           onClick={() => setIsOpen(!isOpen)}
-           className="p-2 -mr-2 text-foreground active:scale-95 transition-transform"
+           onClick={() => { haptic.light(); setIsOpen(!isOpen); }}
+           aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
+           aria-expanded={isOpen}
+           className="min-h-11 min-w-11 -mr-2 grid place-items-center text-foreground active:scale-95 transition-transform"
          >
            {isOpen ? <X className="size-6 text-primary" /> : <Menu className="size-6" />}
          </button>

@@ -1,20 +1,95 @@
 import { useEffect, useState } from "react";
 
-// Tipos mínimos pro Telegram WebApp
+// ---------- Tipos mínimos do Telegram WebApp ----------
+type HapticImpactStyle = "light" | "medium" | "heavy" | "rigid" | "soft";
+type HapticNotificationType = "error" | "success" | "warning";
+
 declare global {
   interface Window {
     Telegram?: {
       WebApp?: {
         ready: () => void;
         expand: () => void;
+        close?: () => void;
         setHeaderColor?: (c: string) => void;
         setBackgroundColor?: (c: string) => void;
+        openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
+        openTelegramLink?: (url: string) => void;
         initDataUnsafe?: { user?: { id: number; first_name?: string; username?: string } };
+        colorScheme?: "light" | "dark";
+        themeParams?: Record<string, string>;
+        onEvent?: (event: string, cb: () => void) => void;
+        offEvent?: (event: string, cb: () => void) => void;
+        BackButton?: {
+          show: () => void;
+          hide: () => void;
+          onClick: (cb: () => void) => void;
+          offClick: (cb: () => void) => void;
+        };
+        MainButton?: {
+          text: string;
+          show: () => void;
+          hide: () => void;
+          enable: () => void;
+          disable: () => void;
+          onClick: (cb: () => void) => void;
+          offClick: (cb: () => void) => void;
+          setText: (t: string) => void;
+          showProgress: (leaveActive?: boolean) => void;
+          hideProgress: () => void;
+        };
+        HapticFeedback?: {
+          impactOccurred: (style: HapticImpactStyle) => void;
+          notificationOccurred: (type: HapticNotificationType) => void;
+          selectionChanged: () => void;
+        };
       };
     };
   }
 }
 
+// ---------- Helpers de UX nativa ----------
+const tg = () => (typeof window !== "undefined" ? window.Telegram?.WebApp : undefined);
+
+export const haptic = {
+  light: () => tg()?.HapticFeedback?.impactOccurred("light"),
+  medium: () => tg()?.HapticFeedback?.impactOccurred("medium"),
+  heavy: () => tg()?.HapticFeedback?.impactOccurred("heavy"),
+  selection: () => tg()?.HapticFeedback?.selectionChanged(),
+  success: () => tg()?.HapticFeedback?.notificationOccurred("success"),
+  error: () => tg()?.HapticFeedback?.notificationOccurred("error"),
+  warning: () => tg()?.HapticFeedback?.notificationOccurred("warning"),
+};
+
+/** Abre links externos respeitando o contexto do Telegram WebApp */
+export function openExternal(url: string) {
+  const w = tg();
+  if (w?.openLink) {
+    w.openLink(url, { try_instant_view: false });
+  } else if (typeof window !== "undefined") {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+/** Hook para mostrar/ocultar o BackButton nativo do Telegram */
+export function useTelegramBackButton(show: boolean, onClick: () => void) {
+  useEffect(() => {
+    const bb = tg()?.BackButton;
+    if (!bb) return;
+    if (show) {
+      bb.show();
+      bb.onClick(onClick);
+      return () => {
+        bb.offClick(onClick);
+        bb.hide();
+      };
+    } else {
+      bb.hide();
+    }
+  }, [show, onClick]);
+}
+
+// ---------- Hook principal ----------
 export interface TgUser {
   id: string;
   name?: string;
@@ -23,8 +98,8 @@ export interface TgUser {
   isTest: boolean;
 }
 
-export function useTelegramUser(): { 
-  user: TgUser | null; 
+export function useTelegramUser(): {
+  user: TgUser | null;
   ready: boolean;
   setUserManually: (id: string, name?: string) => void;
 } {
@@ -32,23 +107,18 @@ export function useTelegramUser(): {
   const [ready, setReady] = useState(false);
 
   const setUserManually = (id: string, name?: string) => {
-    const newUser = {
-      id,
-      name: name || "Usuário Manual",
-      isTest: true,
-    };
+    const newUser = { id, name: name || "Usuário Manual", isTest: true };
     setUser(newUser);
     localStorage.setItem("tg_user_cache", JSON.stringify(newUser));
     setReady(true);
   };
 
-  // Função auxiliar para tentar pegar usuario de uma string de initData
   const userFromInitData = (str: string) => {
     try {
       const p = new URLSearchParams(str);
       const u = p.get("user");
       if (u) return JSON.parse(u);
-    } catch (e) {
+    } catch {
       return null;
     }
   };
@@ -56,17 +126,13 @@ export function useTelegramUser(): {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // 1) Procure por IDs comuns na URL (id, tg_id, user_id, uid, telegram_id)
     const params = new URLSearchParams(window.location.search);
-    console.log("DEBUG URL Params:", window.location.search);
-
     const urlId =
       params.get("id") ||
       params.get("tg_id") ||
       params.get("user_id") ||
       params.get("uid") ||
       params.get("telegram_id") ||
-      params.get("tgid") ||
       params.get("tgid");
 
     const nameFromUrl =
@@ -76,7 +142,6 @@ export function useTelegramUser(): {
       params.get("user_name");
 
     if (urlId) {
-      console.log("Usuário detectado via URL:", urlId);
       const newUser = {
         id: urlId,
         name: nameFromUrl || "Usuário #" + urlId.slice(-4),
@@ -88,17 +153,15 @@ export function useTelegramUser(): {
       return;
     }
 
-    // Tentar detectar usuario com polling para garantir que o SDK carregou
     let attempts = 0;
-    const maxAttempts = 20; // 2 segundos (100ms cada)
-    
+    const maxAttempts = 20;
+
     const checkUser = () => {
       attempts++;
-      const tg = window.Telegram?.WebApp;
-      let sdkUser = tg?.initDataUnsafe?.user;
-      
+      const w = window.Telegram?.WebApp;
+      const sdkUser = w?.initDataUnsafe?.user;
+
       if (sdkUser) {
-        console.log("Usuário detectado pelo SDK:", sdkUser.id);
         const newUser: TgUser = {
           id: String(sdkUser.id),
           name: sdkUser.first_name || sdkUser.username || "Usuário",
@@ -108,15 +171,14 @@ export function useTelegramUser(): {
         };
         setUser(newUser);
         localStorage.setItem("tg_user_cache", JSON.stringify(newUser));
-        if (tg) {
-          tg.ready();
-          tg.expand();
+        if (w) {
+          w.ready();
+          w.expand();
         }
         setReady(true);
         return true;
       }
-      
-      // Se chegamos aqui e temos initData bruto na URL/Hash, tentamos ele
+
       const searchParams = new URLSearchParams(window.location.search);
       const hash = window.location.hash.includes("?")
         ? window.location.hash.split("?")[1]
@@ -131,7 +193,6 @@ export function useTelegramUser(): {
       if (webAppDataStr) {
         const u = userFromInitData(webAppDataStr);
         if (u) {
-          console.log("Usuário detectado via initData manual:", u.id);
           const newUser = {
             id: String(u.id),
             name: u.first_name || u.username || "Usuário",
@@ -145,7 +206,6 @@ export function useTelegramUser(): {
       }
 
       if (attempts >= maxAttempts) {
-        // Tentar cache como última esperança antes do guest
         const cached = localStorage.getItem("tg_user_cache");
         if (cached) {
           try {
@@ -153,24 +213,18 @@ export function useTelegramUser(): {
             setUser(parsed);
             setReady(true);
             return true;
-          } catch(e) {}
+          } catch {}
         }
-        
-        console.warn("Tempo de detecção esgotado. Usando Guest.");
         setUser({ id: "guest", name: "Guest", isTest: true });
         setReady(true);
         return true;
       }
-      
       return false;
     };
 
-    // Primeira tentativa imediata
     if (!checkUser()) {
       const interval = setInterval(() => {
-        if (checkUser()) {
-          clearInterval(interval);
-        }
+        if (checkUser()) clearInterval(interval);
       }, 100);
       return () => clearInterval(interval);
     }

@@ -3,11 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   RefreshCw,
-  ChevronRight,
   TrendingUp,
   User,
-  Wallet,
-  Star,
   Plus,
   Radio,
   Music2,
@@ -18,136 +15,184 @@ import {
   ListMusic,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useTelegramUser } from "@/lib/telegram";
+import { useTelegramUser, haptic, openExternal } from "@/lib/telegram";
 import { api, driveImg, fmtEC, type Artist, type RadarItem, invalidateCache, type ChartData } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
+type LoadState<T> = { status: "loading" } | { status: "error"; error: string } | { status: "ok"; data: T };
+
 function Index() {
-  const [myArtists, setMyArtists] = useState<Artist[] | null>(null);
-  const [radarFeed, setRadarFeed] = useState<RadarItem[] | null>(null);
+  const [myArtists, setMyArtists] = useState<LoadState<Artist[]>>({ status: "loading" });
+  const [radarFeed, setRadarFeed] = useState<LoadState<RadarItem[]>>({ status: "loading" });
   const [topCharts, setTopCharts] = useState<Record<string, ChartData>>({});
+  const [syncing, setSyncing] = useState(false);
   const { user, ready } = useTelegramUser();
 
-  const fetchData = async () => {
-    // Carregar Meus Artistas
+  const fetchData = async (silent = false) => {
+    if (!silent) setSyncing(true);
+
+    const tasks: Promise<unknown>[] = [];
+
     if (user && user.id !== "guest") {
-      api.meusArtistas(user.id).then(setMyArtists).catch(() => setMyArtists([]));
+      setMyArtists({ status: "loading" });
+      tasks.push(
+        api
+          .meusArtistas(user.id)
+          .then((d) => setMyArtists({ status: "ok", data: d }))
+          .catch((e) => setMyArtists({ status: "error", error: String(e?.message || e) }))
+      );
     } else {
-      setMyArtists([]);
+      setMyArtists({ status: "ok", data: [] });
     }
-    
-    // Carregar Radar
-    api.radar().then(setRadarFeed).catch(() => setRadarFeed([]));
-    
-    // Carregar Charts
-    api.topCharts().then(setTopCharts).catch(() => {});
+
+    setRadarFeed({ status: "loading" });
+    tasks.push(
+      api
+        .radar()
+        .then((d) => setRadarFeed({ status: "ok", data: d }))
+        .catch((e) => setRadarFeed({ status: "error", error: String(e?.message || e) }))
+    );
+
+    tasks.push(api.topCharts().then(setTopCharts).catch(() => {}));
+
+    await Promise.allSettled(tasks);
+    if (!silent) setSyncing(false);
   };
 
   useEffect(() => {
     if (!ready) return;
-    fetchData();
+    fetchData(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, user]);
 
-  const handleSync = () => {
+  const handleSync = async () => {
+    if (syncing) return;
+    haptic.medium();
     invalidateCache();
-    toast.success("Empire Sincronizado", {
-      description: "Dados imperiais atualizados com sucesso.",
-    });
-    fetchData();
+    await fetchData(false);
+    haptic.success();
+    toast.success("Empire Sincronizado", { description: "Dados imperiais atualizados." });
   };
 
-  const openLinkModal = () => (window as any).setShowLinkModal?.(true);
+  const openLinkModal = () => {
+    haptic.light();
+    (window as any).setShowLinkModal?.(true);
+  };
 
   return (
     <div className="pb-24 px-4 pt-6 max-w-md mx-auto min-h-screen">
-      {/* Header Estilo Dashboard */}
-      <header className="flex items-center justify-between mb-6 animate-in fade-in slide-in-from-top-4 duration-700">
+      {/* Header */}
+      <header className="flex items-center justify-between mb-6 animate-in fade-in duration-500">
         <div>
           <h1 className="text-2xl font-black italic tracking-tighter uppercase leading-none mb-1">
             Empire <span className="text-primary">Hub</span>
           </h1>
-          <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-[0.2em] pr-1">
+          <p className="text-[11px] uppercase font-bold text-muted-foreground tracking-[0.15em]">
             Plataforma de Gestão Imperial
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button 
+          <button
             onClick={handleSync}
-            className="size-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center active:scale-90 transition-transform hover:bg-primary/10 hover:text-primary transition-colors"
-            title="Sincronizar"
+            disabled={syncing}
+            aria-label={syncing ? "Sincronizando" : "Sincronizar dados"}
+            aria-busy={syncing}
+            className="size-11 rounded-full bg-white/5 border border-white/10 grid place-items-center active:scale-90 transition-transform hover:bg-primary/10 hover:text-primary disabled:opacity-60"
           >
-            <RefreshCw className="size-4" />
+            <RefreshCw className={`size-4 ${syncing ? "animate-spin" : ""}`} aria-hidden="true" />
           </button>
-          <div className="size-10 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center">
+          <div className="size-11 rounded-full bg-primary/20 border border-primary/30 grid place-items-center overflow-hidden">
             {user?.photo_url ? (
-               <img src={user.photo_url} className="size-10 rounded-full object-cover" />
+              <img
+                src={user.photo_url}
+                className="size-11 rounded-full object-cover"
+                alt={user?.name ? `Foto de ${user.name}` : "Foto do usuário"}
+                loading="lazy"
+                decoding="async"
+              />
             ) : (
-               <User className="size-5 text-primary" />
+              <User className="size-5 text-primary" aria-hidden="true" />
             )}
           </div>
         </div>
       </header>
 
-      {/* CARROSSEL MEUS ARTISTAS (Destaque Principal) */}
-      <section className="mb-10 animate-in fade-in slide-in-from-left-4 duration-1000 delay-100">
+      {/* MEUS ARTISTAS */}
+      <section className="mb-10" aria-labelledby="meus-artistas-h">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-2">
-            <div className="size-2 rounded-full bg-primary animate-pulse" />
+          <h2 id="meus-artistas-h" className="text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2">
+            <span className="size-2 rounded-full bg-primary animate-pulse" aria-hidden="true" />
             Meus Artistas
           </h2>
-          <div className="flex items-center gap-4">
-            <Link 
-              to="/artistas" 
-              search={{ filter: "all" }}
-              className="text-[10px] font-black uppercase text-muted-foreground tracking-widest hover:text-primary transition-colors flex items-center gap-1.5"
-            >
-              <div className="size-1 bg-muted-foreground rounded-full" />
-              Empire Artists
-            </Link>
-            <Link 
-              to="/artistas" 
-              search={{ filter: "mine" }}
-              className="text-[10px] font-black uppercase text-primary tracking-widest hover:underline"
-            >
-              Ver Tudo
-            </Link>
-          </div>
-        </div>
-        
-        {myArtists === null ? (
-          <div className="flex gap-3 overflow-x-hidden">
-            {[1,2].map(i => <div key={i} className="min-w-[180px] h-24 rounded-[1.5rem] bg-white/5 animate-pulse" />)}
-          </div>
-        ) : myArtists.length === 0 ? (
-          <div 
-            onClick={openLinkModal}
-            className="p-6 rounded-[2rem] bg-card/50 border-2 border-dashed border-white/5 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-primary/5 transition-all group"
+          <Link
+            to="/artistas"
+            search={{ filter: "mine" }}
+            onClick={() => haptic.selection()}
+            className="text-[11px] font-bold uppercase text-primary tracking-wider hover:underline min-h-11 grid place-items-center"
           >
-            <Plus className="size-6 text-primary/40 group-hover:scale-110 transition-transform mb-2" />
-            <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-              Nenhum artista vinculado - Toque para conectar
-            </span>
+            Ver tudo
+          </Link>
+        </div>
+
+        {myArtists.status === "loading" ? (
+          <div className="flex gap-3 overflow-x-hidden">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="min-w-[110px] h-[7.5rem] rounded-[1.5rem] bg-white/5 animate-pulse" />
+            ))}
           </div>
+        ) : myArtists.status === "error" ? (
+          <div className="p-5 rounded-[1.5rem] bg-destructive/10 border border-destructive/20 text-center">
+            <p className="text-xs font-bold text-destructive mb-2">Não conseguimos carregar seus artistas</p>
+            <button
+              onClick={() => fetchData(false)}
+              className="text-[11px] font-black uppercase tracking-wider text-primary underline min-h-11"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        ) : myArtists.data.length === 0 ? (
+          <button
+            type="button"
+            onClick={openLinkModal}
+            className="w-full p-6 rounded-[1.75rem] bg-card/50 border-2 border-dashed border-primary/20 flex flex-col items-center justify-center text-center hover:bg-primary/5 transition-all group min-h-32"
+          >
+            <div className="size-12 rounded-2xl bg-primary/10 grid place-items-center mb-3 group-hover:scale-110 transition-transform">
+              <Plus className="size-6 text-primary" aria-hidden="true" />
+            </div>
+            <p className="text-sm font-black uppercase tracking-tight mb-1">Vincule seu primeiro artista</p>
+            <p className="text-[11px] font-medium text-muted-foreground leading-snug max-w-[18rem]">
+              Conecte uma lenda livre ao seu império para acompanhar saldo, projetos e charts.
+            </p>
+          </button>
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x">
-            {myArtists.map((a) => (
+            {myArtists.data.map((a) => (
               <Link
                 key={a.nome}
                 to="/artistas/$nome"
                 params={{ nome: a.nome }}
-                className="min-w-[110px] snap-center p-2 rounded-[1.5rem] bg-white/5 backdrop-blur-md border border-white/10 flex flex-col items-center gap-2 active:scale-95 transition-all group"
+                onClick={() => haptic.selection()}
+                className="min-w-[120px] snap-center p-2.5 rounded-[1.5rem] bg-white/5 backdrop-blur-md border border-white/10 flex flex-col items-center gap-2 active:scale-95 transition-all group"
               >
-                <div className="size-14 rounded-[1rem] bg-secondary overflow-hidden flex-shrink-0 border border-white/10 shadow-lg group-hover:scale-105 transition-transform">
-                  <img src={driveImg(a.foto, 150)} className="w-full h-full object-cover" alt={a.nome} />
+                <div className="size-16 rounded-2xl bg-secondary overflow-hidden flex-shrink-0 border border-white/10 shadow-lg group-hover:scale-105 transition-transform">
+                  <img
+                    src={driveImg(a.foto, 150)}
+                    className="w-full h-full object-cover"
+                    alt={`Foto de ${a.nome}`}
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </div>
                 <div className="text-center w-full px-1 overflow-hidden">
-                  <h3 className="text-xs font-black uppercase truncate leading-tight group-hover:text-primary transition-colors">
+                  <h3 className="text-[12px] font-black uppercase truncate leading-tight group-hover:text-primary transition-colors">
                     {a.nome}
                   </h3>
-                  <p className="text-[10px] font-bold text-primary/70 mt-0.5 whitespace-nowrap overflow-hidden">{fmtEC(a.saldo)}</p>
+                  <p className="text-[11px] font-bold text-primary/80 mt-0.5 whitespace-nowrap overflow-hidden">
+                    {fmtEC(a.saldo)}
+                  </p>
                 </div>
               </Link>
             ))}
@@ -155,209 +200,242 @@ function Index() {
         )}
       </section>
 
-      {/* BILLBOARD HOT 100 - Glass Style Highlight */}
-      {(topCharts.billboard_hot_100 || true) && (() => {
+      {/* BILLBOARD HOT 100 */}
+      {(() => {
         const data = topCharts.billboard_hot_100;
-        const finalUrl = data?.url || 'https://empirerpg-max.github.io/central/charts.html?tab=BILLBOARD%20HOT%20100';
-        
+        const finalUrl = data?.url || "https://empirerpg-max.github.io/central/charts.html?tab=BILLBOARD%20HOT%20100";
+
         return (
-          <section className="mb-12 animate-in fade-in zoom-in duration-1000 delay-300">
+          <section className="mb-12" aria-labelledby="billboard-h">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xs font-black uppercase tracking-[0.3em]">Billboard Hot 100 #1</h2>
+              <h2 id="billboard-h" className="text-xs font-black uppercase tracking-[0.2em]">
+                Billboard Hot 100 #1
+              </h2>
             </div>
-            <a 
-              href={finalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group relative block aspect-[16/10] rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl bg-white/5"
+            <button
+              type="button"
+              onClick={() => {
+                haptic.light();
+                openExternal(finalUrl);
+              }}
+              className="group relative block w-full aspect-[16/10] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl bg-white/5 text-left"
             >
               {data?.foto ? (
-                <img 
-                  src={driveImg(data.foto, 800)} 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
-                  alt="Billboard #1"
+                <img
+                  src={driveImg(data.foto, 800)}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  alt={data.musica ? `Capa: ${data.musica}` : "Billboard Hot 100"}
+                  loading="lazy"
+                  decoding="async"
                 />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-4 opacity-20">
-                  <TrendingUp className="size-20" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.5em]">Global Chart</span>
+                  <TrendingUp className="size-20" aria-hidden="true" />
+                  <span className="text-xs font-black uppercase tracking-[0.3em]">Global Chart</span>
                 </div>
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
-              
-              {/* Glass Info Overlay */}
-              <div className="absolute inset-x-4 bottom-4 p-5 rounded-[2rem] bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl">
-                <div className="flex items-center gap-4">
-                  <div className="size-12 rounded-full bg-primary flex items-center justify-center flex-shrink-0 animate-bounce">
-                     <TrendingUp className="size-6 text-black" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+
+              <div className="absolute inset-x-4 bottom-4 p-4 rounded-[1.5rem] bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="size-12 rounded-full bg-primary grid place-items-center flex-shrink-0">
+                    <TrendingUp className="size-6 text-black" aria-hidden="true" />
                   </div>
-                  <div className="min-w-0">
-                    <h4 className="text-white text-xs font-black uppercase tracking-tight leading-tight mb-1 line-clamp-1">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-white text-sm font-black uppercase tracking-tight leading-tight mb-0.5 line-clamp-1">
                       {data?.musica || "Ver Billboard Hot 100"}
-                    </h4>
-                    <p className="text-primary text-[10px] font-black uppercase tracking-widest truncate">
-                      {data?.artista || "Dados Semanais"}
+                    </h3>
+                    <p className="text-primary text-[11px] font-bold uppercase tracking-wider truncate">
+                      {data?.artista || "Dados semanais"}
                     </p>
                   </div>
                 </div>
               </div>
-              
-              <div className="absolute top-6 right-6">
-                <div className="px-5 py-2.5 rounded-full bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-xl">
-                  Charts This Week
-                </div>
+
+              <div className="absolute top-4 right-4">
+                <span className="px-3 py-1.5 rounded-full bg-primary text-black text-[10px] font-black uppercase tracking-wider shadow-lg">
+                  This week
+                </span>
               </div>
-            </a>
+            </button>
           </section>
         );
       })()}
 
-      {/* PLATFORM CHARTS - INTERACTIVE SCROLL */}
-      <section className="mb-12 animate-in fade-in slide-in-from-right-4 duration-1000 delay-400">
-        <h2 className="text-xs font-black uppercase tracking-[0.3em] mb-4 px-1 opacity-50 text-center">Global Top Positions</h2>
-        <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide -mx-4 px-4 snap-x">
+      {/* PLATFORM CHARTS */}
+      <section className="mb-12" aria-labelledby="platforms-h">
+        <h2 id="platforms-h" className="text-xs font-black uppercase tracking-[0.2em] mb-4 text-muted-foreground">
+          Top por plataforma
+        </h2>
+        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x">
           {[
-            { id: 'spotify', label: 'Spotify', icon: Music2, color: 'text-[#1DB954]', link: 'https://empirerpg-max.github.io/central/charts.html?tab=SPOTIFY' },
-            { id: 'apple_music', label: 'Apple Music', icon: Music, color: 'text-[#FC3C44]', link: 'https://empirerpg-max.github.io/central/charts.html?tab=APPLE%20MUSIC' },
-            { id: 'youtube', label: 'YouTube', icon: PlayCircle, color: 'text-[#FF0000]', link: 'https://empirerpg-max.github.io/central/charts.html?tab=YOUTUBE' },
-            { id: 'billboard_200', label: 'Billboard 200', icon: Disc, color: 'text-primary', link: 'https://empirerpg-max.github.io/central/charts.html?tab=DADOS%20%C3%81LBUNS' },
-            { id: 'digital_sales', label: 'Digital Sales', icon: BarChart3, color: 'text-blue-500', link: 'https://empirerpg-max.github.io/central/charts.html?tab=DIGITAL%20SALES' }
-          ].map(plat => {
+            { id: "spotify", label: "Spotify", icon: Music2, color: "text-[#1DB954]", link: "https://empirerpg-max.github.io/central/charts.html?tab=SPOTIFY" },
+            { id: "apple_music", label: "Apple Music", icon: Music, color: "text-[#FC3C44]", link: "https://empirerpg-max.github.io/central/charts.html?tab=APPLE%20MUSIC" },
+            { id: "youtube", label: "YouTube", icon: PlayCircle, color: "text-[#FF0000]", link: "https://empirerpg-max.github.io/central/charts.html?tab=YOUTUBE" },
+            { id: "billboard_200", label: "Billboard 200", icon: Disc, color: "text-primary", link: "https://empirerpg-max.github.io/central/charts.html?tab=DADOS%20%C3%81LBUNS" },
+            { id: "digital_sales", label: "Digital Sales", icon: BarChart3, color: "text-blue-500", link: "https://empirerpg-max.github.io/central/charts.html?tab=DIGITAL%20SALES" },
+          ].map((plat) => {
             const data = topCharts[plat.id];
             const finalUrl = data?.url || plat.link;
+            const Icon = plat.icon;
             return (
-              <a
+              <button
+                type="button"
                 key={plat.id}
-                href={finalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="min-w-[150px] snap-center group relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/5 backdrop-blur-md active:scale-95 transition-all shadow-xl"
+                onClick={() => {
+                  haptic.light();
+                  openExternal(finalUrl);
+                }}
+                aria-label={`Abrir parada ${plat.label}`}
+                className="min-w-[160px] snap-center group relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5 backdrop-blur-md active:scale-95 transition-all shadow-xl text-left"
               >
                 <div className="aspect-square overflow-hidden relative">
                   {data?.foto ? (
-                    <img 
-                      src={driveImg(data.foto, 400)} 
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 grayscale group-hover:grayscale-0" 
-                      alt={plat.label}
+                    <img
+                      src={driveImg(data.foto, 400)}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      alt={`${plat.label} #1`}
+                      loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <div className="w-full h-full bg-secondary flex flex-col items-center justify-center p-4">
-                       <plat.icon className={`size-12 ${plat.color} opacity-20 mb-2`} />
-                       <span className="text-[8px] font-black uppercase opacity-20 text-center">Abrir Parada</span>
+                      <Icon className={`size-12 ${plat.color} opacity-30 mb-2`} aria-hidden="true" />
+                      <span className="text-[11px] font-bold uppercase opacity-50 text-center">Abrir parada</span>
                     </div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-                  <div className="absolute top-3 left-3 size-9 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/10">
-                    <plat.icon className={`size-5 ${plat.color}`} />
+                  <div className="absolute top-3 left-3 size-9 rounded-full bg-black/60 backdrop-blur-md grid place-items-center border border-white/10">
+                    <Icon className={`size-5 ${plat.color}`} aria-hidden="true" />
                   </div>
                 </div>
-                <div className="p-4">
-                  <span className="text-[9px] font-black uppercase tracking-[0.1em] text-primary mb-1 block">{plat.label}</span>
-                  <h4 className="text-xs font-black uppercase leading-tight line-clamp-1">
-                    {data?.musica || "Ver Parada"}
+                <div className="p-3.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1 block">{plat.label}</span>
+                  <h4 className="text-[13px] font-black uppercase leading-tight line-clamp-1">
+                    {data?.musica || "Ver parada"}
                   </h4>
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold truncate opacity-60">
-                    {data?.artista || "Clique para abrir"}
+                  <p className="text-[11px] text-muted-foreground font-medium truncate mt-0.5">
+                    {data?.artista || "Toque para abrir"}
                   </p>
                 </div>
-              </a>
+              </button>
             );
           })}
         </div>
       </section>
 
-      {/* EMPIRE PLAYLISTS - NOVA SEÇÃO */}
-      <section className="mb-12 animate-in fade-in slide-in-from-left-4 duration-1000 delay-[450ms]">
-        <div className="flex items-center justify-between mb-4 px-1">
-          <h2 className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-2">
-            <ListMusic className="size-4 text-primary" />
+      {/* EMPIRE PLAYLISTS */}
+      <section className="mb-12" aria-labelledby="playlists-h">
+        <div className="flex items-center justify-between mb-4">
+          <h2 id="playlists-h" className="text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2">
+            <ListMusic className="size-4 text-primary" aria-hidden="true" />
             Empire Playlists
           </h2>
-          <Link to="/playlists" className="text-[9px] font-black uppercase text-muted-foreground tracking-widest hover:text-primary transition-colors">Explorar Todas</Link>
+          <Link
+            to="/playlists"
+            onClick={() => haptic.selection()}
+            className="text-[11px] font-bold uppercase text-primary tracking-wider hover:underline min-h-11 grid place-items-center"
+          >
+            Explorar
+          </Link>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <a 
-            href="https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="group relative h-28 rounded-[2rem] overflow-hidden border border-white/5 bg-[#1DB954]/10 transition-all hover:border-[#1DB954]/40"
+          <button
+            type="button"
+            onClick={() => { haptic.light(); openExternal("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"); }}
+            className="group relative h-32 rounded-[1.75rem] overflow-hidden border border-white/5 bg-[#1DB954]/10 transition-all hover:border-[#1DB954]/40 text-left"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-[#1DB954]/20 to-transparent" />
             <div className="relative p-4 h-full flex flex-col justify-between">
-              <Music2 className="size-6 text-[#1DB954]" />
+              <Music2 className="size-7 text-[#1DB954]" aria-hidden="true" />
               <div>
-                <p className="text-[8px] font-black uppercase tracking-widest text-[#1DB954]/70">Spotify</p>
-                <h4 className="text-[11px] font-black uppercase tracking-tight text-white leading-tight">Elite Hits</h4>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#1DB954]">Spotify</p>
+                <h3 className="text-sm font-black uppercase tracking-tight leading-tight">Elite Hits</h3>
               </div>
             </div>
-            <div className="absolute -bottom-4 -right-4 size-16 bg-[#1DB954] opacity-5 blur-2xl group-hover:opacity-20 transition-opacity" />
-          </a>
-          
-          <a 
-            href="https://music.apple.com/us/playlist/todays-hits/pl.f4d1e2e1" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="group relative h-28 rounded-[2rem] overflow-hidden border border-white/5 bg-[#FC3C44]/10 transition-all hover:border-[#FC3C44]/40"
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { haptic.light(); openExternal("https://music.apple.com/us/playlist/todays-hits/pl.f4d1e2e1"); }}
+            className="group relative h-32 rounded-[1.75rem] overflow-hidden border border-white/5 bg-[#FC3C44]/10 transition-all hover:border-[#FC3C44]/40 text-left"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-[#FC3C44]/20 to-transparent" />
             <div className="relative p-4 h-full flex flex-col justify-between">
-              <Music className="size-6 text-[#FC3C44]" />
+              <Music className="size-7 text-[#FC3C44]" aria-hidden="true" />
               <div>
-                <p className="text-[8px] font-black uppercase tracking-widest text-[#FC3C44]/70">Apple Music</p>
-                <h4 className="text-[11px] font-black uppercase tracking-tight text-white leading-tight">Chart Top 50</h4>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#FC3C44]">Apple Music</p>
+                <h3 className="text-sm font-black uppercase tracking-tight leading-tight">Chart Top 50</h3>
               </div>
             </div>
-            <div className="absolute -bottom-4 -right-4 size-16 bg-[#FC3C44] opacity-5 blur-2xl group-hover:opacity-20 transition-opacity" />
-          </a>
+          </button>
         </div>
       </section>
 
-      {/* Radar Feed - Compact Design */}
-      <section className="animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500">
+      {/* RADAR FEED */}
+      <section aria-labelledby="radar-h">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-2">
-             <Radio className="size-4 text-red-500 animate-pulse" />
-             Radar Feed
+          <h2 id="radar-h" className="text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2">
+            <Radio className="size-4 text-red-500 animate-pulse" aria-hidden="true" />
+            Radar Feed
           </h2>
-          <span className="text-[10px] font-black uppercase text-muted-foreground opacity-30">Últimas Atualizações</span>
+          <span className="text-[11px] font-bold uppercase text-muted-foreground">Ao vivo</span>
         </div>
-        
-        <div className="space-y-4">
-          {radarFeed === null ? (
-            [1,2,3].map(i => <div key={i} className="h-20 rounded-[2rem] bg-white/5 animate-pulse" />)
-          ) : radarFeed.length === 0 ? (
-             <div className="p-10 text-center text-xs uppercase font-black text-muted-foreground opacity-30">Silêncio no Radar...</div>
-          ) : (
-            radarFeed.map((item, idx) => (
-              <div 
-                key={idx}
-                className="flex items-center gap-4 p-5 rounded-[2.5rem] bg-card/40 border border-white/5 hover:bg-white/5 transition-colors group"
+
+        <div className="space-y-3">
+          {radarFeed.status === "loading" ? (
+            [1, 2, 3].map((i) => <div key={i} className="h-20 rounded-[1.5rem] bg-white/5 animate-pulse" />)
+          ) : radarFeed.status === "error" ? (
+            <div className="p-5 rounded-[1.5rem] bg-destructive/10 border border-destructive/20 text-center">
+              <p className="text-xs font-bold text-destructive mb-2">Radar indisponível</p>
+              <button
+                onClick={() => fetchData(false)}
+                className="text-[11px] font-black uppercase tracking-wider text-primary underline min-h-11"
               >
-                <div className="size-14 rounded-[1.5rem] bg-secondary flex-shrink-0 overflow-hidden ring-2 ring-white/5 border border-white/10">
-                  <img src={driveImg(item.foto, 150)} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" alt="Radar" />
+                Tentar novamente
+              </button>
+            </div>
+          ) : radarFeed.data.length === 0 ? (
+            <div className="p-8 text-center text-xs uppercase font-bold text-muted-foreground">
+              Silêncio no radar — nada por aqui ainda.
+            </div>
+          ) : (
+            radarFeed.data.map((item, idx) => (
+              <article
+                key={idx}
+                className="flex items-center gap-3 p-4 rounded-[1.5rem] bg-card/40 border border-white/5 hover:bg-white/5 transition-colors group"
+              >
+                <div className="size-12 rounded-2xl bg-secondary flex-shrink-0 overflow-hidden border border-white/10">
+                  <img
+                    src={driveImg(item.foto, 150)}
+                    className="w-full h-full object-cover"
+                    alt={item.nome ? `Foto de ${item.nome}` : "Radar"}
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-2">
-                    <h4 className="text-xs font-black uppercase truncate group-hover:text-primary transition-colors">
+                    <h3 className="text-sm font-black uppercase truncate group-hover:text-primary transition-colors">
                       {item.nome}
-                    </h4>
-                    <span className="text-[10px] font-mono text-primary/50 flex-shrink-0 uppercase">
+                    </h3>
+                    <span className="text-[10px] font-bold text-primary/70 flex-shrink-0 uppercase tracking-wider">
                       Live
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground/80 font-medium line-clamp-1 mt-0.5">
+                  <p className="text-[12px] text-muted-foreground font-medium line-clamp-1 mt-0.5">
                     {item.acao}
                   </p>
                 </div>
-              </div>
+              </article>
             ))
           )}
         </div>
       </section>
 
-      <footer className="mt-16 text-center pb-8 border-t border-white/5 pt-8">
-        <p className="text-[9px] font-black uppercase tracking-[0.4em] text-muted-foreground/20">
-           Empire Hub • Est. 2026 • RPG Industry
+      <footer className="mt-12 text-center pb-6 border-t border-white/5 pt-6">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">
+          Empire Hub • Est. 2026
         </p>
       </footer>
     </div>
