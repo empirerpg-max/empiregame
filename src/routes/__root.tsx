@@ -36,7 +36,7 @@ import {
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
-import { useTelegramUser } from "@/lib/telegram";
+import { useTelegramUser, haptic, useTelegramBackButton } from "@/lib/telegram";
 import { api, driveImg, type Artist } from "@/lib/api";
 
 function GlobalLinkModal({ onClose }: { onClose: () => void }) {
