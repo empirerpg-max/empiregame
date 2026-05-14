@@ -244,6 +244,15 @@ function BottomNav() {
 }
 
 function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RootInner />
+    </QueryClientProvider>
+  );
+}
+
+function RootInner() {
   const [isOpen, setIsOpen] = useState(false);
   const [showIdModal, setShowIdModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
