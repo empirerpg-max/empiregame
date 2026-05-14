@@ -206,7 +206,7 @@ export const MemoriaDaFama: React.FC = () => {
     setScore(finalScore);
     
     confetti({
-      articleCount: 150,
+      particleCount: 150,
       spread: 70,
       origin: { y: 0.6 },
       colors: ['#c84bff', '#ffcc00', '#ffffff']

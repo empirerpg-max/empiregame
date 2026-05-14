@@ -517,9 +517,12 @@ export const api = {
   },
 
   // ---- Queridômetro ----
-  async getQueridometroStatus(tgId: string): Promise<CommonResponse & { 
-    meuPerfil?: any, 
-    artistas?: any[], 
+  async getQueridometroStatus(tgId: string): Promise<CommonResponse & {
+    meuPerfil?: any,
+    artistas?: any[],
+    artistasAlvos?: any[],
+    meusArtistas?: any[],
+    ranking?: any[],
     votosRestantes?: number,
     reacoesRecebidas?: any[],
     configEmojis?: any[],

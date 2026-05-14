@@ -33,7 +33,7 @@ function PayolaPage() {
 
   useEffect(() => {
     if (selectedArtist) {
-      api.listaMusicas(selectedArtist).then(setMusicas);
+      (api as any).listaMusicas?.(selectedArtist).then(setMusicas);
     }
   }, [selectedArtist]);
 

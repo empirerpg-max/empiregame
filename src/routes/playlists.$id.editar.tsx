@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { api, type PlaylistPayload } from "@/lib/api";
 import { PlaylistEditor } from "@/components/PlaylistEditor";
