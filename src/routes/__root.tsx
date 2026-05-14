@@ -1,11 +1,12 @@
 import {
   Outlet,
   Link,
-  createRootRoute,
+  createRootRouteWithContext,
   HeadContent,
   Scripts,
   useLocation,
 } from "@tanstack/react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { 
   Home, 
   Crown, 
@@ -138,7 +139,7 @@ function NotFoundComponent() {
   );
 }
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -194,11 +195,15 @@ export const Route = createRootRoute({
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      <HeadContent />
-      {children}
-      <Scripts />
-    </>
+    <html lang="pt-BR" className="dark">
+      <head>
+        <HeadContent />
+      </head>
+      <body className="dark bg-background text-foreground">
+        {children}
+        <Scripts />
+      </body>
+    </html>
   );
 }
 
