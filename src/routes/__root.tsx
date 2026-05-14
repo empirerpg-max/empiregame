@@ -295,6 +295,18 @@ function RootInner() {
   };
   useTelegramBackButton(!isHome, handleBack);
 
+  // Scroll para o topo a cada navegação (UX padrão de apps mobile)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    }
+  }, [pathname]);
+
+  // Fechar menu hamburguer ao navegar
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
   const handleManualIdSubmit = () => {
     if (!manualId.trim()) return;
     setUserManually(manualId.trim(), "Magnata");
