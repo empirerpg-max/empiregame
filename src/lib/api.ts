@@ -117,7 +117,7 @@ async function rawCall<T = unknown>(params: Record<string, unknown>): Promise<T>
     // Mas o JSON.parse(e.postData.contents) no backend espera esse formato.
   }
 
-  const url = isPost ? SCRIPT_URL : `${SCRIPT_URL}?${qs(params)}`;
+  const url = isPost ? SCRIPT_URL : `${SCRIPT_URL}?${qs(params as Record<string, string | number | undefined>)}`;
   const res = await fetch(url, options);
   const text = await res.text();
   try {
