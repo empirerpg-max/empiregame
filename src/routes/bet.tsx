@@ -195,9 +195,9 @@ function BetPage() {
                   <img src={driveImg(m.capa, 40)} className="size-8 rounded object-cover border border-white/10" />
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-black leading-none mb-1">{m.musica}</p>
-                    <p className="text-[9px] text-muted-foreground font-bold">{m.artista}</p>
+                    <p className="text-[11px] text-muted-foreground font-bold">{m.artista}</p>
                   </div>
-                  <div className="text-primary text-[8px] font-black uppercase opacity-0 group-hover:opacity-100">+ Adicionar</div>
+                  <div className="text-primary text-[11px] font-black uppercase opacity-0 group-hover:opacity-100">+ Adicionar</div>
                 </button>
               ))}
             </div>
@@ -209,7 +209,7 @@ function BetPage() {
             <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground">
               Músicas Disponíveis: {betData?.semana}
             </h2>
-            <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[9px] font-black uppercase border border-primary/20">
+            <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[11px] font-black uppercase border border-primary/20">
                {betData?.musicas.length || 0} Opções
             </div>
           </div>
@@ -239,7 +239,7 @@ function BetPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="text-[8px] uppercase font-black text-muted-foreground mb-1">Posição</p>
+                      <p className="text-[11px] uppercase font-black text-muted-foreground mb-1">Posição</p>
                       <input
                         type="number"
                         min="1"

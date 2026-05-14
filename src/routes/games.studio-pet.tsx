@@ -291,7 +291,7 @@ function StudioPetGame() {
                <h1 className="text-lg font-cabinet font-black italic uppercase tracking-tighter text-white">Studio Pet <span className="text-primary text-xs ml-1">v2.0</span></h1>
                <div className="flex items-center gap-1.5">
                   <div className={`size-1.5 rounded-full ${isSyncing ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
-                  <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em]">{isSyncing ? 'Sincronizando Banco' : 'Sincronizado'}</p>
+                  <p className="text-[11px] font-black text-white/30 uppercase tracking-[0.2em]">{isSyncing ? 'Sincronizando Banco' : 'Sincronizado'}</p>
                </div>
             </div>
          </div>
@@ -425,7 +425,7 @@ function StudioPetGame() {
             
             <div className="mt-12 text-center relative z-10 px-8 py-3 bg-white/5 border border-white/5 rounded-full backdrop-blur-sm">
                <h3 className="text-white font-cabinet font-black italic uppercase text-sm tracking-widest">{activeArtist?.nome ? `${activeArtist.nome}'s Pet` : 'Mascote do Estúdio'}</h3>
-               <p className="text-white/20 text-[9px] font-black uppercase tracking-[0.4em]">Design Experimental Empire RPG</p>
+               <p className="text-white/20 text-[11px] font-black uppercase tracking-[0.4em]">Design Experimental Empire RPG</p>
             </div>
          </div>
 
@@ -449,7 +449,7 @@ function StudioPetGame() {
                  </div>
                  <div className="relative z-10 text-left">
                     <h4 className="text-white font-cabinet font-black italic uppercase group-hover:text-white transition-colors">{act.label}</h4>
-                    <p className="text-[9px] font-black text-white/30 uppercase tracking-widest">{act.sub} EC</p>
+                    <p className="text-[11px] font-black text-white/30 uppercase tracking-widest">{act.sub} EC</p>
                  </div>
               </button>
             ))}
@@ -468,7 +468,7 @@ function StudioPetGame() {
                     <div className="size-8 bg-white/5 rounded-xl flex items-center justify-center text-lg shadow-sm">{log.icon}</div>
                     <div className="flex-1">
                        <p className="text-[12px] text-white/60 font-medium leading-relaxed">{log.msg}</p>
-                       <span className="text-[9px] font-black text-white/10 uppercase tracking-widest group-hover:text-white/20 transition-colors">{log.time}</span>
+                       <span className="text-[11px] font-black text-white/10 uppercase tracking-widest group-hover:text-white/20 transition-colors">{log.time}</span>
                     </div>
                  </motion.div>
                ))}

@@ -35,7 +35,7 @@ function ArtistasList() {
   return (
     <main className="flex-1 mx-auto w-full max-w-2xl px-4 pt-6">
       <header className="mb-4">
-        <p className="text-[8px] uppercase tracking-[0.2em] text-primary/70 font-black mb-1">
+        <p className="text-[11px] uppercase tracking-[0.2em] text-primary/70 font-black mb-1">
           {filter === "all" ? "A Indústria" : "Seu Plantel"}
         </p>
         <h1 className="text-xl font-black tracking-tighter uppercase italic">
@@ -123,12 +123,12 @@ function ArtistasList() {
                         <div className="flex-1 min-w-0 flex flex-col pt-1">
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                             {generoVal && (
-                              <span className="text-[8px] font-black uppercase tracking-widest bg-primary/20 text-primary px-2 py-0.5 rounded border border-primary/30 shadow-sm">
+                              <span className="text-[11px] font-black uppercase tracking-widest bg-primary/20 text-primary px-2 py-0.5 rounded border border-primary/30 shadow-sm">
                                 {generoVal}
                               </span>
                             )}
                             {paisVal && (
-                              <span className="text-[8px] font-bold text-white/90 uppercase tracking-tight bg-white/10 px-2 py-0.5 rounded border border-white/10 shadow-sm backdrop-blur-md flex items-center gap-1">
+                              <span className="text-[11px] font-bold text-white/90 uppercase tracking-tight bg-white/10 px-2 py-0.5 rounded border border-white/10 shadow-sm backdrop-blur-md flex items-center gap-1">
                                 <span className="opacity-50">📍</span> {paisVal}
                               </span>
                             )}
@@ -179,7 +179,7 @@ function ArtistasList() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-black text-sm tracking-tight truncate">{a.nome}</p>
-                      <p className="text-[8px] font-black text-primary uppercase tracking-widest truncate">
+                      <p className="text-[11px] font-black text-primary uppercase tracking-widest truncate">
                         {fmtEC(a.saldo)} <span className="text-muted-foreground/40 mx-1">•</span> {a.gravadora}
                       </p>
                     </div>

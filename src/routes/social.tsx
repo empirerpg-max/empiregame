@@ -277,7 +277,7 @@ function SocialPage() {
   };
 
   const neoCard = "border-[3.5px] rounded-[24px] p-4 sm:p-5 mb-5 transition-all active:translate-x-[1px] active:translate-y-[1px]";
-  const neoBadge = "px-2.5 py-0.5 rounded-full border-2 border-black text-[8px] font-black uppercase tracking-tight text-white text-center";
+  const neoBadge = "px-2.5 py-0.5 rounded-full border-2 border-black text-[11px] font-black uppercase tracking-tight text-white text-center";
   const neoInput = "w-full border-3 border-black rounded-[16px] p-3.5 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-[#3D8BFF]/20 text-black bg-white placeholder:text-black/30 transition-all";
 
   return (
@@ -292,19 +292,19 @@ function SocialPage() {
           <div className="grid grid-cols-4 bg-white border-[3px] border-black rounded-2xl p-1 shadow-[4px_4px_0px_#000] w-full overflow-hidden">
              <button 
               onClick={() => setViewMode("Feed")}
-              className={`py-3 font-black text-[9px] uppercase rounded-xl transition-all flex items-center justify-center gap-1 ${viewMode === "Feed" ? 'bg-black text-white shadow-inner' : 'bg-white text-black hover:bg-zinc-50'}`}
+              className={`py-3 font-black text-[11px] uppercase rounded-xl transition-all flex items-center justify-center gap-1 ${viewMode === "Feed" ? 'bg-black text-white shadow-inner' : 'bg-white text-black hover:bg-zinc-50'}`}
              >Feed</button>
              <button 
               onClick={() => { setViewMode("Industry"); setSelectedIndustryArtist(null); }}
-              className={`py-3 font-black text-[9px] uppercase rounded-xl transition-all flex items-center justify-center gap-1 ${viewMode === "Industry" ? 'bg-black text-white shadow-inner' : 'bg-white text-black hover:bg-zinc-50'}`}
+              className={`py-3 font-black text-[11px] uppercase rounded-xl transition-all flex items-center justify-center gap-1 ${viewMode === "Industry" ? 'bg-black text-white shadow-inner' : 'bg-white text-black hover:bg-zinc-50'}`}
              >Perfis</button>
              <button 
               onClick={() => setViewMode("News")}
-              className={`py-3 font-black text-[9px] uppercase rounded-xl transition-all flex items-center justify-center gap-1 ${viewMode === "News" ? 'bg-black text-white shadow-inner' : 'bg-white text-black hover:bg-zinc-50'}`}
+              className={`py-3 font-black text-[11px] uppercase rounded-xl transition-all flex items-center justify-center gap-1 ${viewMode === "News" ? 'bg-black text-white shadow-inner' : 'bg-white text-black hover:bg-zinc-50'}`}
              >News</button>
              <button 
               onClick={() => setViewMode("Settings")}
-              className={`py-3 font-black text-[9px] uppercase rounded-xl transition-all flex items-center justify-center gap-1 ${viewMode === "Settings" ? 'bg-black text-white shadow-inner' : 'bg-white text-black hover:bg-zinc-50'}`}
+              className={`py-3 font-black text-[11px] uppercase rounded-xl transition-all flex items-center justify-center gap-1 ${viewMode === "Settings" ? 'bg-black text-white shadow-inner' : 'bg-white text-black hover:bg-zinc-50'}`}
              >Configurações</button>
           </div>
         </div>
@@ -354,7 +354,7 @@ function SocialPage() {
                           <div className="size-1 bg-black rounded-full animate-pulse" />
                         </motion.div>
                       )}
-                      <span className={`text-[9px] font-black uppercase italic tracking-tighter transition-all ${isActive ? 'text-[#3D8BFF] scale-105' : 'text-black/60'}`}>
+                      <span className={`text-[11px] font-black uppercase italic tracking-tighter transition-all ${isActive ? 'text-[#3D8BFF] scale-105' : 'text-black/60'}`}>
                         {art.nome.split(' ')[0]}
                       </span>
                    </button>
@@ -513,7 +513,7 @@ function SocialPage() {
                       </div>
                     )}
                     <div className="absolute top-4 left-4">
-                       <span className="bg-black text-[#D0FF43] text-[9px] font-black uppercase px-3 py-1 rounded-full border-2 border-white/20 shadow-lg">EXCLUSIVO</span>
+                       <span className="bg-black text-[#D0FF43] text-[11px] font-black uppercase px-3 py-1 rounded-full border-2 border-white/20 shadow-lg">EXCLUSIVO</span>
                     </div>
                   </div>
                   <div className="p-5 sm:p-6 bg-white shrink-0">
@@ -604,7 +604,7 @@ function SocialPage() {
                           </div>
                           <div className="flex items-center gap-2">
                              {perfil && (
-                               <span className="text-[9px] font-black uppercase bg-black text-white px-2 py-0.5 rounded-md italic">
+                               <span className="text-[11px] font-black uppercase bg-black text-white px-2 py-0.5 rounded-md italic">
                                  {perfil.seguidores?.toLocaleString() || 0} SEGS
                                </span>
                              )}
@@ -694,7 +694,7 @@ function SocialPage() {
                                      </div>
                                      <div className="text-left">
                                         <p className="text-[10px] font-black uppercase text-black leading-none">{selectedIndustryArtist.nome}</p>
-                                        <p className="text-[8px] font-black opacity-50 uppercase">{perfil?.handle || '@' + selectedIndustryArtist.nome.toLowerCase()}</p>
+                                        <p className="text-[11px] font-black opacity-50 uppercase">{perfil?.handle || '@' + selectedIndustryArtist.nome.toLowerCase()}</p>
                                      </div>
                                   </div>
 
@@ -826,7 +826,7 @@ function SocialPage() {
                   <div className="space-y-1">
                     <p className="text-[10px] font-black uppercase text-black opacity-60 italic text-black">Postar como:</p>
                     <div className={neoInput + " flex items-center gap-2 opacity-50 italic bg-zinc-50"}>
-                      <div className="size-5 rounded-full bg-black/10 flex items-center justify-center font-black text-[8px] overflow-hidden">
+                      <div className="size-5 rounded-full bg-black/10 flex items-center justify-center font-black text-[11px] overflow-hidden">
                         {activeArtist?.foto ? <img src={activeArtist.foto} className="w-full h-full object-cover" /> : activeArtist?.nome[0]}
                       </div>
                       {activeArtist?.nome || "Magnata"}

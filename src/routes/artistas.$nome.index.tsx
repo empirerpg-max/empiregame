@@ -268,7 +268,7 @@ function StatCardV2({ label, value, icon, accent }: any) {
           <div className={`size-7 rounded-lg grid place-items-center ${accent ? "bg-primary/20 text-primary" : "bg-white/10 text-white/50"}`}>
              {icon}
           </div>
-          <span className="text-[9px] font-black uppercase tracking-[0.15em] truncate">{label}</span>
+          <span className="text-[11px] font-black uppercase tracking-[0.15em] truncate">{label}</span>
        </div>
        <p className={`text-base font-black italic tracking-tighter truncate ${accent ? "text-primary" : "text-foreground"}`}>
          {value}
@@ -284,7 +284,7 @@ function StatCompact({ label, value, max, icon, color, reverse }: any) {
        <div className={`size-10 rounded-xl bg-white/5 grid place-items-center shadow-inner shrink-0 ${color}`}>{icon}</div>
        <div className="flex-1 min-w-0">
           <div className="flex justify-between items-end mb-2">
-             <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 truncate mr-1">{label}</span>
+             <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60 truncate mr-1">{label}</span>
              <span className="text-xs font-black tracking-tighter shrink-0">{value} <span className="opacity-30">/ {max}</span></span>
           </div>
           <div className="h-2 bg-white/10 rounded-full overflow-hidden p-[1px]">

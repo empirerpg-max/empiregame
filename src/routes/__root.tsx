@@ -80,7 +80,7 @@ function GlobalLinkModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} className="absolute top-4 right-4 p-2 opacity-50 hover:opacity-100"><X className="size-5" /></button>
           
           <h3 className="text-lg font-black tracking-tighter mb-1 text-center decoration-primary decoration-2 underline underline-offset-2">Vincular Artista</h3>
-          <p className="text-[8px] text-muted-foreground uppercase font-black tracking-widest text-center mb-4 opacity-60">Assine contrato com uma lenda disponível</p>
+          <p className="text-[11px] text-muted-foreground uppercase font-black tracking-widest text-center mb-4 opacity-60">Assine contrato com uma lenda disponível</p>
           
           <div className="relative mb-4">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -98,12 +98,12 @@ function GlobalLinkModal({ onClose }: { onClose: () => void }) {
                   <div className="size-10 rounded-xl bg-primary/10 grid place-items-center font-black text-primary text-xs flex-shrink-0">{a.nome[0]}</div>
                   <div className="flex-1 min-w-0">
                     <p className="font-black text-xs truncate uppercase tracking-tight">{a.nome}</p>
-                    <p className="text-[8px] text-muted-foreground uppercase font-black opacity-40">{a.gravadora}</p>
+                    <p className="text-[11px] text-muted-foreground uppercase font-black opacity-40">{a.gravadora}</p>
                   </div>
                   <button 
                     disabled={!!linking}
                     onClick={() => handleLink(a.nome)}
-                    className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-black text-[9px] uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
+                    className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
                   >
                     {linking === a.nome ? "..." : "Vincular"}
                   </button>
@@ -295,6 +295,18 @@ function RootInner() {
   };
   useTelegramBackButton(!isHome, handleBack);
 
+  // Scroll para o topo a cada navegação (UX padrão de apps mobile)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    }
+  }, [pathname]);
+
+  // Fechar menu hamburguer ao navegar
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
   const handleManualIdSubmit = () => {
     if (!manualId.trim()) return;
     setUserManually(manualId.trim(), "Magnata");
@@ -415,7 +427,7 @@ function RootInner() {
               </div>
               
               <h3 className="text-xl font-black tracking-tighter mb-2 text-center underline decoration-primary decoration-4 underline-offset-4">Identidade Imperial</h3>
-              <p className="text-[9px] text-muted-foreground uppercase font-black tracking-[0.2em] text-center mb-6 px-4 opacity-70">Sincronize seu passaporte para acessar seus bens e artistas.</p>
+              <p className="text-[11px] text-muted-foreground uppercase font-black tracking-[0.2em] text-center mb-6 px-4 opacity-70">Sincronize seu passaporte para acessar seus bens e artistas.</p>
               
               <div className="space-y-4">
                 <div className="relative">
@@ -426,7 +438,7 @@ function RootInner() {
                     placeholder="DIGITE SEU ID TELEGRAM"
                     className="w-full h-20 bg-white/5 border-2 border-white/10 rounded-3xl px-6 font-black text-center text-xl outline-none focus:border-primary/50 transition-all placeholder:text-white/10"
                   />
-                  {!manualId && <span className="absolute left-1/2 -translate-x-1/2 bottom-3 animate-pulse text-[8px] font-black text-primary uppercase">Obrigatório</span>}
+                  {!manualId && <span className="absolute left-1/2 -translate-x-1/2 bottom-3 animate-pulse text-[11px] font-black text-primary uppercase">Obrigatório</span>}
                 </div>
                 
                 <div className="grid grid-cols-2 gap-3 pt-2">

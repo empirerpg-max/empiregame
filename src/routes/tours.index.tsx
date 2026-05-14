@@ -145,7 +145,7 @@ function ToursIndex() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[9px] font-black uppercase tracking-widest text-primary/80">
+                      <span className="text-[11px] font-black uppercase tracking-widest text-primary/80">
                         {t.artista}
                       </span>
                       {t.status === "Em andamento" && (
@@ -158,10 +158,10 @@ function ToursIndex() {
                     </h3>
                     
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="flex items-center gap-1 text-[9px] text-muted-foreground font-black uppercase bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-black uppercase bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
                         <Users className="size-3 text-primary" /> {t.tipo}
                       </div>
-                      <div className="flex items-center gap-1 text-[9px] text-muted-foreground font-black uppercase bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-black uppercase bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
                         <Globe className="size-3 text-primary" /> {t.continente}
                       </div>
                     </div>
@@ -175,13 +175,13 @@ function ToursIndex() {
                 <div className="mt-5 relative z-10">
                   <div className="flex justify-between items-end mb-2 px-1">
                     <div>
-                      <p className="text-muted-foreground text-[8px] uppercase font-black tracking-widest mb-0.5">Execução</p>
+                      <p className="text-muted-foreground text-[11px] uppercase font-black tracking-widest mb-0.5">Execução</p>
                       <p className="text-xs font-black tracking-tight">
                         {t.realizados} <span className="text-muted-foreground/40 font-bold">/ {t.shows} SHOWS</span>
                       </p>
                     </div>
                     <div className="text-right">
-                       <p className="text-muted-foreground text-[8px] uppercase font-black tracking-widest mb-0.5">Esgotados</p>
+                       <p className="text-muted-foreground text-[11px] uppercase font-black tracking-widest mb-0.5">Esgotados</p>
                        <p className="text-xs font-black text-amber-500 tracking-tight">{t.soldOuts} SOLD OUTS</p>
                     </div>
                   </div>

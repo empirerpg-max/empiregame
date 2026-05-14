@@ -197,7 +197,7 @@ function FilantropiaPage() {
                             <p className="text-sm font-black italic uppercase truncate">{i.nome}</p>
                             <p className="text-[11px] text-muted-foreground truncate italic">{i.acao}</p>
                          </div>
-                         <div className="text-[9px] font-black text-muted-foreground/30">{i.timestamp.split(" ")[1]}</div>
+                         <div className="text-[11px] font-black text-muted-foreground/30">{i.timestamp.split(" ")[1]}</div>
                       </div>
                    ))}
                 </div>

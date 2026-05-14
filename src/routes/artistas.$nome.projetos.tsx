@@ -90,7 +90,7 @@ function Projetos() {
                        style={{ width: `${progress}%` }}
                      />
                    </div>
-                   <div className="flex items-center gap-4 text-[9px] font-bold uppercase text-muted-foreground">
+                   <div className="flex items-center gap-4 text-[11px] font-bold uppercase text-muted-foreground">
                      <span className="flex items-center gap-1">
                        <Star className="size-3 text-amber-500" /> {info.sold_outs || 0} Sold Outs
                      </span>

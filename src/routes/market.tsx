@@ -194,13 +194,13 @@ function MarketPage() {
                      </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[9px] uppercase font-black tracking-widest text-muted-foreground mb-0.5">{it.categoria}</p>
+                    <p className="text-[11px] uppercase font-black tracking-widest text-muted-foreground mb-0.5">{it.categoria}</p>
                     <h3 className="font-black text-base truncate tracking-tight text-white mb-0.5">{it.item}</h3>
                     <p className="text-[10px] text-muted-foreground font-medium truncate italic">{it.efeito || "Item disponível para aquisição no império."}</p>
                   </div>
                   <div className="text-right">
                      <p className="text-xs font-black text-primary">{fmtEC(it.preco)}</p>
-                     <span className="text-[8px] font-black uppercase tracking-tighter text-muted-foreground/30">Custo Total</span>
+                     <span className="text-[11px] font-black uppercase tracking-tighter text-muted-foreground/30">Custo Total</span>
                   </div>
                 </button>
               ))}
