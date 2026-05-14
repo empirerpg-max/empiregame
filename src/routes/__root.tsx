@@ -174,6 +174,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/130c3ca4-e5a2-42b6-b630-b40d622d345c/id-preview-b6ad8193--6634bb87-7b09-47bf-82c3-5047e8bc7caa.lovable.app-1777495380913.png",
       },
+      { name: "description", content: "Empire Hub Studio is a Telegram bot application for managing artist careers and social interactions." },
+      { property: "og:description", content: "Empire Hub Studio is a Telegram bot application for managing artist careers and social interactions." },
+      { name: "twitter:description", content: "Empire Hub Studio is a Telegram bot application for managing artist careers and social interactions." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de8b0c28-0fc0-4c33-a514-65dbb7cdd3d4/id-preview-56a4fc4c--1dfc0f66-4a5d-4eee-afb1-75282af91d1d.lovable.app-1778802833405.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de8b0c28-0fc0-4c33-a514-65dbb7cdd3d4/id-preview-56a4fc4c--1dfc0f66-4a5d-4eee-afb1-75282af91d1d.lovable.app-1778802833405.png" },
     ],
     links: [
       {
