@@ -269,38 +269,53 @@ function RootInner() {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [manualId, setManualId] = useState("");
   const { user, ready, setUserManually } = useTelegramUser();
+  const router = useRouter();
+  const { pathname } = useLocation();
 
   useEffect(() => {
     (window as any).setShowIdModal = setShowIdModal;
     (window as any).setShowLinkModal = setShowLinkModal;
   }, []);
 
+  // Sincroniza cores do header/background do Telegram com o tema do app
+  useEffect(() => {
+    const w = window.Telegram?.WebApp;
+    if (!w) return;
+    try {
+      w.setHeaderColor?.("#000000");
+      w.setBackgroundColor?.("#000000");
+    } catch {}
+  }, []);
+
+  // BackButton nativo do Telegram em rotas internas
+  const isHome = pathname === "/";
+  const handleBack = () => {
+    haptic.light();
+    router.history.back();
+  };
+  useTelegramBackButton(!isHome, handleBack);
+
   const handleManualIdSubmit = () => {
     if (!manualId.trim()) return;
     setUserManually(manualId.trim(), "Magnata");
     setShowIdModal(false);
+    haptic.success();
     toast.success("ID Definido", { description: `Conectado como ${manualId}` });
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-background pb-24 pt-16">
-      {/* Filtro SVG global */}
-      <svg style={{ position: "absolute", width: 0, height: 0 }} aria-hidden="true">
-        <filter id="charcoal-filter">
-          <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="3" result="noise" />
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" />
-        </filter>
-      </svg>
-
       {/* Top Bar */}
       <nav className="fixed top-0 inset-x-0 z-[60] h-16 bg-background/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6">
-         <Link to="/" className="flex items-center gap-2">
+         <Link to="/" className="flex items-center gap-2" onClick={() => haptic.selection()}>
             <div className="size-8 rounded-lg bg-primary text-primary-foreground grid place-items-center font-black italic tracking-tighter">E</div>
             <span className="font-black italic uppercase tracking-tighter text-base">Empire Hub</span>
          </Link>
          <button 
-           onClick={() => setIsOpen(!isOpen)}
-           className="p-2 -mr-2 text-foreground active:scale-95 transition-transform"
+           onClick={() => { haptic.light(); setIsOpen(!isOpen); }}
+           aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
+           aria-expanded={isOpen}
+           className="min-h-11 min-w-11 -mr-2 grid place-items-center text-foreground active:scale-95 transition-transform"
          >
            {isOpen ? <X className="size-6 text-primary" /> : <Menu className="size-6" />}
          </button>
