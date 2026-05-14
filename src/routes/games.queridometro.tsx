@@ -26,6 +26,7 @@ interface Participant {
   avatar?: string;
   foto?: string;
   saldo: number;
+  prestigio?: number;
 }
 
 interface Reaction {
@@ -275,7 +276,7 @@ function QueridometroGame() {
                   <h2 className="text-3xl font-cabinet font-black italic text-white uppercase tracking-tighter mb-2">{activeArtist.nome}</h2>
                   <div className="flex items-center gap-2 mb-6">
                      <div className="px-4 py-1.5 bg-primary/20 border border-primary/40 rounded-full text-[10px] font-black text-primary uppercase tracking-widest">
-                        NÍVEL DE PRESTÍGIO: {Math.floor(activeArtist.prestigio)}
+                        NÍVEL DE PRESTÍGIO: {Math.floor(activeArtist.prestigio || 0)}
                      </div>
                   </div>
                   <div className="text-5xl font-cabinet font-black text-gold italic">{Math.floor(activeArtist.saldo).toLocaleString()} EC</div>
