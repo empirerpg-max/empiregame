@@ -218,8 +218,12 @@ function BottomNav() {
     { to: "/ranking", label: "Rank", icon: Star },
   ];
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 border-t border-white/5 bg-background/85 backdrop-blur-xl">
-      <div className="mx-auto max-w-md flex items-center justify-around px-2 py-0.5 pb-[max(0.15rem,env(safe-area-inset-bottom))]">
+    <nav
+      className="fixed bottom-0 inset-x-0 z-40 border-t border-white/5 bg-background/90 backdrop-blur-xl"
+      role="navigation"
+      aria-label="Navegação principal"
+    >
+      <div className="mx-auto max-w-md flex items-stretch justify-around px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {items.map((it) => {
           const active = pathname === it.to || (it.to !== "/" && pathname.startsWith(it.to));
           const Icon = it.icon;
@@ -228,15 +232,20 @@ function BottomNav() {
               key={it.to}
               to={it.to}
               search={it.search}
-              className={`flex flex-col items-center gap-0 px-3 py-1 transition-all ${
-                active ? "text-primary opacity-100" : "text-muted-foreground opacity-60"
+              onClick={() => haptic.selection()}
+              aria-label={it.label}
+              aria-current={active ? "page" : undefined}
+              className={`relative flex flex-col items-center justify-center gap-0.5 min-h-11 min-w-11 flex-1 rounded-2xl transition-colors ${
+                active ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              <Icon
-                className={`size-4.5 ${active ? "scale-105" : ""}`}
-                strokeWidth={active ? 3 : 2}
-              />
-              <span className={`text-[7px] font-black uppercase tracking-tighter ${active ? 'visible' : 'visible'}`}>{it.label}</span>
+              {active && (
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-primary" />
+              )}
+              <Icon className="size-[22px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${active ? "opacity-100" : "opacity-80"}`}>
+                {it.label}
+              </span>
             </Link>
           );
         })}
