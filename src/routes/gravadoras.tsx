@@ -64,7 +64,7 @@ function Gravadoras() {
               </div>
               <div className="text-right">
                 <span className="font-black text-xl italic tracking-tighter text-amber-400">{g.prestigio}</span>
-                <p className="text-[8px] font-black uppercase text-muted-foreground/30 tracking-[0.1em]">Pontos</p>
+                <p className="text-[11px] font-black uppercase text-muted-foreground/30 tracking-[0.1em]">Pontos</p>
               </div>
             </li>
           ))}

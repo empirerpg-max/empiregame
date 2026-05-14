@@ -260,7 +260,7 @@ function QueridometroGame() {
                     </div>
                     <div className="text-right flex-shrink-0">
                        <div className="text-xl font-cabinet font-black text-gold italic leading-none">{p.totalVotos || 0}</div>
-                       <span className="text-[9px] font-black text-white/30 uppercase italic text-right block">Votos</span>
+                       <span className="text-[11px] font-black text-white/30 uppercase italic text-right block">Votos</span>
                     </div>
                  </div>
                ))}
@@ -280,7 +280,7 @@ function QueridometroGame() {
                      </div>
                   </div>
                   <div className="text-5xl font-cabinet font-black text-gold italic">{Math.floor(activeArtist.saldo).toLocaleString()} EC</div>
-                  <span className="text-[9px] font-black text-white/40 uppercase tracking-widest mt-2">Saldo em Empire Coins</span>
+                  <span className="text-[11px] font-black text-white/40 uppercase tracking-widest mt-2">Saldo em Empire Coins</span>
                </div>
 
                <div className="p-8 bg-white/5 border border-white/10 rounded-[40px] text-center space-y-4">
@@ -330,8 +330,8 @@ function QueridometroGame() {
                     >
                        <span className="text-4xl transition-transform group-hover:scale-125">{e.emoji}</span>
                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] font-black group-hover:text-black text-primary uppercase tracking-widest">-{e.custo} EC</span>
-                          <span className="text-[7px] font-black group-hover:text-black/60 text-white/40 uppercase">Custo de Envio</span>
+                          <span className="text-[11px] font-black group-hover:text-black text-primary uppercase tracking-widest">-{e.custo} EC</span>
+                          <span className="text-[11px] font-black group-hover:text-black/60 text-white/40 uppercase">Custo de Envio</span>
                        </div>
                     </button>
                   ))}
@@ -340,7 +340,7 @@ function QueridometroGame() {
 
              <div className="mt-16 flex items-center gap-3 opacity-30">
                 <Info className="size-4" />
-                <p className="text-[9px] font-black uppercase tracking-widest text-center px-8">O prestígio gerado para {selectedTarget.nome} é confidencial e muda semanalmente.</p>
+                <p className="text-[11px] font-black uppercase tracking-widest text-center px-8">O prestígio gerado para {selectedTarget.nome} é confidencial e muda semanalmente.</p>
              </div>
           </motion.div>
         )}

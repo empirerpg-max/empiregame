@@ -361,7 +361,7 @@ function HitsProducerGame() {
 
           <div className="flex-1 max-w-[200px] ml-10">
             <div className="flex justify-between items-end mb-1.5">
-              <span className="text-[9px] font-black uppercase text-primary tracking-[0.1em]">Hype Meter</span>
+              <span className="text-[11px] font-black uppercase text-primary tracking-[0.1em]">Hype Meter</span>
               <span className="text-[10px] font-black text-white">{Math.floor(currentInfo.hype)}%</span>
             </div>
             <div className="h-2.5 bg-white/10 rounded-full overflow-hidden border border-white/5 relative">
@@ -452,7 +452,7 @@ function HitsProducerGame() {
               </div>
 
               <div className="space-y-4">
-                 <p className="text-[9px] font-bold text-white/30 uppercase leading-relaxed tracking-widest">
+                 <p className="text-[11px] font-bold text-white/30 uppercase leading-relaxed tracking-widest">
                    🎯 PERFECT = +20pts | ❤️ PRECISÃO = +VIDA | 💀 ERRO = -VIDA <br/>
                    Teclas desktop: D F J K
                  </p>

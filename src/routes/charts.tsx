@@ -88,7 +88,7 @@ function Charts() {
                         ? fmtMoney(a.fortuna_total)
                         : `EC ${a.saldo.toLocaleString("pt-BR")}`}
                   </p>
-                  <p className="text-[7px] text-muted-foreground uppercase font-black">
+                  <p className="text-[11px] text-muted-foreground uppercase font-black">
                     {tab === "prestigio" ? "PONTOS" : "TOTAL"}
                   </p>
                 </div>

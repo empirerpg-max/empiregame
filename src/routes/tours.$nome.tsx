@@ -169,11 +169,11 @@ function TourDetails() {
                  <Crown className="size-10 m-auto text-primary" />
                )}
                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                 <span className="text-[8px] font-black uppercase text-white tabular-nums">Editar</span>
+                 <span className="text-[11px] font-black uppercase text-white tabular-nums">Editar</span>
                </div>
             </button>
             <div className="flex items-center gap-2 mb-2">
-               <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[8px] font-black uppercase tracking-widest border border-primary/20">
+               <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[11px] font-black uppercase tracking-widest border border-primary/20">
                   {info.tipo}
                </span>
                <span className="text-[10px] font-black text-white/40 uppercase tracking-widest italic">{artist.nome}</span>
@@ -184,7 +184,7 @@ function TourDetails() {
             
             {/* Revenue Badge - Top Center Focus */}
             <div className="mt-4 px-6 py-3 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-xl flex flex-col items-center">
-               <span className="text-[8px] font-black uppercase tracking-[0.2em] text-emerald-500/60 mb-1">Arrecadação Total</span>
+               <span className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-500/60 mb-1">Arrecadação Total</span>
                <span className="text-2xl font-black italic tracking-tighter text-emerald-400">{fmtEC(info.arrecadacao_total)}</span>
             </div>
           </div>
@@ -221,7 +221,7 @@ function TourDetails() {
         <section>
           <div className="flex items-center justify-between mb-5 px-1">
              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Itinerário de Shows</h3>
-             <div className="flex items-center gap-1.5 text-[9px] font-black text-primary uppercase">
+             <div className="flex items-center gap-1.5 text-[11px] font-black text-primary uppercase">
                 <Globe className="size-3" /> {info.local_atual || "EM ROTA MUNDIAL"}
              </div>
           </div>
@@ -245,7 +245,7 @@ function TourDetails() {
                       <div className={`size-14 rounded-2xl flex flex-col items-center justify-center shrink-0 border ${
                         isCurrent ? "bg-primary border-primary text-primary-foreground" : "bg-white/5 border-white/5 text-muted-foreground"
                       }`}>
-                         <span className="text-[8px] font-black uppercase -mb-0.5 opacity-60">MAI</span>
+                         <span className="text-[11px] font-black uppercase -mb-0.5 opacity-60">MAI</span>
                          <span className="text-xl font-black tracking-tighter leading-none">{s.data?.split('/')[0] || i + 1}</span>
                       </div>
                       
@@ -254,7 +254,7 @@ function TourDetails() {
                            {s.local || "Cidade do Império"}
                          </h5>
                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                            <span className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
                                <MapPin className="size-2.5 text-primary" /> The Empire {info.tipo}
                             </span>
                          </div>
@@ -264,9 +264,9 @@ function TourDetails() {
                          {isPast ? (
                             <CheckCircle2 className="size-5 text-emerald-500" />
                          ) : s.vendidos >= s.capacidade * 0.98 ? (
-                            <div className="px-2 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[8px] font-black uppercase rounded-lg">SOLD OUT</div>
+                            <div className="px-2 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[11px] font-black uppercase rounded-lg">SOLD OUT</div>
                          ) : (
-                            <div className="text-[9px] font-black text-muted-foreground/30 uppercase tracking-tighter">
+                            <div className="text-[11px] font-black text-muted-foreground/30 uppercase tracking-tighter">
                                {Math.round((s.vendidos / s.capacidade) * 100)}% Vend.
                             </div>
                          )}
@@ -294,7 +294,7 @@ function StatMini({ icon, value, label }: any) {
           {icon}
        </div>
        <span className="text-base font-black tracking-tight leading-none mb-0.5">{value}</span>
-       <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/40">{label}</span>
+       <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/40">{label}</span>
     </div>
   );
 }
