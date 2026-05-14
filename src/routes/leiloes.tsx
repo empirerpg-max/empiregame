@@ -37,7 +37,7 @@ function LeiloesPage() {
     const nome = meusArtistas[0];
     const valor = Number(
       prompt(
-        `Lance atual: ${fmtEC(item.lanceAtual || item.lance_atual || item.lanceMini)}\nDigite seu lance em $EC:`,
+        `Lance atual: ${fmtEC(Number(item.lanceAtual || item.lance_atual || item.lanceMini || 0))}\nDigite seu lance em $EC:`,
       ) || 0,
     );
     if (!valor) return;
@@ -68,10 +68,10 @@ function LeiloesPage() {
         <p className="text-sm text-muted-foreground">Nenhum leilão ativo no momento.</p>
       )}
       <ul className="space-y-3">
-        {items?.map((it: Record<string, unknown>, i: number) => (
+        {(items as Record<string, unknown>[] | null)?.map((it, i) => (
           <li key={i} className="p-4 rounded-xl bg-card border border-border">
-            <p className="font-bold text-sm">{it.descricao || it.titulo}</p>
-            <p className="text-xs text-muted-foreground mt-1">Vendedor: {it.vendedor}</p>
+            <p className="font-bold text-sm">{String(it.descricao || it.titulo || "")}</p>
+            <p className="text-xs text-muted-foreground mt-1">Vendedor: {String(it.vendedor || "")}</p>
             <div className="flex items-center justify-between mt-3">
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -80,7 +80,7 @@ function LeiloesPage() {
                 <p className="text-lg font-black text-primary">
                   {fmtEC(Number(it.lanceAtual || it.lance_atual || it.lanceMini || 0))}
                 </p>
-                <p className="text-[10px] text-muted-foreground">por {it.licitante || "—"}</p>
+                <p className="text-[10px] text-muted-foreground">por {String(it.licitante || "—")}</p>
               </div>
               <button
                 onClick={() => bid(it)}
