@@ -241,6 +241,8 @@ function GlobalLinkModal({ onClose }: { onClose: () => void }) {
 }
 
 import appCss from "../styles.css?url";
+import logoIcon from "@/assets/logo-icon.png";
+import logoFull from "@/assets/logo-full.png";
 
 function NotFoundComponent() {
   return (
@@ -446,7 +448,7 @@ function RootInner() {
       {/* Top Bar */}
       <nav className="fixed top-0 inset-x-0 z-[60] bg-background/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 h-16 pt-[env(safe-area-inset-top)]" style={{ height: "calc(4rem + env(safe-area-inset-top))" }}>
          <Link to="/" className="flex items-center gap-2" onClick={() => haptic.selection()}>
-            <div className="size-8 rounded-lg bg-primary text-primary-foreground grid place-items-center font-black italic tracking-tighter">E</div>
+            <img src={logoIcon} alt="Empire" className="size-8 rounded-lg object-contain" />
             <span className="font-black italic uppercase tracking-tighter text-base">Empire Hub</span>
          </Link>
          <button 

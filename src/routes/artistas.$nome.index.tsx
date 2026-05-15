@@ -114,9 +114,9 @@ function ArtistDashboard() {
                     </span>
                     <span className="text-[11px] font-black text-white/50 uppercase tracking-widest italic">{artist.genero}</span>
                  </div>
-                 <h1 className="text-2xl font-black italic uppercase tracking-tighter leading-none mb-1 drop-shadow-xl truncate">
+                  <h1 className="text-xl sm:text-2xl font-black italic uppercase tracking-tighter leading-tight mb-1 drop-shadow-xl break-words">
                     {artist.nome}
-                 </h1>
+                  </h1>
                  <div className="flex items-center gap-2">
                     <div className={`size-1.5 rounded-full ${artist.status === "Livre" ? "bg-primary animate-pulse" : "bg-yellow-500"}`} />
                     <span className="text-[10px] font-black text-white/70 uppercase tracking-widest">{artist.status}</span>
@@ -165,7 +165,6 @@ function ArtistDashboard() {
              {activeTab === "entretenimento" && (
                 <div className="grid grid-cols-2 gap-3">
                    <MiniAction label="Viral" icon={<Flame />} onClick={() => setModal("viral")} color="text-rose-500" />
-                   <MiniAction label="Payola" icon={<Radio />} onClick={() => setModal("payola")} color="text-primary" />
                    <MiniAction label="Filantropia" icon={<HandHeart />} onClick={() => setModal("filantropia")} color="text-emerald-500" />
                    <MiniAction label="Leilão" icon={<Gavel />} onClick={() => setModal("leilao")} color="text-amber-500" />
                    <MiniAction label="Market" icon={<ShoppingBag />} to="/market" color="text-indigo-500" />
