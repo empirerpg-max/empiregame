@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Camera, ChevronLeft, Gamepad2, Heart, Music4, Play } from "lucide-react";
+import { Brain, Camera, ChevronLeft, Gamepad2, Heart, Music4, Play } from "lucide-react";
 
 export const Route = createFileRoute("/games/")({
   component: GamesHub,
