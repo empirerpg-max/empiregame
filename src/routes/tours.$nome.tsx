@@ -30,68 +30,88 @@ function TourDetails() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([api.listarTodos(), api.listTours(), api.getAgendaTour(nome)]).then(
-      ([artists, toursList, agendaData]) => {
-        const art = artists.find((a) => a.nome === nome);
-        setArtist(art || null);
 
-        const tFromList = toursList.find((t) => t.artista === nome);
+    // 💡 Ajuste Crítico: Decodifica o nome (remove %20) e ignora maiúsculas/minúsculas
+    const safeNome = decodeURIComponent(nome || "")
+      .trim()
+      .toLowerCase();
 
-        if (tFromList) {
-          // ✅ Parse da agenda (pode vir como string ou array)
-          let agenda = [];
-          if (typeof tFromList.agenda === "string") {
-            try {
-              agenda = JSON.parse(tFromList.agenda);
-            } catch (e) {
-              agenda = [];
-            }
-          } else if (Array.isArray(tFromList.agenda)) {
-            agenda = tFromList.agenda;
+    // Adicionado .catch para não quebrar tudo se uma das rotas da API oscilar
+    Promise.all([
+      api.listarTodos().catch(() => []),
+      api.listTours().catch(() => []),
+      api.getAgendaTour(nome).catch(() => []),
+    ]).then(([artists, toursList, agendaData]) => {
+      const art = (Array.isArray(artists) ? artists : []).find((a) => a.nome?.trim().toLowerCase() === safeNome);
+      setArtist(art || null);
+
+      const tFromList = (Array.isArray(toursList) ? toursList : []).find(
+        (t) => t.artista?.trim().toLowerCase() === safeNome,
+      );
+
+      // 💡 Ajuste Crítico 2: Restaurando a prioridade da API que puxa o Histórico real (agendaData)
+      let agenda: any[] = [];
+      if (Array.isArray(agendaData) && agendaData.length > 0) {
+        agenda = agendaData;
+      } else if (tFromList) {
+        if (typeof tFromList.agenda === "string") {
+          try {
+            agenda = JSON.parse(tFromList.agenda);
+          } catch (e) {
+            agenda = [];
           }
+        } else if (Array.isArray(tFromList.agenda)) {
+          agenda = tFromList.agenda;
+        }
+      }
 
-          console.log("Agenda carregada:", agenda); // DEBUG
-
-          setTourDetails({
-            titulo: tFromList.titulo || "The Empire Tour",
-            tipo: tFromList.porte || "Arena",
-            status: tFromList.status || "Em andamento",
-            qtd: Number(tFromList.total_shows || 0),
-            shows_realizados: Number(tFromList.show_atual || 0),
-            local_atual: tFromList.local_atual || "Mundial",
-            arrecadacao_total: Number(tFromList.arrecadacao_total || 0),
-            agenda: agenda, // ✅ Agenda preenchida com dados reais
-            foto: tFromList.foto || "",
-          });
-        } else if (art && art.tour_info) {
-          // Fallback: tenta pegar agenda do tour_info no artista
-          let info: any = art.tour_info;
-          if (typeof info === "string") {
+      if (tFromList) {
+        setTourDetails({
+          titulo: tFromList.titulo || "The Empire Tour",
+          tipo: tFromList.porte || "Arena",
+          status: tFromList.status || "Em andamento",
+          qtd: Number(tFromList.total_shows || 0),
+          shows_realizados: Number(tFromList.show_atual || 0),
+          local_atual: tFromList.local_atual || "Mundial",
+          arrecadacao_total: Number(tFromList.arrecadacao_total || 0),
+          agenda: agenda, // ✅ Histórico volta a funcionar!
+          foto: tFromList.foto || "",
+        });
+      } else if (art && art.tour_info) {
+        let info: any = art.tour_info;
+        if (typeof info === "string") {
+          try {
+            const cleanJson = info
+              .trim()
+              .replace(/^"+|"+$/g, "")
+              .replace(/\\"/g, '"');
+            info = JSON.parse(cleanJson);
+          } catch {
             try {
-              const cleanJson = info.trim().replace(/^"+|"+$/g, "");
-              info = JSON.parse(cleanJson);
+              info = JSON.parse(info);
             } catch {
               info = {};
             }
           }
-
-          // Se houver agenda em tour_info, use-a
-          const agendaFallback = info.agenda || [];
-
-          setTourDetails({
-            titulo: info.titulo || "The Empire Tour",
-            tipo: info.tipo || "Arena",
-            status: info.status || "Em andamento",
-            qtd: Number(info.qtd || 10),
-            shows_realizados: Number(info.shows_realizados || 0),
-            local_atual: info.continente || "Mundial",
-            arrecadacao_total: 0,
-            agenda: agendaFallback, // ✅ Usa agenda do tour_info
-          });
         }
-        setLoading(false);
-      },
-    );
+
+        const agendaFallback = agenda.length > 0 ? agenda : Array.isArray(info.agenda) ? info.agenda : [];
+
+        setTourDetails({
+          titulo: info.titulo || "The Empire Tour",
+          tipo: info.tipo || "Arena",
+          status: info.status || "Em andamento",
+          qtd: Number(info.qtd || info.shows || 10),
+          shows_realizados: Number(info.shows_realizados || info.realizados || 0),
+          local_atual: info.continente || "Mundial",
+          arrecadacao_total: Number(info.arrecadacao_total || 0),
+          agenda: agendaFallback,
+        });
+      } else {
+        setTourDetails(null);
+      }
+      setLoading(false);
+    });
   }, [nome]);
 
   if (loading) {
@@ -109,12 +129,12 @@ function TourDetails() {
     return (
       <div className="flex flex-col items-center justify-center h-[80vh] p-8 text-center">
         <Mic2 className="size-16 text-muted-foreground/20 mb-4" />
-        <h2 className="text-xl font-black uppercase italic italic tracking-tighter">Turnê não encontrada</h2>
+        <h2 className="text-xl font-black uppercase italic tracking-tighter">Turnê não encontrada</h2>
         <p className="text-sm text-muted-foreground mt-2 mb-8 max-w-[240px]">
           Este artista não está em turnê no momento.
         </p>
         <Link
-          to="/tours/"
+          to="/tours"
           className="px-8 py-4 rounded-3xl bg-primary text-primary-foreground font-black uppercase text-xs tracking-widest"
         >
           Ver todas as turnês
@@ -126,12 +146,10 @@ function TourDetails() {
   const info = tourDetails;
   const progress = info.qtd > 0 ? (info.shows_realizados / info.qtd) * 100 : 0;
 
-  // Total de público somado da agenda
   const publicoTotal = Array.isArray(info.agenda)
     ? info.agenda.reduce((acc: number, s: any) => acc + (Number(s.vendidos) || 0), 0)
     : 0;
 
-  // Calculando Sold Outs a partir da agenda
   const soldOutsCount = Array.isArray(info.agenda)
     ? info.agenda.filter((s: any) => Number(s.vendidos) >= Number(s.capacidade) * 0.98).length
     : 0;
@@ -158,7 +176,6 @@ function TourDetails() {
 
   return (
     <main className="flex-1 pb-24 bg-background">
-      {/* Header Visual */}
       <div className="relative h-[45vh] min-h-[360px] overflow-hidden">
         {info.foto ? (
           <img
@@ -176,13 +193,12 @@ function TourDetails() {
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
 
         <Link
-          to="/tours/"
+          to="/tours"
           className="absolute top-6 left-6 z-30 size-12 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/10 flex items-center justify-center shadow-2xl active:scale-90 transition-transform"
         >
           <ChevronLeft className="size-6" />
         </Link>
 
-        {/* Info Overlay */}
         <div className="absolute inset-x-6 bottom-12 z-20">
           <div className="flex flex-col items-center text-center">
             <button
@@ -217,7 +233,6 @@ function TourDetails() {
               {info.titulo}
             </h1>
 
-            {/* Revenue Badge - Top Center Focus */}
             <div className="mt-4 px-6 py-3 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-xl flex flex-col items-center">
               <span className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-500/60 mb-1">
                 Arrecadação Total
@@ -231,7 +246,6 @@ function TourDetails() {
       </div>
 
       <div className="px-6 -mt-6 relative z-30 space-y-6">
-        {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-3">
           <StatMini icon={<Users className="size-4" />} value={publicoTotal.toLocaleString()} label="Fans" />
           <StatMini icon={<Star className="size-4" />} value={soldOutsCount} label="Sold Outs" />
@@ -242,7 +256,6 @@ function TourDetails() {
           />
         </div>
 
-        {/* Progress Card */}
         <div className="p-6 rounded-[2.5rem] bg-card border border-white/5 relative overflow-hidden group">
           <div className="flex justify-between items-end mb-4 relative z-10">
             <div>
@@ -262,7 +275,6 @@ function TourDetails() {
           <Crown className="absolute -right-4 -bottom-4 size-32 opacity-5 rotate-12 group-hover:scale-110 transition-transform duration-700" />
         </div>
 
-        {/* Agenda Section */}
         <section>
           <div className="flex items-center justify-between mb-5 px-1">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
