@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { BackButton } from "@/components/BackButton";
 import { useEffect, useState } from "react";
 import { ChevronLeft, Dice5, Loader2, Info, Trophy, Music } from "lucide-react";
 import { api, fmtEC, driveImg } from "@/lib/api";
