@@ -33,6 +33,7 @@ import { Route as ArtistasIndexRouteImport } from './routes/artistas.index'
 import { Route as ToursNomeRouteImport } from './routes/tours.$nome'
 import { Route as PlaylistsNovaRouteImport } from './routes/playlists.nova'
 import { Route as PlaylistsIdRouteImport } from './routes/playlists.$id'
+import { Route as GamesPaparazziEscapeRouteImport } from './routes/games.paparazzi-escape'
 import { Route as GamesHitsProducerRouteImport } from './routes/games.hits-producer'
 import { Route as AlbumIdRouteImport } from './routes/album.$id'
 import { Route as AcoesTourRouteImport } from './routes/acoes.tour'
@@ -164,6 +165,11 @@ const PlaylistsIdRoute = PlaylistsIdRouteImport.update({
   path: '/playlists/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GamesPaparazziEscapeRoute = GamesPaparazziEscapeRouteImport.update({
+  id: '/games/paparazzi-escape',
+  path: '/games/paparazzi-escape',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GamesHitsProducerRoute = GamesHitsProducerRouteImport.update({
   id: '/games/hits-producer',
   path: '/games/hits-producer',
@@ -238,6 +244,7 @@ export interface FileRoutesByFullPath {
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
   '/games/hits-producer': typeof GamesHitsProducerRoute
+  '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -274,6 +281,7 @@ export interface FileRoutesByTo {
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
   '/games/hits-producer': typeof GamesHitsProducerRoute
+  '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -311,6 +319,7 @@ export interface FileRoutesById {
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
   '/games/hits-producer': typeof GamesHitsProducerRoute
+  '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -349,6 +358,7 @@ export interface FileRouteTypes {
     | '/acoes/tour'
     | '/album/$id'
     | '/games/hits-producer'
+    | '/games/paparazzi-escape'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -385,6 +395,7 @@ export interface FileRouteTypes {
     | '/acoes/tour'
     | '/album/$id'
     | '/games/hits-producer'
+    | '/games/paparazzi-escape'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -421,6 +432,7 @@ export interface FileRouteTypes {
     | '/acoes/tour'
     | '/album/$id'
     | '/games/hits-producer'
+    | '/games/paparazzi-escape'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -458,6 +470,7 @@ export interface RootRouteChildren {
   AcoesTourRoute: typeof AcoesTourRoute
   AlbumIdRoute: typeof AlbumIdRouteWithChildren
   GamesHitsProducerRoute: typeof GamesHitsProducerRoute
+  GamesPaparazziEscapeRoute: typeof GamesPaparazziEscapeRoute
   PlaylistsIdRoute: typeof PlaylistsIdRouteWithChildren
   PlaylistsNovaRoute: typeof PlaylistsNovaRoute
   ToursNomeRoute: typeof ToursNomeRoute
@@ -640,6 +653,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlaylistsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/games/paparazzi-escape': {
+      id: '/games/paparazzi-escape'
+      path: '/games/paparazzi-escape'
+      fullPath: '/games/paparazzi-escape'
+      preLoaderRoute: typeof GamesPaparazziEscapeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/games/hits-producer': {
       id: '/games/hits-producer'
       path: '/games/hits-producer'
@@ -759,6 +779,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcoesTourRoute: AcoesTourRoute,
   AlbumIdRoute: AlbumIdRouteWithChildren,
   GamesHitsProducerRoute: GamesHitsProducerRoute,
+  GamesPaparazziEscapeRoute: GamesPaparazziEscapeRoute,
   PlaylistsIdRoute: PlaylistsIdRouteWithChildren,
   PlaylistsNovaRoute: PlaylistsNovaRoute,
   ToursNomeRoute: ToursNomeRoute,
