@@ -12,35 +12,27 @@ function ToursIndex() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Tenta primeiro o endpoint dedicado de tours
-    Promise.all([
-      api.listTours(),
-      api.listarTodos()
-    ]).then(([toursList, allArtists]) => {
-      console.log("Tours from list:", toursList);
-      console.log("All artists for fallback:", allArtists?.length);
-      
+    Promise.all([api.listTours(), api.listarTodos()]).then(([toursList, allArtists]) => {
       let finalTours: any[] = [];
 
-      // 1. Prioridade: dados vindos do listar_tours (CONTROLE_TOURS)
       if (Array.isArray(toursList) && toursList.length > 0) {
-        finalTours = toursList.map(t => {
-          const artistData = allArtists?.find(a => a.nome === t.artista);
-          return {
-            artista: t.artista,
-            foto: t.foto || "",
-            titulo: t.titulo || "The Empire Tour",
-            tipo: t.porte || "Arena",
-            status: t.status || "Em andamento",
-            shows: Math.max(1, Number(t.total_shows || 0)),
-            realizados: Number(t.show_atual || 0),
-            soldOuts: 0, 
-            continente: t.local_atual || "Mundial",
-          };
-        }).filter(t => t.artista); 
-      } 
-      
-      // 2. Fallback/Complemento: dados vindos do tour_info nos artistas
+        finalTours = toursList
+          .map((t) => {
+            return {
+              artista: t.artista,
+              foto: t.foto || "",
+              titulo: t.titulo || "The Empire Tour",
+              tipo: t.porte || "Arena",
+              status: t.status || "Em andamento",
+              shows: Math.max(1, Number(t.total_shows || 0)),
+              realizados: Number(t.show_atual || 0),
+              soldOuts: 0,
+              continente: t.local_atual || "Mundial",
+            };
+          })
+          .filter((t) => t.artista);
+      }
+
       if (Array.isArray(allArtists)) {
         const fallbackTours = allArtists
           .filter((a) => a.tour_info)
@@ -48,7 +40,10 @@ function ToursIndex() {
             let info: any = a.tour_info;
             if (typeof info === "string" && info.trim()) {
               try {
-                const cleanJson = info.trim().replace(/^"+|"+$/g, "");
+                const cleanJson = info
+                  .trim()
+                  .replace(/^"+|"+$/g, "")
+                  .replace(/\\"/g, '"');
                 info = JSON.parse(cleanJson);
               } catch {
                 try {
@@ -74,9 +69,8 @@ function ToursIndex() {
           })
           .filter((t): t is NonNullable<typeof t> => t !== null);
 
-        // Mesclar sem duplicar artistas
-        fallbackTours.forEach(ft => {
-          if (!finalTours.find(t => t.artista === ft.artista)) {
+        fallbackTours.forEach((ft) => {
+          if (!finalTours.find((t) => t.artista === ft.artista)) {
             finalTours.push(ft);
           }
         });
@@ -121,14 +115,13 @@ function ToursIndex() {
           {tours.map((t) => (
             <Link
               key={t.artista}
-              to="/tours/$nome/"
+              to="/tours/$nome" // 💡 Ajuste Crítico 3: Rota ajustada sem a barra dupla no final!
               params={{ nome: t.artista }}
               className="block group"
             >
               <div className="relative overflow-hidden rounded-3xl bg-card border border-white/5 p-4 transition-all hover:bg-white/[0.06] hover:scale-[1.01] active:scale-[0.98] shadow-2xl shadow-black/20">
-                {/* Background Glow */}
                 <div className="absolute -right-20 -bottom-20 size-48 bg-primary/10 blur-[60px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                
+
                 <div className="flex gap-4 items-center relative z-10">
                   <div className="relative size-20 shrink-0 rounded-2xl overflow-hidden border-2 border-white/10 bg-slate-900 shadow-lg flex items-center justify-center">
                     {t.foto ? (
@@ -136,7 +129,9 @@ function ToursIndex() {
                         src={driveImg(t.foto, 400)}
                         alt={t.artista}
                         className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-110"
-                       loading="lazy" decoding="async"/>
+                        loading="lazy"
+                        decoding="async"
+                      />
                     ) : (
                       <Crown className="size-10 text-primary/40 group-hover:scale-110 group-hover:text-primary transition-all duration-500" />
                     )}
@@ -152,11 +147,11 @@ function ToursIndex() {
                         <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       )}
                     </div>
-                    
+
                     <h3 className="text-xl font-black italic uppercase tracking-tighter leading-tight truncate mb-2">
                       {t.titulo}
                     </h3>
-                    
+
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-black uppercase bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
                         <Users className="size-3 text-primary" /> {t.tipo}
@@ -166,7 +161,7 @@ function ToursIndex() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="size-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-all">
                     <ChevronRight className="size-5" />
                   </div>
@@ -175,20 +170,24 @@ function ToursIndex() {
                 <div className="mt-5 relative z-10">
                   <div className="flex justify-between items-end mb-2 px-1">
                     <div>
-                      <p className="text-muted-foreground text-[11px] uppercase font-black tracking-widest mb-0.5">Execução</p>
+                      <p className="text-muted-foreground text-[11px] uppercase font-black tracking-widest mb-0.5">
+                        Execução
+                      </p>
                       <p className="text-xs font-black tracking-tight">
                         {t.realizados} <span className="text-muted-foreground/40 font-bold">/ {t.shows} SHOWS</span>
                       </p>
                     </div>
                     <div className="text-right">
-                       <p className="text-muted-foreground text-[11px] uppercase font-black tracking-widest mb-0.5">Esgotados</p>
-                       <p className="text-xs font-black text-amber-500 tracking-tight">{t.soldOuts} SOLD OUTS</p>
+                      <p className="text-muted-foreground text-[11px] uppercase font-black tracking-widest mb-0.5">
+                        Esgotados
+                      </p>
+                      <p className="text-xs font-black text-amber-500 tracking-tight">{t.soldOuts} SOLD OUTS</p>
                     </div>
                   </div>
-                  
+
                   <div className="h-1.5 bg-white/10 rounded-full overflow-hidden p-[1px]">
-                    <div 
-                      className="h-full bg-gradient-to-r from-primary/80 to-primary rounded-full transition-all duration-700" 
+                    <div
+                      className="h-full bg-gradient-to-r from-primary/80 to-primary rounded-full transition-all duration-700"
                       style={{ width: `${Math.min(100, (t.realizados / t.shows) * 100)}%` }}
                     />
                   </div>
