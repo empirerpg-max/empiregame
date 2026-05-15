@@ -17,8 +17,25 @@ import {
   Newspaper,
   ImageOff,
   UserCircle,
-  ChevronRight
+  ChevronRight,
+  ChevronLeft,
+  Grid3x3,
+  BadgeCheck,
+  Play,
+  Music2,
+  Bookmark,
+  Repeat2,
+  Film,
+  Tag,
+  Settings,
 } from "lucide-react";
+
+function formatCount(n: number | undefined): string {
+  const v = Number(n || 0);
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1).replace(/\.0$/, "") + "M";
+  if (v >= 1_000) return (v / 1_000).toFixed(v >= 10_000 ? 0 : 1).replace(/\.0$/, "") + "K";
+  return String(v);
+}
 import { api } from "@/lib/api";
 import { useTelegramUser } from "@/lib/telegram";
 
