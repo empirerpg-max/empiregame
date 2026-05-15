@@ -54,7 +54,6 @@ type Post = {
   data: string;
 };
 
-// ✅ Correção: Tipagem flexível para capturar os dados, não importa como venham do banco
 type SocialProfile = {
   artista: string;
   rede: string;
@@ -206,7 +205,9 @@ function SocialPage() {
     if (!editingProfileInfo || submitting) return;
     setSubmitting(true);
     try {
-      // ✅ Correção: Enviamos os dados com várias chaves pro Apps Script mapear sem problemas
+      // 💡 Convertendo explicitamente para número puro
+      const safeSeguindo = parseInt(String(profileFollowing).replace(/\D/g, ""), 10) || 0;
+
       const p: any = {
         artista: editingProfileInfo.artista,
         rede: editingProfileInfo.rede,
@@ -215,8 +216,11 @@ function SocialPage() {
         avatar: profileAvatar || "",
         foto: profileAvatar || "",
         bio: profileBio || "",
-        seguindo: Number(profileFollowing) || 0,
+        seguindo: safeSeguindo,
       };
+
+      console.log("Enviando dados para o Google Script:", p); // Debug para você ver o que está indo
+
       const tgId = user?.id || "";
       const res = await (api as any).salvarPerfilSocial(p, tgId);
       if (res.ok) {
@@ -733,7 +737,6 @@ function SocialPage() {
                 const following = perfil?.seguindo || 0;
                 const totalLikes = artistPosts.reduce((s, p) => s + (p.analytics?.likes || 0), 0);
 
-                // ✅ Correção: Busca garantida da imagem
                 const profileAvatarStr = perfil?.avatar_url || perfil?.avatar || perfil?.foto;
                 const avatarSrc = profileAvatarStr ? driveImg(profileAvatarStr) : undefined;
 
@@ -1130,7 +1133,6 @@ function SocialPage() {
                           onClick={() => {
                             setEditingProfileInfo({ artista: art.nome, rede });
                             setProfileHandle(perfil?.handle || "@");
-                            // ✅ Correção: Busca garantida da imagem
                             setProfileAvatar(perfil?.avatar_url || perfil?.avatar || perfil?.foto || "");
                             setProfileBio(perfil?.bio || "");
                             setProfileFollowers(String(perfil?.seguidores || "0"));
@@ -1366,13 +1368,14 @@ function SocialPage() {
       )}
 
       <AnimatePresence>
+        {/* 💡 MODAL DE CONFIGURAÇÃO DE PERFIL - Ajustado para items-center para evitar que o teclado esconda o input */}
         {isProfileModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-sm">
             <motion.div
               initial={{ y: 100, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
-              className="bg-white border-[4px] border-black rounded-[30px] p-6 max-w-sm w-full shadow-[10px_10px_0px_#000]"
+              className="bg-white border-[4px] border-black rounded-[30px] p-6 max-w-sm w-full shadow-[10px_10px_0px_#000] max-h-[90vh] overflow-y-auto"
             >
               <div className="flex justify-between items-center mb-6">
                 <div className="flex flex-col">
@@ -1407,12 +1410,13 @@ function SocialPage() {
                   <p className="text-[10px] font-black uppercase text-black opacity-60 italic">
                     Seguindo (qtd. de pessoas que segue):
                   </p>
+                  {/* 💡 Correção: type="text" com inputMode previne bugs do React/Navegador mobile */}
                   <input
-                    type="number"
-                    min={0}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={profileFollowing}
-                    /* ✅ Correção: Removido o .replace() que quebrava inputs do tipo 'number' */
-                    onChange={(e) => setProfileFollowing(e.target.value)}
+                    onChange={(e) => setProfileFollowing(e.target.value.replace(/\D/g, ""))}
                     placeholder="0"
                     className={neoInput}
                   />
