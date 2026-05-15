@@ -285,6 +285,13 @@ export const api = {
   },
 
   // ---- Empire Market ----
+  async listarCategoriasMarket(): Promise<string[]> {
+    const r = await call<unknown>({ acao: "listar_categorias_market" }, { cache: true });
+    if (Array.isArray(r)) {
+      return r.map((x) => String(x || "").trim()).filter(Boolean);
+    }
+    return [];
+  },
   async listarMarket(): Promise<MarketItem[]> {
     const r = await call<Record<string, unknown>[]>({ acao: "listar_market" }, { cache: true });
     return Array.isArray(r)
