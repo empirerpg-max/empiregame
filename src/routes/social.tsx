@@ -106,6 +106,7 @@ function SocialPage() {
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState("");
   const [profileFollowers, setProfileFollowers] = useState("0");
+  const [profileFollowing, setProfileFollowing] = useState("0");
   const [columns, setColumns] = useState(1);
   const [selectedNews, setSelectedNews] = useState<News | null>(null);
   const { user, ready } = useTelegramUser();
