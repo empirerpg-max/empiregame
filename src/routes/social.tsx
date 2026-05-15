@@ -198,13 +198,13 @@ function SocialPage() {
     if (!editingProfileInfo || submitting) return;
     setSubmitting(true);
     try {
-      const p: SocialProfile = {
+      const p: any = {
         artista: editingProfileInfo.artista,
         rede: editingProfileInfo.rede,
         handle: profileHandle || "@",
         avatar_url: profileAvatar || "",
         bio: profileBio || "",
-        seguidores: Number(profileFollowers) || 0
+        seguindo: Number(profileFollowing) || 0,
       };
       const tgId = user?.id || "";
       const res = await (api as any).salvarPerfilSocial(p, tgId);
