@@ -547,7 +547,8 @@ async function triggerVictory() {
   savingEl.classList.remove('hidden');
   playBtn.disabled = true;
 
-  await syncEmpireCoins('telegram-user', selectedWager, prize);
+  // Crédita só o prêmio (a aposta original ficou retida quando começamos).
+  await syncEmpireCoins(TELEGRAM_ID, 0, prize);
 
   savingEl.classList.add('hidden');
   playBtn.disabled = false;
