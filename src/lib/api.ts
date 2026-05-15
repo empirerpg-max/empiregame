@@ -98,9 +98,12 @@ function qs(params: Record<string, string | number | undefined>) {
   return u.toString();
 }
 
-// --- Cache em memória com SWR (stale-while-revalidate) ---
+// --- Cache em memória SWR (stale-while-revalidate) ---
+// Devolve dado em cache imediatamente quando ainda for "stale-aceitável"
+// e dispara fetch em background pra atualizar. Reduz latência percebida.
 const cache = new Map<string, { data: unknown; ts: number }>();
-const CACHE_TTL = 30_000; // 30s
+const CACHE_FRESH = 60_000;   // 60s: considerado fresco, devolve direto
+const CACHE_STALE = 5 * 60_000; // 5min: ainda devolve, mas refaz em background
 const inflight = new Map<string, Promise<unknown>>();
 
 async function rawCall<T = unknown>(params: Record<string, unknown>): Promise<T> {
@@ -112,9 +115,6 @@ async function rawCall<T = unknown>(params: Record<string, unknown>): Promise<T>
 
   if (isPost) {
     options.body = JSON.stringify(params);
-    // Nota: Nao definimos Content-Type como application/json porque Apps Script 
-    // lida melhor com text/plain no doPost se nao houver complexidade de pre-flight.
-    // Mas o JSON.parse(e.postData.contents) no backend espera esse formato.
   }
 
   const url = isPost ? SCRIPT_URL : `${SCRIPT_URL}?${qs(params as Record<string, string | number | undefined>)}`;
@@ -127,16 +127,7 @@ async function rawCall<T = unknown>(params: Record<string, unknown>): Promise<T>
   }
 }
 
-async function call<T = unknown>(
-  params: Record<string, unknown>,
-  opts: { cache?: boolean } = {},
-): Promise<T> {
-  if (!opts.cache) return rawCall<T>(params);
-  const key = JSON.stringify(params);
-  const hit = cache.get(key);
-  const fresh = hit && Date.now() - hit.ts < CACHE_TTL;
-  if (fresh) return hit.data as T;
-  if (inflight.has(key)) return inflight.get(key)! as Promise<T>;
+function fetchAndStore<T>(key: string, params: Record<string, unknown>): Promise<T> {
   const p = rawCall<T>(params)
     .then((data) => {
       cache.set(key, { data, ts: Date.now() });
@@ -149,6 +140,29 @@ async function call<T = unknown>(
     });
   inflight.set(key, p);
   return p;
+}
+
+async function call<T = unknown>(
+  params: Record<string, unknown>,
+  opts: { cache?: boolean } = {},
+): Promise<T> {
+  if (!opts.cache) return rawCall<T>(params);
+  const key = JSON.stringify(params);
+  const hit = cache.get(key);
+  const age = hit ? Date.now() - hit.ts : Infinity;
+
+  // Fresco — devolve sem rebuscar
+  if (hit && age < CACHE_FRESH) return hit.data as T;
+
+  // Stale aceitável — devolve cache + revalida em background (SWR)
+  if (hit && age < CACHE_STALE) {
+    if (!inflight.has(key)) fetchAndStore<T>(key, params).catch(() => {});
+    return hit.data as T;
+  }
+
+  // Sem cache utilizável — espera o fetch
+  if (inflight.has(key)) return inflight.get(key)! as Promise<T>;
+  return fetchAndStore<T>(key, params);
 }
 
 export function invalidateCache() {
