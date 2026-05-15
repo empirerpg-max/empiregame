@@ -416,19 +416,49 @@ function gameLoop(timestamp) {
   animId = requestAnimationFrame(gameLoop);
 }
 
-// ─── ECONOMY ─────────────────────────────────
-async function syncEmpireCoins(telegramId, wagerAmount, wonAmount) {
-  const res = await fetch(WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ telegramId, wagerAmount, wonAmount, game: 'produtor-de-hits' })
-  });
-  return res.status === 200;
+// ─── ECONOMY (Apps Script `sync_game_coins`) ─
+// O backend espera: { acao, telegram_id, wager, won, gameContext, artistName }
+// e retorna { ok: true, novoSaldo } ou { ok: false, erro }.
+// Não enviamos Content-Type para evitar preflight CORS contra o Apps Script
+// (o doPost faz JSON.parse(e.postData.contents) — funciona com text/plain).
+async function callEmpire(payload) {
+  try {
+    const res = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) return { ok: false, erro: 'HTTP ' + res.status };
+    const txt = await res.text();
+    try { return JSON.parse(txt); } catch (_) { return { ok: false, erro: 'Resposta inválida' }; }
+  } catch (e) {
+    return { ok: false, erro: e.message || 'Falha de rede' };
+  }
 }
 
+async function syncEmpireCoins(telegramId, wagerAmount, wonAmount) {
+  const r = await callEmpire({
+    acao: 'sync_game_coins',
+    telegram_id: telegramId,
+    wager: wagerAmount,
+    won: wonAmount,
+    gameContext: 'O Produtor de Hits',
+    artistName: ARTIST_NAME
+  });
+  return r && r.ok === true;
+}
+
+// Debita a aposta antes de iniciar a sessão. Bloqueia o jogo se faltar saldo.
 async function transactEmpireCoins(wager, action) {
-  // Substituir pela chamada real ao seu backend
-  return new Promise(resolve => setTimeout(() => resolve(true), 800));
+  if (!ARTIST_NAME) {
+    alert('Nenhum artista selecionado. Volte ao menu e escolha um artista para apostar.');
+    return false;
+  }
+  if (action !== 'deduct') return true;
+  const ok = await syncEmpireCoins(TELEGRAM_ID, wager, 0);
+  if (!ok) {
+    alert('Não foi possível debitar a aposta. Saldo insuficiente ou falha de rede.');
+  }
+  return ok;
 }
 
 // ─── STATE TRANSITIONS ───────────────────────
