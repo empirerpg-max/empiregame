@@ -471,6 +471,16 @@ export const api = {
     invalidateCache();
     return call<CommonResponse>({ acao: "vincular_artista", nome, telegram_id: telegramId });
   },
+  async criarArtista(payload: { nome: string; foto: string; gravadora: string; telegram_id: string }): Promise<CommonResponse> {
+    invalidateCache();
+    return call<CommonResponse>({
+      acao: "criar_artista",
+      nome: payload.nome,
+      foto: payload.foto,
+      gravadora: payload.gravadora,
+      telegram_id: payload.telegram_id,
+    });
+  },
   async topCharts(): Promise<Record<string, ChartData>> {
     const data = await call<Record<string, ChartData>>({ acao: "top_charts" }, { cache: true });
     return data || {};
