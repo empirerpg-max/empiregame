@@ -33,6 +33,7 @@ import { Route as ArtistasIndexRouteImport } from './routes/artistas.index'
 import { Route as ToursNomeRouteImport } from './routes/tours.$nome'
 import { Route as PlaylistsNovaRouteImport } from './routes/playlists.nova'
 import { Route as PlaylistsIdRouteImport } from './routes/playlists.$id'
+import { Route as GamesQueridometroRouteImport } from './routes/games.queridometro'
 import { Route as GamesPaparazziEscapeRouteImport } from './routes/games.paparazzi-escape'
 import { Route as GamesHitsProducerRouteImport } from './routes/games.hits-producer'
 import { Route as AlbumIdRouteImport } from './routes/album.$id'
@@ -165,6 +166,11 @@ const PlaylistsIdRoute = PlaylistsIdRouteImport.update({
   path: '/playlists/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GamesQueridometroRoute = GamesQueridometroRouteImport.update({
+  id: '/games/queridometro',
+  path: '/games/queridometro',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GamesPaparazziEscapeRoute = GamesPaparazziEscapeRouteImport.update({
   id: '/games/paparazzi-escape',
   path: '/games/paparazzi-escape',
@@ -245,6 +251,7 @@ export interface FileRoutesByFullPath {
   '/album/$id': typeof AlbumIdRouteWithChildren
   '/games/hits-producer': typeof GamesHitsProducerRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
+  '/games/queridometro': typeof GamesQueridometroRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -282,6 +289,7 @@ export interface FileRoutesByTo {
   '/album/$id': typeof AlbumIdRouteWithChildren
   '/games/hits-producer': typeof GamesHitsProducerRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
+  '/games/queridometro': typeof GamesQueridometroRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -320,6 +328,7 @@ export interface FileRoutesById {
   '/album/$id': typeof AlbumIdRouteWithChildren
   '/games/hits-producer': typeof GamesHitsProducerRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
+  '/games/queridometro': typeof GamesQueridometroRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -359,6 +368,7 @@ export interface FileRouteTypes {
     | '/album/$id'
     | '/games/hits-producer'
     | '/games/paparazzi-escape'
+    | '/games/queridometro'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -396,6 +406,7 @@ export interface FileRouteTypes {
     | '/album/$id'
     | '/games/hits-producer'
     | '/games/paparazzi-escape'
+    | '/games/queridometro'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -433,6 +444,7 @@ export interface FileRouteTypes {
     | '/album/$id'
     | '/games/hits-producer'
     | '/games/paparazzi-escape'
+    | '/games/queridometro'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -471,6 +483,7 @@ export interface RootRouteChildren {
   AlbumIdRoute: typeof AlbumIdRouteWithChildren
   GamesHitsProducerRoute: typeof GamesHitsProducerRoute
   GamesPaparazziEscapeRoute: typeof GamesPaparazziEscapeRoute
+  GamesQueridometroRoute: typeof GamesQueridometroRoute
   PlaylistsIdRoute: typeof PlaylistsIdRouteWithChildren
   PlaylistsNovaRoute: typeof PlaylistsNovaRoute
   ToursNomeRoute: typeof ToursNomeRoute
@@ -653,6 +666,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlaylistsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/games/queridometro': {
+      id: '/games/queridometro'
+      path: '/games/queridometro'
+      fullPath: '/games/queridometro'
+      preLoaderRoute: typeof GamesQueridometroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/games/paparazzi-escape': {
       id: '/games/paparazzi-escape'
       path: '/games/paparazzi-escape'
@@ -780,6 +800,7 @@ const rootRouteChildren: RootRouteChildren = {
   AlbumIdRoute: AlbumIdRouteWithChildren,
   GamesHitsProducerRoute: GamesHitsProducerRoute,
   GamesPaparazziEscapeRoute: GamesPaparazziEscapeRoute,
+  GamesQueridometroRoute: GamesQueridometroRoute,
   PlaylistsIdRoute: PlaylistsIdRouteWithChildren,
   PlaylistsNovaRoute: PlaylistsNovaRoute,
   ToursNomeRoute: ToursNomeRoute,

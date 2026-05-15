@@ -38,7 +38,28 @@ const SPAWN_INTERVAL_MIN  = 0.45;
 // ─── STATE ───────────────────────────────────
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
 let W = 0, H = 0, HORIZON_Y = 0, FLOOR_Y = 0, ROAD_HALF = 0;
+let PX = 4; // tamanho do "pixel" lógico (escala dos sprites)
+
+// Desenha um retângulo "pixel" arredondado pro grid de PX
+function px(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+}
+// Desenha sprite a partir de matriz de chars + paleta. Cada char = 1 "pixel" de tamanho `s`.
+function drawSprite(map, palette, x, y, s) {
+  for (let row = 0; row < map.length; row++) {
+    const line = map[row];
+    for (let col = 0; col < line.length; col++) {
+      const ch = line[col];
+      const c = palette[ch];
+      if (!c) continue;
+      ctx.fillStyle = c;
+      ctx.fillRect(Math.round(x + col * s), Math.round(y + row * s), Math.ceil(s), Math.ceil(s));
+    }
+  }
+}
 
 let STATE = 'MENU';
 let player = {
@@ -63,7 +84,7 @@ function resize() {
   FLOOR_Y = H * FLOOR_RATIO;
   ROAD_HALF = W * 0.45;
 }
-window.addEventListener('resize', resize);
+window.addEventListener('resize', () => { resize(); ctx.imageSmoothingEnabled = false; initBackground(); });
 resize();
 
 // ─── PROJEÇÃO 3/4 ───────────────────────────
@@ -81,152 +102,276 @@ function laneToX(lane) {
   return (lane - 1) * (LANE_OFFSET / 0.18);
 }
 
-// ─── PARALLAX FUNDO ─────────────────────────
-const skyline = [];
-const neonLights = [];
-function initBackground() {
-  skyline.length = 0;
-  for (let i = 0; i < 14; i++) {
-    skyline.push({
-      x: Math.random() * W * 1.4 - W * 0.2,
-      w: 40 + Math.random() * 90,
-      h: 60 + Math.random() * 130,
-      hue: 240 + Math.random() * 60,
-    });
+// ─── PARALLAX FUNDO PIXEL ART ───────────────
+// 3 camadas de prédios chunky com janelas em grid (estilo pixel)
+const buildingsFar  = [];
+const buildingsMid  = [];
+const buildingsNear = [];
+const stars = [];
+function buildLayer(arr, count, minH, maxH, palette) {
+  arr.length = 0;
+  let x = -50;
+  while (x < W * 1.4) {
+    const w = 28 + Math.floor(Math.random() * 56);
+    const h = minH + Math.floor(Math.random() * (maxH - minH));
+    const c = palette[Math.floor(Math.random() * palette.length)];
+    const win = Math.random() < 0.85;
+    arr.push({ x, w, h, c, win, hue: Math.floor(Math.random() * 60) });
+    x += w + 2 + Math.floor(Math.random() * 6);
   }
-  neonLights.length = 0;
-  for (let i = 0; i < 40; i++) {
-    neonLights.push({
-      x: Math.random() * W,
-      y: HORIZON_Y - 8 + Math.random() * 14,
-      hue: Math.random() * 360,
-      r: 2 + Math.random() * 3,
-      a: 0.3 + Math.random() * 0.6,
-      vx: 20 + Math.random() * 30,
-    });
+}
+function initBackground() {
+  buildLayer(buildingsFar,  16, 50,  100, ['#1a1238', '#221a44', '#2a1a4e']);
+  buildLayer(buildingsMid,  14, 80,  170, ['#2a1450', '#3a1860', '#481a72']);
+  buildLayer(buildingsNear, 10, 120, 230, ['#10081e', '#180a26', '#220c34']);
+  stars.length = 0;
+  for (let i = 0; i < 60; i++) stars.push({ x: Math.random() * W, y: Math.random() * HORIZON_Y * 0.85, b: Math.random() < 0.3 });
+}
+
+function scrollLayer(arr, dx) {
+  for (const b of arr) {
+    b.x -= dx;
+    if (b.x + b.w < -20) {
+      const last = arr.reduce((m, o) => Math.max(m, o.x + o.w), 0);
+      b.x = last + 2 + Math.floor(Math.random() * 6);
+    }
+  }
+}
+function drawLayer(arr, windowColor, windowSize) {
+  for (const b of arr) {
+    px(b.x, HORIZON_Y - b.h, b.w, b.h, b.c);
+    // topo (antena/caixa d'água) chance
+    if (b.w > 36 && Math.random() < 0.0001) {} // estático: desenha só se sorteado na criação? simples:
+    // janelas em grid
+    if (b.win) {
+      const step = windowSize * 2;
+      for (let wy = HORIZON_Y - b.h + 6; wy < HORIZON_Y - 6; wy += step) {
+        for (let wx = b.x + 4; wx < b.x + b.w - 4; wx += step) {
+          // padrão pseudo-aleatório estável usando coords
+          if (((wx * 31 + wy * 17 + b.hue) >> 1) % 5 < 2) {
+            px(wx, wy, windowSize, windowSize, windowColor);
+          }
+        }
+      }
+    }
   }
 }
 
 function drawBackground(dt) {
-  // Céu
-  const sky = ctx.createLinearGradient(0, 0, 0, FLOOR_Y);
-  sky.addColorStop(0, '#04040e');
-  sky.addColorStop(0.6, '#0a0820');
-  sky.addColorStop(1, '#1a0a3a');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, FLOOR_Y);
+  // Céu pixel (3 faixas)
+  px(0, 0,                     W, HORIZON_Y * 0.45, '#08051a');
+  px(0, HORIZON_Y * 0.45,      W, HORIZON_Y * 0.30, '#140a30');
+  px(0, HORIZON_Y * 0.75,      W, HORIZON_Y * 0.25, '#2a0e4a');
 
-  // Skyline lento
-  for (const b of skyline) {
-    b.x -= speed * 4 * dt;
-    if (b.x + b.w < 0) { b.x = W + Math.random() * 80; b.w = 40 + Math.random() * 90; }
-    ctx.fillStyle = `hsl(${b.hue}, 35%, 10%)`;
-    ctx.fillRect(b.x, HORIZON_Y - b.h, b.w, b.h);
-    // janelinhas
-    ctx.fillStyle = `hsla(${b.hue + 20}, 80%, 65%, 0.35)`;
-    for (let wy = HORIZON_Y - b.h + 10; wy < HORIZON_Y - 6; wy += 12) {
-      for (let wx = b.x + 4; wx < b.x + b.w - 6; wx += 10) {
-        if (Math.random() > 0.7) ctx.fillRect(wx, wy, 3, 5);
-      }
-    }
+  // Estrelas
+  for (const s of stars) {
+    px(s.x, s.y, s.b ? 2 : 1, s.b ? 2 : 1, s.b ? '#ffeeff' : '#aaaadd');
   }
 
-  // Linha do horizonte com neon
-  for (const n of neonLights) {
-    n.x -= n.vx * dt;
-    if (n.x < -10) n.x = W + 10;
-    ctx.save();
-    ctx.globalAlpha = n.a;
-    ctx.fillStyle = `hsl(${n.hue}, 100%, 65%)`;
-    ctx.shadowBlur = 12; ctx.shadowColor = `hsl(${n.hue}, 100%, 70%)`;
-    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
+  // Lua pixel
+  px(W - 80, 36, 24, 24, '#ffe9b8');
+  px(W - 76, 32, 16, 4,  '#ffe9b8');
+  px(W - 80, 56, 24, 4,  '#ffe9b8');
+
+  // 3 camadas de prédios (parallax)
+  scrollLayer(buildingsFar,  speed * 0.6 * dt * 8);
+  drawLayer(buildingsFar, '#ffaa55', 2);
+
+  scrollLayer(buildingsMid,  speed * 1.4 * dt * 8);
+  drawLayer(buildingsMid, '#ffcc66', 3);
+
+  scrollLayer(buildingsNear, speed * 2.4 * dt * 8);
+  drawLayer(buildingsNear, '#ff66cc', 3);
+
+  // Letreiros neon flutuando (pixel)
+  px(60, HORIZON_Y - 60, 10, 18, '#ff4baa');
+  px(72, HORIZON_Y - 56, 6, 14,  '#4bf0ff');
+  px(W - 160, HORIZON_Y - 90, 14, 22, '#ffcc00');
 }
 
-// ─── CHÃO COM PISTAS EM PERSPECTIVA ─────────
+// ─── CHÃO PIXEL (asfalto + zebra) ───────────
 let roadOffset = 0;
 function drawRoad(dt) {
   roadOffset = (roadOffset + speed * dt * 0.5) % 1;
 
-  // Chão
-  const ground = ctx.createLinearGradient(0, HORIZON_Y, 0, H);
-  ground.addColorStop(0, '#0c0820');
-  ground.addColorStop(1, '#06030f');
-  ctx.fillStyle = ground;
-  ctx.fillRect(0, HORIZON_Y, W, H - HORIZON_Y);
+  // Calçada (faixa antes do horizonte)
+  px(0, HORIZON_Y, W, 6, '#3a1a55');
+  px(0, HORIZON_Y + 6, W, 2, '#ff4baa');
 
-  // Linhas convergindo no horizonte (laterais + divisórias de pistas)
-  const xs = [-1.5, -0.5, 0.5, 1.5]; // bordas laterais e divisórias entre pistas
-  ctx.strokeStyle = 'rgba(255,75,170,0.35)';
-  ctx.lineWidth = 1.5;
-  for (const lx of xs) {
-    const top = project(lx, 0, Z_SPAWN);
-    const bot = project(lx, 0, 0);
-    ctx.beginPath();
-    ctx.moveTo(top.x, top.y);
-    ctx.lineTo(bot.x, bot.y);
-    ctx.stroke();
+  // Asfalto: faixas horizontais alternadas pra dar textura "pixel"
+  const groundH = H - HORIZON_Y - 8;
+  const stripeH = 6;
+  for (let y = 0; y < groundH; y += stripeH * 2) {
+    px(0, HORIZON_Y + 8 + y,           W, stripeH, '#0a0618');
+    px(0, HORIZON_Y + 8 + y + stripeH, W, stripeH, '#08040f');
   }
 
-  // "Cílios" das pistas (faixas tracejadas em perspectiva)
-  ctx.fillStyle = 'rgba(75,240,255,0.25)';
-  for (let i = 0; i < 12; i++) {
-    const z = ((i + roadOffset) / 12) * Z_SPAWN;
-    for (const lx of [-0.5, 0.5]) {
-      const p = project(lx, 0, z);
-      const sz = 2 + (1 - p.scale) * 0; // visual mínimo
-      ctx.fillRect(p.x - 1, p.y - 1, 2 + (1 / (1 + z)) * 6, 2 + (1 / (1 + z)) * 4);
+  // Bordas neon laterais (raias da rua) em perspectiva — chunky
+  for (const lx of [-1.5, 1.5]) {
+    let prev = project(lx, 0, Z_SPAWN);
+    for (let i = 1; i <= 16; i++) {
+      const z = Z_SPAWN * (1 - i / 16);
+      const cur = project(lx, 0, z);
+      ctx.fillStyle = '#ff4baa';
+      ctx.fillRect(Math.round(cur.x) - 2, Math.round(cur.y), 4, 4);
+      prev = cur;
     }
   }
 
-  // Linha do horizonte glow
-  ctx.strokeStyle = 'rgba(75,240,255,0.4)';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, HORIZON_Y); ctx.lineTo(W, HORIZON_Y); ctx.stroke();
+  // Zebra das pistas (pixels grossos cada vez maiores)
+  for (let i = 0; i < 14; i++) {
+    const z = ((i + roadOffset) / 14) * Z_SPAWN;
+    for (const lx of [-0.5, 0.5]) {
+      const p = project(lx, 0, z);
+      const sz = 3 + (1 / (1 + z)) * 14;
+      px(p.x - sz / 2, p.y - sz / 2, sz, sz, '#4bf0ff');
+    }
+  }
+
+  // Linha do horizonte com glow simulado por 3 px stacks
+  px(0, HORIZON_Y - 2, W, 1, 'rgba(75,240,255,0.25)');
+  px(0, HORIZON_Y - 1, W, 1, 'rgba(75,240,255,0.55)');
+  px(0, HORIZON_Y,     W, 1, '#4bf0ff');
+}
+
+// ─── PAPARAZZI PURSUER (atrás do player) ────
+// Sprite pixel do paparazzi com câmera grande
+const PAPARAZZI_SPRITE = [
+  '..bbbbb..',
+  '.b00000b.',
+  'bccccccccb',
+  'b0c000c0b',
+  '.b00000b.',
+  'ssbbbbbss',
+  's0sbbb s0s',
+  '..bb.bb..',
+  '..bb.bb..',
+];
+const PAPARAZZI_PALETTE = {
+  '0': '#1a1a2a',  // preto roupa
+  'b': '#0a0a14',  // contorno
+  'c': '#444',     // câmera
+  's': '#ff4baa',  // luz/colete
+};
+let pursuerFlash = 0;
+function drawPaparazzi(dt) {
+  // Posição: canto inferior-esquerdo, com leve oscilação
+  const t = performance.now() / 200;
+  const baseS = Math.max(4, Math.floor(Math.min(W, H) * 0.012));
+  const sx = 24 + Math.sin(t) * 4;
+  const sy = FLOOR_Y - PAPARAZZI_SPRITE.length * baseS - 8 + Math.cos(t * 0.7) * 3;
+
+  // Sombra
+  px(sx + 4, FLOOR_Y - 4, PAPARAZZI_SPRITE[0].length * baseS - 6, 4, 'rgba(0,0,0,0.55)');
+  drawSprite(PAPARAZZI_SPRITE, PAPARAZZI_PALETTE, sx, sy, baseS);
+
+  // Flash de câmera aleatório
+  pursuerFlash -= dt;
+  if (pursuerFlash <= 0 && Math.random() < 0.012) pursuerFlash = 0.12;
+  if (pursuerFlash > 0) {
+    const fx = sx + 2 * baseS;
+    const fy = sy + 2 * baseS;
+    px(fx - baseS, fy - baseS, baseS * 4, baseS * 4, 'rgba(255,255,255,0.85)');
+    flashAlpha = Math.max(flashAlpha, 0.10);
+  }
 }
 
 // ─── PLAYER ──────────────────────────────────
+// Sprites pixel do artista (correndo / pulando / deslizando)
+const ART_RUN_A = [
+  '...kkkk...',
+  '..kffffk..',
+  '..kf..fk..',  // óculos escuros
+  '..kbbbbk..',
+  '..ffffff..',  // pele
+  '.pppppppp.',  // jaqueta
+  '.pyyyyyypp',
+  '.pyyyyyypp',
+  '..bbbbbb..',  // cinto
+  '..jj..jj..',  // calça
+  '..jj..jj..',
+  '..jj..jj..',
+  '..ss..ss..',  // tênis (correndo: pés desencontrados)
+];
+const ART_RUN_B = [
+  '...kkkk...',
+  '..kffffk..',
+  '..kf..fk..',
+  '..kbbbbk..',
+  '..ffffff..',
+  '.pppppppp.',
+  '.pyyyyyypp',
+  '.pyyyyyypp',
+  '..bbbbbb..',
+  '..jj..jj..',
+  '..jj..jj..',
+  '..jj..jj..',
+  '...ssss...',
+];
+const ART_JUMP = [
+  '...kkkk...',
+  '..kffffk..',
+  '..kf..fk..',
+  '..kbbbbk..',
+  '..ffffff..',
+  '.pyypppyp.',  // braços abertos
+  'ppyyyyyypp',
+  '.pyyyyyyp.',
+  '..bbbbbb..',
+  '..jjjjjj..',
+  '...jjjj...',
+  '..ss..ss..',
+];
+const ART_SLIDE = [
+  '...........',
+  '...........',
+  '...........',
+  '...........',
+  '..kkkk.....',
+  '.kffffkpppp',
+  '.kf..fpppppp',
+  '.kbbbbpyyypp',
+  '..ffbbbbbbbp',
+  '..jjjjjjjjj.',
+  '..ssssssss..',
+];
+const ART_PALETTE = {
+  'k': '#1a0820',  // contorno
+  'b': '#0a0410',
+  'f': '#ffd5b8',  // pele
+  'p': '#ff4baa',  // jaqueta neon (rosa)
+  'y': '#4bf0ff',  // detalhe ciano
+  'j': '#22154a',  // calça
+  's': '#ffcc00',  // tênis
+};
+
+// ─── PLAYER ──────────────────────────────────
 function drawPlayer() {
-  // Posição lateral interpola entre lanes
   const laneX = laneToX(player.laneVisual);
   const p = project(laneX, player.y, 0);
   const baseSize = Math.min(W, H) * 0.07;
-
   const sliding = isSliding();
-  const bodyH = sliding ? baseSize * 1.0 : baseSize * 1.7;
-  const bodyW = sliding ? baseSize * 1.4 : baseSize * 0.9;
+  const inAir = !player.onGround;
 
-  ctx.save();
-  // Sombra no chão
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.beginPath();
-  ctx.ellipse(p.x, FLOOR_Y + 4, bodyW * 0.7, bodyW * 0.22, 0, 0, Math.PI * 2);
-  ctx.fill();
+  const sprite = sliding ? ART_SLIDE : (inAir ? ART_JUMP : (Math.floor(performance.now() / 90) % 2 ? ART_RUN_A : ART_RUN_B));
+  const cols = sprite[0].length;
+  const rows = sprite.length;
+  const scale = Math.max(3, Math.floor(baseSize / 6));
+  const sw = cols * scale;
+  const sh = rows * scale;
 
-  // Corpo neon
-  const cy = p.y - bodyH * 0.55;
-  ctx.shadowBlur = 22; ctx.shadowColor = '#ff4baa';
-  ctx.fillStyle = '#ff4baa';
-  ctx.beginPath();
-  ctx.ellipse(p.x, cy, bodyW * 0.5, bodyH * 0.45, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Sombra
+  px(p.x - sw * 0.45, FLOOR_Y + 2, sw * 0.9, 4, 'rgba(0,0,0,0.5)');
 
-  // Cabeça (escondida quando deslizando)
-  if (!sliding) {
-    ctx.fillStyle = '#ffd5b8';
-    ctx.beginPath();
-    ctx.arc(p.x, cy - bodyH * 0.55, baseSize * 0.42, 0, Math.PI * 2);
-    ctx.fill();
+  // Glow neon (4 px stacks pra simular aura sem blur)
+  ctx.globalAlpha = 0.35;
+  for (const off of [[-2,0],[2,0],[0,-2],[0,2]]) {
+    drawSprite(sprite, { 'p': '#ff4baa', 'y': '#4bf0ff' }, p.x - sw / 2 + off[0], p.y - sh + off[1], scale);
   }
+  ctx.globalAlpha = 1;
 
-  // Trail neon
-  ctx.globalAlpha = 0.25;
-  ctx.fillStyle = '#4bf0ff';
-  ctx.beginPath();
-  ctx.ellipse(p.x, p.y + 2, bodyW * 0.55, baseSize * 0.18, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  // Sprite principal
+  drawSprite(sprite, ART_PALETTE, p.x - sw / 2, p.y - sh, scale);
 }
 
 // ─── OBSTÁCULOS / MOEDAS ─────────────────────
@@ -272,91 +417,122 @@ function makeObstacle(lane, type) {
   return { lane, z: Z_SPAWN, type };
 }
 
+// ─── SPRITES PIXEL DOS OBSTÁCULOS ───────────
+const SPR_BARRICADE = [
+  'rrrrrrrr',
+  'rwwwwwwr',
+  'rwrrrrwr',
+  'rwrwwrwr',
+  'rwrrrrwr',
+  'rwwwwwwr',
+  'rrrrrrrr',
+  'kk....kk',
+  'kk....kk',
+];
+const PAL_BARRICADE = { 'r': '#ff4baa', 'w': '#fff', 'k': '#1a0820' };
+
+// Câmera gigante de paparazzi (drone) — precisa esquivar (slide)
+const SPR_DRONE = [
+  '...kkkkkk...',
+  '..kggggggk..',
+  '.kgwwwwwwgk.',
+  'kgwccccccwgk',  // lente
+  'kgwc rrr cwgk',
+  'kgwccccccwgk',
+  '.kgwwwwwwgk.',
+  '..kggggggk..',
+  '...kk..kk...',
+];
+const PAL_DRONE = { 'k': '#0a0414', 'g': '#444', 'w': '#888', 'c': '#1a1a2a', 'r': '#ff4baa', ' ': null };
+
+// Holofote/painel (BLOCK) — precisa trocar de pista
+const SPR_BLOCK = [
+  'yyyyyyyyy',
+  'ykrrrrrky',
+  'ykrwwwrky',
+  'ykrwwwrky',
+  'ykrrrrrky',
+  'yyyyyyyyy',
+  '..yyyyy..',
+  '..yyyyy..',
+  '..yyyyy..',
+  '..yyyyy..',
+  '.kkkkkkk.',
+];
+const PAL_BLOCK = { 'y': '#ffcc00', 'k': '#1a0820', 'r': '#ff4466', 'w': '#fff' };
+
+// Moeda (E$C) pixel art em frames pra rotação
+const COIN_FRAMES = [
+  [
+    '.kkkkk.',
+    'kyyyyyk',
+    'kywwyyk',
+    'kyyyyyk',
+    'kyyyyyk',
+    'kyyyyyk',
+    '.kkkkk.',
+  ],
+  [
+    '..kkk..',
+    '.kyyyk.',
+    '.kywyk.',
+    '.kyyyk.',
+    '.kyyyk.',
+    '.kyyyk.',
+    '..kkk..',
+  ],
+  [
+    '...k...',
+    '...k...',
+    '...k...',
+    '...k...',
+    '...k...',
+    '...k...',
+    '...k...',
+  ],
+  [
+    '..kkk..',
+    '.koook.',
+    '.koook.',
+    '.koook.',
+    '.koook.',
+    '.koook.',
+    '..kkk..',
+  ],
+];
+const PAL_COIN = { 'k': '#7a5500', 'y': '#ffcc00', 'w': '#fff5b8', 'o': '#cc8800' };
+
+function drawSpritePerspective(sprite, palette, laneX, worldY, z, baseScale) {
+  const p = project(laneX, worldY, z);
+  const cols = sprite[0].length;
+  const rows = sprite.length;
+  const s = Math.max(1, baseScale * p.scale);
+  const sw = cols * s;
+  const sh = rows * s;
+  drawSprite(sprite, palette, p.x - sw / 2, p.y - sh, s);
+  return p;
+}
+
 function drawObstacle(o) {
   const laneX = laneToX(o.lane);
   if (o.type === 'BARRICADE') {
-    const baseY = 0;
-    const top   = 4;
-    const a = project(laneX - 0.18, baseY, o.z);
-    const b = project(laneX + 0.18, baseY, o.z);
-    const c = project(laneX + 0.18, top,   o.z);
-    const d = project(laneX - 0.18, top,   o.z);
-    ctx.save();
-    ctx.shadowBlur = 14; ctx.shadowColor = '#ff4baa';
-    const grd = ctx.createLinearGradient(a.x, a.y, c.x, c.y);
-    grd.addColorStop(0, '#2a0a3e');
-    grd.addColorStop(1, '#ff4baa');
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y);
-    ctx.closePath(); ctx.fill();
-    // listra neon
-    ctx.fillStyle = '#4bf0ff';
-    ctx.fillRect((a.x + b.x) / 2 - 2, (a.y + c.y) / 2 - 2, 4, 4);
-    ctx.restore();
+    drawSpritePerspective(SPR_BARRICADE, PAL_BARRICADE, laneX, 0, o.z, 10);
   } else if (o.type === 'DRONE') {
-    // Drone-câmera no alto: precisa esquivar (slide)
-    const droneY = 14;
-    const a = project(laneX - 0.14, droneY,     o.z);
-    const b = project(laneX + 0.14, droneY,     o.z);
-    const c = project(laneX + 0.14, droneY - 4, o.z);
-    const d = project(laneX - 0.14, droneY - 4, o.z);
-    ctx.save();
-    ctx.shadowBlur = 16; ctx.shadowColor = '#4bf0ff';
-    ctx.fillStyle = '#1a1040';
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#4bf0ff';
-    ctx.lineWidth = 2; ctx.stroke();
-    // lente
-    ctx.fillStyle = '#ff4baa';
-    ctx.beginPath();
-    ctx.arc((a.x + b.x) / 2, (a.y + c.y) / 2, 4 * a.scale + 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    // Flash branco quando próximo
+    drawSpritePerspective(SPR_DRONE, PAL_DRONE, laneX, 12, o.z, 9);
     if (o.z < 1.2 && o.z > 0.6 && !o._flashed) {
       o._flashed = true;
-      flashAlpha = Math.max(flashAlpha, 0.25);
+      flashAlpha = Math.max(flashAlpha, 0.3);
     }
-  } else {
-    // BLOCK alto que ocupa tudo: precisa trocar de pista
-    const top = 14;
-    const a = project(laneX - 0.18, 0,   o.z);
-    const b = project(laneX + 0.18, 0,   o.z);
-    const c = project(laneX + 0.18, top, o.z);
-    const d = project(laneX - 0.18, top, o.z);
-    ctx.save();
-    ctx.shadowBlur = 18; ctx.shadowColor = '#ff4466';
-    const grd = ctx.createLinearGradient(a.x, a.y, c.x, c.y);
-    grd.addColorStop(0, '#3a0a1a');
-    grd.addColorStop(1, '#ff4466');
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#ffaaaa';
-    ctx.lineWidth = 1; ctx.stroke();
-    ctx.restore();
+  } else { // BLOCK (holofote alto, troca de pista)
+    drawSpritePerspective(SPR_BLOCK, PAL_BLOCK, laneX, 0, o.z, 11);
   }
 }
 
 function drawCoin(c) {
   const laneX = laneToX(c.lane);
-  const p = project(laneX, c.y + 6, c.z);
-  const r = 12 * p.scale + 3;
-  ctx.save();
-  ctx.shadowBlur = 18; ctx.shadowColor = '#ffcc00';
-  ctx.fillStyle = '#ffcc00';
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.beginPath();
-  ctx.arc(p.x - r * 0.3, p.y - r * 0.3, r * 0.35, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  // Frame de rotação baseado em tempo + posição (cada moeda gira)
+  const frameIdx = Math.floor((performance.now() / 90 + c.z * 2) % 4);
+  drawSpritePerspective(COIN_FRAMES[frameIdx], PAL_COIN, laneX, c.y + 4, c.z, 4);
 }
 
 // Ordena por z desc para desenhar do mais longe ao mais perto
@@ -525,6 +701,7 @@ function draw(dt) {
   drawRoad(dt);
   drawWorldObjects();
   drawPlayer();
+  drawPaparazzi(dt);
   for (const p of particles) p.draw();
 
   // Flash branco (câmeras / drones)

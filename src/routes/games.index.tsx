@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Camera, ChevronLeft, Gamepad2, Music4, Play } from "lucide-react";
+import { Camera, ChevronLeft, Gamepad2, Heart, Music4, Play } from "lucide-react";
 
 export const Route = createFileRoute("/games/")({
   component: GamesHub,
@@ -25,6 +25,16 @@ const games = [
     risk: "Risco alto",
     route: "/games/paparazzi-escape" as const,
     icon: Camera,
+  },
+  {
+    id: "queridometro",
+    title: "Queridômetro",
+    description:
+      "Mande emoji pra qualquer artista. Prestígio entregue às cegas (de -20 a +20).",
+    tag: "Social",
+    risk: "Mistério",
+    route: "/games/queridometro" as const,
+    icon: Heart,
   },
 ];
 
