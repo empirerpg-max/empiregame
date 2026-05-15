@@ -1111,14 +1111,20 @@ function SocialPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic text-black">Quantidade de Seguidores:</p>
+                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic">Seguindo (qtd. de pessoas que segue):</p>
                   <input 
                     type="number"
-                    value={profileFollowers}
-                    onChange={(e) => setProfileFollowers(e.target.value)}
+                    min={0}
+                    value={profileFollowing}
+                    onChange={(e) => setProfileFollowing(e.target.value.replace(/[^0-9]/g, ""))}
                     placeholder="0"
                     className={neoInput}
                   />
+                </div>
+
+                <div className="p-3 bg-zinc-50 border-2 border-dashed border-black/20 rounded-xl text-[10px] font-bold text-black/60 italic leading-snug">
+                  <span className="font-black uppercase text-black/80">Seguidores:</span> calculados automaticamente pela coluna <span className="font-black">G</span> da aba <span className="font-black">SOCIAL_PERFIS</span>.
+                  {" "}Atual: <span className="font-black text-black">{Number(profileFollowers).toLocaleString("pt-BR")}</span>.
                 </div>
 
                 <div className="space-y-1">
