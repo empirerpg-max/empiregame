@@ -38,7 +38,28 @@ const SPAWN_INTERVAL_MIN  = 0.45;
 // ─── STATE ───────────────────────────────────
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
 let W = 0, H = 0, HORIZON_Y = 0, FLOOR_Y = 0, ROAD_HALF = 0;
+let PX = 4; // tamanho do "pixel" lógico (escala dos sprites)
+
+// Desenha um retângulo "pixel" arredondado pro grid de PX
+function px(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+}
+// Desenha sprite a partir de matriz de chars + paleta. Cada char = 1 "pixel" de tamanho `s`.
+function drawSprite(map, palette, x, y, s) {
+  for (let row = 0; row < map.length; row++) {
+    const line = map[row];
+    for (let col = 0; col < line.length; col++) {
+      const ch = line[col];
+      const c = palette[ch];
+      if (!c) continue;
+      ctx.fillStyle = c;
+      ctx.fillRect(Math.round(x + col * s), Math.round(y + row * s), Math.ceil(s), Math.ceil(s));
+    }
+  }
+}
 
 let STATE = 'MENU';
 let player = {
