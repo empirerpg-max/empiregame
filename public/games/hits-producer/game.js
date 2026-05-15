@@ -522,6 +522,8 @@ async function triggerGameOver() {
 
   // A aposta já foi debitada no startGame — não chamamos sync de novo aqui.
   // Apenas garantimos uma micro-pausa para a UI assentar e liberamos o botão.
+  const savingEl = document.getElementById('go-saving');
+  const retryBtn = document.getElementById('btn-retry');
   savingEl.classList.remove('hidden');
   retryBtn.disabled = true;
   await new Promise(r => setTimeout(r, 250));
