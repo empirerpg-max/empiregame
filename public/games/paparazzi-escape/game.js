@@ -1,9 +1,17 @@
 /* ================================================
    FUGA DO PAPARAZZI — game.js
-   State Machine: MENU → LOADING → RUNNING → CASHOUT_LOADING → DEAD
+   State Machine: MENU → LOADING → RUNNING → CASHOUT_LOADING → DEAD/SUCCESS
 ================================================ */
 
-const WEBHOOK_URL = 'https://SEU_WEBHOOK_AQUI.com/api/empire-coins';
+// ─── CONSTANTES ──────────────────────────────
+// Mesma URL do Apps Script usada por src/lib/api.ts e pelos outros jogos.
+const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwxbkUndhZPtFvtK1uIFTkPNN-m6WeiFVMU3IDzuahsC0oQp8Ba2GLQFOAPkWv8eiA3/exec';
+
+// Identificação vinda da rota React (?tg=...&artist=...)
+const URL_PARAMS = new URLSearchParams(window.location.search);
+const TELEGRAM_ID = (URL_PARAMS.get('tg') || 'guest').trim();
+const ARTIST_NAME = (URL_PARAMS.get('artist') || '').trim();
+
 const ENTRY_FEE = 50;
 const GRAVITY = 1400;       // px/s²
 const JUMP_FORCE = -560;    // px/s
@@ -25,6 +33,7 @@ let obstacleSpeed = OBSTACLE_SPEED_BASE;
 let gapFactor = GAP_START;
 let animId = null, lastTime = 0;
 let playClicked = false;
+let cashoutClicked = false;
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -47,21 +56,18 @@ const layers = [
 ];
 
 function initParallax() {
-  // Prédios
   layers[0].items = Array.from({length: 8}, (_, i) => ({
     x: i * (W / 4), y: H * 0.2,
     w: W * 0.12 + Math.random() * W * 0.1,
     h: H * 0.3 + Math.random() * H * 0.25,
     color: `hsl(${240 + Math.random()*40}, 30%, ${8 + Math.random()*8}%)`
   }));
-  // Luzes neon (janelas)
   layers[1].items = Array.from({length: 30}, (_, i) => ({
     x: Math.random() * W * 2, y: H * 0.1 + Math.random() * H * 0.5,
     w: 4 + Math.random() * 8, h: 4 + Math.random() * 8,
     color: `hsl(${Math.random()*360}, 100%, 70%)`,
     alpha: 0.4 + Math.random() * 0.6
   }));
-  // Linhas de asfalto
   layers[2].items = Array.from({length: 12}, (_, i) => ({
     x: i * (W / 6), y: H * 0.88, w: W * 0.06, h: 6,
     color: 'rgba(255,255,255,0.15)'
@@ -69,7 +75,6 @@ function initParallax() {
 }
 
 function drawParallax(dt) {
-  // Sky gradient
   const sky = ctx.createLinearGradient(0, 0, 0, H);
   sky.addColorStop(0, '#04040e');
   sky.addColorStop(0.7, '#0a0820');
@@ -77,13 +82,11 @@ function drawParallax(dt) {
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, W, H);
 
-  // Layer 0: prédios
   for (const b of layers[0].items) {
     b.x -= obstacleSpeed * layers[0].speed * dt;
     if (b.x + b.w < 0) b.x = W + b.w;
     ctx.fillStyle = b.color;
     ctx.fillRect(b.x, b.y, b.w, b.h);
-    // janelas
     for (let wy = b.y + 10; wy < b.y + b.h - 10; wy += 18) {
       for (let wx = b.x + 6; wx < b.x + b.w - 6; wx += 14) {
         if (Math.random() > 0.7) {
@@ -94,7 +97,6 @@ function drawParallax(dt) {
     }
   }
 
-  // Layer 1: luzes neon flutuantes
   for (const l of layers[1].items) {
     l.x -= obstacleSpeed * layers[1].speed * dt;
     if (l.x < -l.w) l.x = W + l.w;
@@ -106,14 +108,12 @@ function drawParallax(dt) {
     ctx.restore();
   }
 
-  // Chão
   ctx.fillStyle = '#0c0818';
   ctx.fillRect(0, H * 0.86, W, H * 0.14);
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, H * 0.86); ctx.lineTo(W, H * 0.86); ctx.stroke();
 
-  // Layer 2: linhas de asfalto
   for (const l of layers[2].items) {
     l.x -= obstacleSpeed * layers[2].speed * dt;
     if (l.x + l.w < 0) l.x = W;
@@ -121,7 +121,6 @@ function drawParallax(dt) {
     ctx.fillRect(l.x, l.y, l.w, l.h);
   }
 
-  // Flash de câmera
   if (flashAlpha > 0) {
     ctx.fillStyle = `rgba(255,255,255,${flashAlpha})`;
     ctx.fillRect(0, 0, W, H);
@@ -135,19 +134,16 @@ function drawPlayer() {
   const py = playerY;
   const ps = PLAYER_SIZE;
   ctx.save();
-  // Corpo
   ctx.shadowBlur = 20;
   ctx.shadowColor = '#ff4baa';
   ctx.fillStyle = '#ff4baa';
   ctx.beginPath();
   ctx.ellipse(PLAYER_X, py, ps * 0.6, ps * 0.85, 0, 0, Math.PI * 2);
   ctx.fill();
-  // Cabeça
   ctx.fillStyle = '#ffccaa';
   ctx.beginPath();
   ctx.arc(PLAYER_X, py - ps * 0.9, ps * 0.45, 0, Math.PI * 2);
   ctx.fill();
-  // Trilha de movimento
   ctx.globalAlpha = 0.3;
   ctx.fillStyle = '#ff4baa';
   ctx.beginPath();
@@ -168,10 +164,9 @@ function spawnObstacle() {
     gapH: gap,
     w: 38,
     passed: false,
-    // Spawn de moedas dentro do gap
+    flashed: false,
     hasCoin: Math.random() > 0.35
   });
-  // Coloca moeda no meio do gap
   if (obstacles[obstacles.length-1].hasCoin) {
     coins.push({
       x: W + 59,
@@ -190,16 +185,18 @@ function drawObstacles(dt) {
     const topH = obs.gapY;
     const botY = obs.gapY + obs.gapH;
     const botH = H - botY;
-    // Bloco superior (câmera)
     drawCameraBlock(obs.x, 0, obs.w, topH, true);
-    // Bloco inferior
     drawCameraBlock(obs.x, botY, obs.w, botH, false);
+    // Flash de câmera quando entra em tela
+    if (!obs.flashed && obs.x < W - 40) {
+      obs.flashed = true;
+      flashAlpha = Math.max(flashAlpha, 0.35);
+    }
   }
   obstacles = obstacles.filter(o => o.x + o.w > -10);
 }
 
 function drawCameraBlock(x, y, w, h, isTop) {
-  // Estrutura da barricada
   const grad = ctx.createLinearGradient(x, y, x + w, y);
   grad.addColorStop(0, '#1a0a2e');
   grad.addColorStop(1, '#2e1055');
@@ -209,7 +206,6 @@ function drawCameraBlock(x, y, w, h, isTop) {
   ctx.lineWidth = 2;
   ctx.strokeRect(x, y, w, h);
 
-  // Ícone câmera no topo ou fundo
   const iconY = isTop ? y + h - 28 : y + 8;
   ctx.save();
   ctx.shadowBlur = 14; ctx.shadowColor = '#ff44aa';
@@ -220,11 +216,10 @@ function drawCameraBlock(x, y, w, h, isTop) {
   ctx.restore();
 }
 
-function drawCoins(dt) {
+function drawCoins() {
   for (const coin of coins) {
     if (!coin.alive) continue;
-    coin.x -= obstacleSpeed * dt;
-    // Animação flutuante
+    coin.x -= obstacleSpeed * (1/60); // approx — moved with obstacle, kept smooth
     const floatY = coin.y + Math.sin(Date.now() / 300) * 4;
     ctx.save();
     ctx.shadowBlur = 16; ctx.shadowColor = '#ffcc00';
@@ -264,26 +259,18 @@ class Particle {
   }
 }
 
-// ─── COLLISION (AABB) ─────────────────────────
-/*
- * AABB: verifica se o retângulo do jogador
- * (centrado em PLAYER_X, playerY com tamanho PLAYER_SIZE)
- * colide com qualquer bloco de obstáculo (superior ou inferior)
- * usando coordenadas absolutas de cada bloco.
- */
+// ─── COLLISION (AABB) ────────────────────────
 function checkCollision() {
   const px = PLAYER_X - PLAYER_SIZE * 0.55;
   const py = playerY - PLAYER_SIZE * 0.9;
   const pw = PLAYER_SIZE * 1.1;
   const ph = PLAYER_SIZE * 1.7;
 
-  // Paredes superior e inferior
   if (playerY - PLAYER_SIZE < 0 || playerY + PLAYER_SIZE > H * 0.86) return true;
 
   for (const obs of obstacles) {
     const ox = obs.x;
     const ow = obs.w;
-    // Bloco superior: (ox, 0) → (ox+ow, gapY)
     if (px < ox + ow && px + pw > ox) {
       if (py < obs.gapY) return true;
       if (py + ph > obs.gapY + obs.gapH) return true;
@@ -313,7 +300,7 @@ function updateHUD() {
   document.getElementById('hud-dist').textContent = `${Math.floor(distance)}m`;
 }
 
-// ─── GAME LOOP ────────────────────────────────
+// ─── GAME LOOP ───────────────────────────────
 function gameLoop(ts) {
   if (STATE !== 'RUNNING') return;
   const dt = Math.min((ts - lastTime) / 1000, 0.05);
@@ -321,31 +308,23 @@ function gameLoop(ts) {
   frameCount++;
   distance += obstacleSpeed * dt * 0.01;
 
-  // Física do jogador
   playerVY += GRAVITY * dt;
   playerY += playerVY * dt;
 
-  // Spawn de obstáculos
   if (frameCount % OBSTACLE_INTERVAL === 0) spawnObstacle();
 
-  // Score passagem de obstáculo
   for (const obs of obstacles) {
-    if (!obs.passed && obs.x + obs.w < PLAYER_X) {
-      obs.passed = true;
-    }
+    if (!obs.passed && obs.x + obs.w < PLAYER_X) obs.passed = true;
   }
 
-  // Draw
   drawParallax(dt);
   drawObstacles(dt);
-  drawCoins(dt);
+  drawCoins();
   drawPlayer();
 
-  // Partículas
   particles = particles.filter(p => p.life > 0);
   for (const p of particles) { p.update(dt); p.draw(); }
 
-  // Checagem de colisão (AABB)
   if (checkCollision()) { triggerDead(); return; }
   checkCoinCollect();
 
@@ -353,17 +332,41 @@ function gameLoop(ts) {
   animId = requestAnimationFrame(gameLoop);
 }
 
-// ─── ECONOMY ─────────────────────────────────
-async function syncEmpireCoins(telegramId, wagerAmount, wonAmount) {
-  const res = await fetch(WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ telegramId, wagerAmount, wonAmount, game: 'fuga-do-paparazzi' })
-  });
-  return res.status === 200;
+// ─── ECONOMY (Apps Script `sync_game_coins`) ─
+async function callEmpire(payload) {
+  try {
+    const res = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) return { ok: false, erro: 'HTTP ' + res.status };
+    const txt = await res.text();
+    try { return JSON.parse(txt); } catch (_) { return { ok: false, erro: 'Resposta inválida' }; }
+  } catch (e) {
+    return { ok: false, erro: e.message || 'Falha de rede' };
+  }
 }
-async function transactDeduct(fee) {
-  return new Promise(r => setTimeout(() => r(true), 700));
+
+async function syncEmpireCoins(telegramId, wagerAmount, wonAmount) {
+  const r = await callEmpire({
+    acao: 'sync_game_coins',
+    telegram_id: telegramId,
+    wager: wagerAmount,
+    won: wonAmount,
+    gameContext: 'Fuga do Paparazzi',
+    artistName: ARTIST_NAME
+  });
+  return r && r.ok === true;
+}
+
+async function deductEntry() {
+  if (!ARTIST_NAME) {
+    alert('Nenhum artista selecionado. Volte ao menu e escolha um artista.');
+    return false;
+  }
+  const ok = await syncEmpireCoins(TELEGRAM_ID, ENTRY_FEE, 0);
+  if (!ok) alert('Não foi possível debitar a entrada. Saldo insuficiente ou falha de rede.');
+  return ok;
 }
 
 // ─── STATE TRANSITIONS ───────────────────────
@@ -373,7 +376,7 @@ async function startGame() {
   STATE = 'LOADING';
   showScreen('screen-loading');
 
-  const ok = await transactDeduct(ENTRY_FEE);
+  const ok = await deductEntry();
   if (!ok) { STATE = 'MENU'; showScreen('screen-menu'); playClicked = false; return; }
 
   // Reset
@@ -382,6 +385,7 @@ async function startGame() {
   frameCount = 0; distance = 0; sessionCoins = 0;
   obstacleSpeed = OBSTACLE_SPEED_BASE; gapFactor = GAP_START;
   flashAlpha = 0;
+  cashoutClicked = false;
   initParallax();
   updateHUD();
 
@@ -394,14 +398,16 @@ async function startGame() {
 }
 
 async function triggerCashout() {
-  if (STATE !== 'RUNNING') return;
+  if (STATE !== 'RUNNING' || cashoutClicked) return;
+  cashoutClicked = true;
   STATE = 'CASHOUT_LOADING';
   if (animId) cancelAnimationFrame(animId);
   document.getElementById('hud').classList.add('hidden');
   document.getElementById('cashout-amount').textContent = `+${sessionCoins} 🪙`;
   showScreen('screen-cashout');
 
-  await syncEmpireCoins('telegram-user', ENTRY_FEE, sessionCoins);
+  // Crédita só o saldo coletado (a entrada já foi debitada).
+  await syncEmpireCoins(TELEGRAM_ID, 0, sessionCoins);
 
   showScreen('screen-success');
   document.getElementById('success-prize').textContent = `+${sessionCoins} 🪙`;
@@ -420,17 +426,15 @@ async function triggerDead() {
 
   showScreen('screen-dead');
   document.getElementById('dead-coins').textContent = `Perdeu: ${ENTRY_FEE} 🪙 + ${sessionCoins} 🪙 coletadas`;
-  document.getElementById('dead-saving').classList.remove('hidden');
-
-  await syncEmpireCoins('telegram-user', ENTRY_FEE, 0);
-
   document.getElementById('dead-saving').classList.add('hidden');
+  // Sem chamada extra: a entrada já foi debitada no start; moedas coletadas eram só "saldo de partida" (nunca creditado).
   document.getElementById('btn-retry').disabled = false;
 }
 
 function goToMenu() {
   STATE = 'MENU';
   playClicked = false;
+  cashoutClicked = false;
   if (animId) cancelAnimationFrame(animId);
   document.getElementById('hud').classList.add('hidden');
   obstacles = []; coins = []; particles = [];
@@ -443,7 +447,7 @@ function showScreen(id) {
   if (id) document.getElementById(id)?.classList.add('active');
 }
 
-// ─── INPUT ───────────────────────────────────
+// ─── INPUT (separado do loop pra evitar lag) ─
 function doJump() {
   if (STATE !== 'RUNNING') return;
   playerVY = JUMP_FORCE;
@@ -453,10 +457,13 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); doJump(); }
 });
 document.addEventListener('touchstart', e => {
-  // Não captura toque nos botões de UI
   if (e.target.closest('button') || e.target.closest('.screen')) return;
   doJump();
 }, { passive: true });
+document.addEventListener('mousedown', e => {
+  if (e.target.closest('button') || e.target.closest('.screen')) return;
+  doJump();
+});
 
 document.getElementById('btn-play').addEventListener('click', startGame);
 document.getElementById('btn-cashout').addEventListener('click', triggerCashout);
@@ -467,7 +474,7 @@ document.getElementById('btn-menu-suc').addEventListener('click', goToMenu);
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && STATE === 'RUNNING') {
-    STATE = 'CASHOUT_LOADING';
+    // Pausa preventiva: cancela o loop. Para retomar, jogador volta pelo menu.
     if (animId) cancelAnimationFrame(animId);
   }
 });
