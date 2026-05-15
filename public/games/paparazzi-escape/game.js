@@ -417,91 +417,122 @@ function makeObstacle(lane, type) {
   return { lane, z: Z_SPAWN, type };
 }
 
+// ─── SPRITES PIXEL DOS OBSTÁCULOS ───────────
+const SPR_BARRICADE = [
+  'rrrrrrrr',
+  'rwwwwwwr',
+  'rwrrrrwr',
+  'rwrwwrwr',
+  'rwrrrrwr',
+  'rwwwwwwr',
+  'rrrrrrrr',
+  'kk....kk',
+  'kk....kk',
+];
+const PAL_BARRICADE = { 'r': '#ff4baa', 'w': '#fff', 'k': '#1a0820' };
+
+// Câmera gigante de paparazzi (drone) — precisa esquivar (slide)
+const SPR_DRONE = [
+  '...kkkkkk...',
+  '..kggggggk..',
+  '.kgwwwwwwgk.',
+  'kgwccccccwgk',  // lente
+  'kgwc rrr cwgk',
+  'kgwccccccwgk',
+  '.kgwwwwwwgk.',
+  '..kggggggk..',
+  '...kk..kk...',
+];
+const PAL_DRONE = { 'k': '#0a0414', 'g': '#444', 'w': '#888', 'c': '#1a1a2a', 'r': '#ff4baa', ' ': null };
+
+// Holofote/painel (BLOCK) — precisa trocar de pista
+const SPR_BLOCK = [
+  'yyyyyyyyy',
+  'ykrrrrrky',
+  'ykrwwwrky',
+  'ykrwwwrky',
+  'ykrrrrrky',
+  'yyyyyyyyy',
+  '..yyyyy..',
+  '..yyyyy..',
+  '..yyyyy..',
+  '..yyyyy..',
+  '.kkkkkkk.',
+];
+const PAL_BLOCK = { 'y': '#ffcc00', 'k': '#1a0820', 'r': '#ff4466', 'w': '#fff' };
+
+// Moeda (E$C) pixel art em frames pra rotação
+const COIN_FRAMES = [
+  [
+    '.kkkkk.',
+    'kyyyyyk',
+    'kywwyyk',
+    'kyyyyyk',
+    'kyyyyyk',
+    'kyyyyyk',
+    '.kkkkk.',
+  ],
+  [
+    '..kkk..',
+    '.kyyyk.',
+    '.kywyk.',
+    '.kyyyk.',
+    '.kyyyk.',
+    '.kyyyk.',
+    '..kkk..',
+  ],
+  [
+    '...k...',
+    '...k...',
+    '...k...',
+    '...k...',
+    '...k...',
+    '...k...',
+    '...k...',
+  ],
+  [
+    '..kkk..',
+    '.koook.',
+    '.koook.',
+    '.koook.',
+    '.koook.',
+    '.koook.',
+    '..kkk..',
+  ],
+];
+const PAL_COIN = { 'k': '#7a5500', 'y': '#ffcc00', 'w': '#fff5b8', 'o': '#cc8800' };
+
+function drawSpritePerspective(sprite, palette, laneX, worldY, z, baseScale) {
+  const p = project(laneX, worldY, z);
+  const cols = sprite[0].length;
+  const rows = sprite.length;
+  const s = Math.max(1, baseScale * p.scale);
+  const sw = cols * s;
+  const sh = rows * s;
+  drawSprite(sprite, palette, p.x - sw / 2, p.y - sh, s);
+  return p;
+}
+
 function drawObstacle(o) {
   const laneX = laneToX(o.lane);
   if (o.type === 'BARRICADE') {
-    const baseY = 0;
-    const top   = 4;
-    const a = project(laneX - 0.18, baseY, o.z);
-    const b = project(laneX + 0.18, baseY, o.z);
-    const c = project(laneX + 0.18, top,   o.z);
-    const d = project(laneX - 0.18, top,   o.z);
-    ctx.save();
-    ctx.shadowBlur = 14; ctx.shadowColor = '#ff4baa';
-    const grd = ctx.createLinearGradient(a.x, a.y, c.x, c.y);
-    grd.addColorStop(0, '#2a0a3e');
-    grd.addColorStop(1, '#ff4baa');
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y);
-    ctx.closePath(); ctx.fill();
-    // listra neon
-    ctx.fillStyle = '#4bf0ff';
-    ctx.fillRect((a.x + b.x) / 2 - 2, (a.y + c.y) / 2 - 2, 4, 4);
-    ctx.restore();
+    drawSpritePerspective(SPR_BARRICADE, PAL_BARRICADE, laneX, 0, o.z, 10);
   } else if (o.type === 'DRONE') {
-    // Drone-câmera no alto: precisa esquivar (slide)
-    const droneY = 14;
-    const a = project(laneX - 0.14, droneY,     o.z);
-    const b = project(laneX + 0.14, droneY,     o.z);
-    const c = project(laneX + 0.14, droneY - 4, o.z);
-    const d = project(laneX - 0.14, droneY - 4, o.z);
-    ctx.save();
-    ctx.shadowBlur = 16; ctx.shadowColor = '#4bf0ff';
-    ctx.fillStyle = '#1a1040';
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#4bf0ff';
-    ctx.lineWidth = 2; ctx.stroke();
-    // lente
-    ctx.fillStyle = '#ff4baa';
-    ctx.beginPath();
-    ctx.arc((a.x + b.x) / 2, (a.y + c.y) / 2, 4 * a.scale + 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    // Flash branco quando próximo
+    drawSpritePerspective(SPR_DRONE, PAL_DRONE, laneX, 12, o.z, 9);
     if (o.z < 1.2 && o.z > 0.6 && !o._flashed) {
       o._flashed = true;
-      flashAlpha = Math.max(flashAlpha, 0.25);
+      flashAlpha = Math.max(flashAlpha, 0.3);
     }
-  } else {
-    // BLOCK alto que ocupa tudo: precisa trocar de pista
-    const top = 14;
-    const a = project(laneX - 0.18, 0,   o.z);
-    const b = project(laneX + 0.18, 0,   o.z);
-    const c = project(laneX + 0.18, top, o.z);
-    const d = project(laneX - 0.18, top, o.z);
-    ctx.save();
-    ctx.shadowBlur = 18; ctx.shadowColor = '#ff4466';
-    const grd = ctx.createLinearGradient(a.x, a.y, c.x, c.y);
-    grd.addColorStop(0, '#3a0a1a');
-    grd.addColorStop(1, '#ff4466');
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#ffaaaa';
-    ctx.lineWidth = 1; ctx.stroke();
-    ctx.restore();
+  } else { // BLOCK (holofote alto, troca de pista)
+    drawSpritePerspective(SPR_BLOCK, PAL_BLOCK, laneX, 0, o.z, 11);
   }
 }
 
 function drawCoin(c) {
   const laneX = laneToX(c.lane);
-  const p = project(laneX, c.y + 6, c.z);
-  const r = 12 * p.scale + 3;
-  ctx.save();
-  ctx.shadowBlur = 18; ctx.shadowColor = '#ffcc00';
-  ctx.fillStyle = '#ffcc00';
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.beginPath();
-  ctx.arc(p.x - r * 0.3, p.y - r * 0.3, r * 0.35, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  // Frame de rotação baseado em tempo + posição (cada moeda gira)
+  const frameIdx = Math.floor((performance.now() / 90 + c.z * 2) % 4);
+  drawSpritePerspective(COIN_FRAMES[frameIdx], PAL_COIN, laneX, c.y + 4, c.z, 4);
 }
 
 // Ordena por z desc para desenhar do mais longe ao mais perto
