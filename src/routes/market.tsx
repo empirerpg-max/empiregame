@@ -70,6 +70,7 @@ function MarketPage() {
   const [items, setItems] = useState<MarketItem[] | null>(null);
   const [mural, setMural] = useState<MuralItem[] | null>(null);
   const [artists, setArtists] = useState<Artist[]>([]);
+  const [catOrder, setCatOrder] = useState<string[]>([]);
   const [buying, setBuying] = useState<
     { kind: "market"; item: MarketItem } | { kind: "mural"; item: MuralItem } | null
   >(null);
@@ -78,6 +79,7 @@ function MarketPage() {
   useEffect(() => {
     api.listarMarket().then(setItems);
     api.listarMural().then(setMural);
+    api.listarCategoriasMarket().then(setCatOrder).catch(() => setCatOrder([]));
   }, []);
 
   useEffect(() => {
@@ -85,10 +87,29 @@ function MarketPage() {
     api.meusArtistas(user.id).then(setArtists);
   }, [ready, user]);
 
+  // Categorias ordenadas pelo CONFIG_SISTEMA. Categorias presentes nos itens
+  // mas não listadas no config aparecem ao final, em ordem alfabética.
   const cats = useMemo(() => {
     if (!items) return [];
-    const fromData = Array.from(new Set(items.map((i) => i.categoria)));
-    return fromData.sort();
+    const presentes = new Set(items.map((i) => i.categoria).filter(Boolean));
+    const oficiais = catOrder.filter((c) => presentes.has(c));
+    const extras = Array.from(presentes)
+      .filter((c) => !catOrder.includes(c))
+      .sort();
+    return [...oficiais, ...extras];
+  }, [items, catOrder]);
+
+  // Garante que a categoria selecionada ainda existe após o reload
+  useEffect(() => {
+    if (cat !== "ALL" && cats.length && !cats.includes(cat)) setCat("ALL");
+  }, [cats, cat]);
+
+  const counts = useMemo(() => {
+    const m: Record<string, number> = {};
+    (items || []).forEach((i) => {
+      m[i.categoria] = (m[i.categoria] || 0) + 1;
+    });
+    return m;
   }, [items]);
 
   const filtered = useMemo(() => {
