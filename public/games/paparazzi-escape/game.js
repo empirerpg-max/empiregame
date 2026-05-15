@@ -701,6 +701,7 @@ function draw(dt) {
   drawRoad(dt);
   drawWorldObjects();
   drawPlayer();
+  drawPaparazzi(dt);
   for (const p of particles) p.draw();
 
   // Flash branco (câmeras / drones)
