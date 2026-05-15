@@ -9,10 +9,10 @@ const TELEGRAM_ID = (URL_PARAMS.get('tg') || 'guest').trim();
 const ARTIST_NAME = (URL_PARAMS.get('artist') || '').trim();
 
 const ENTRY_FEE = 30;
-const GAME_DURATION = 60;
+const GAME_DURATION = 40;
 const TIME_COEF = 8;             // tempo_restante * 8
 const FLAWLESS_BONUS = 0.5;      // +50%
-const SPEED_BONUS_THRESHOLD = 30; // <30s → cap 3x entrada
+const SPEED_BONUS_THRESHOLD = 20; // <20s → cap 3x entrada
 const MAX_PRIZE = ENTRY_FEE * 3;
 
 const ICONS = ['🎤','🎸','🎧','👑','💿','⭐','💎','🎬'];
