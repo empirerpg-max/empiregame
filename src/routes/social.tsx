@@ -351,7 +351,7 @@ function SocialPage() {
                               className="w-full h-full object-cover" 
                               referrerPolicy="no-referrer"
                               crossOrigin="anonymous"
-                              onError={(e) = loading="lazy" decoding="async"> {
+                              onError={(e) => {
                                 const target = e.target as HTMLImageElement;
                                 target.onerror = null;
                                 target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(art.nome)}&background=3D8BFF&color=fff&size=128&bold=true`;
@@ -414,7 +414,7 @@ function SocialPage() {
                               className="w-full h-full object-cover" 
                               referrerPolicy="no-referrer"
                               crossOrigin="anonymous"
-                              onError={(e) = loading="lazy" decoding="async"> {
+                              onError={(e) => {
                                 const target = e.target as HTMLImageElement;
                                 target.style.display = 'none';
                                 if (target.parentElement) {
@@ -445,7 +445,7 @@ function SocialPage() {
                             src={driveImg(post.media_url)} 
                             className="w-full h-full object-cover" 
                             referrerPolicy="no-referrer" 
-                            onError={(e) = loading="lazy" decoding="async"> {
+                            onError={(e) => {
                               (e.target as HTMLImageElement).src = "https://placehold.co/600x1067?text=Story";
                             }}
                           />
@@ -462,7 +462,7 @@ function SocialPage() {
                           src={driveImg(post.media_url)} 
                           className="w-full h-full object-cover" 
                           referrerPolicy="no-referrer" 
-                          onError={(e) = loading="lazy" decoding="async"> {
+                          onError={(e) => {
                             (e.target as HTMLImageElement).src = "https://placehold.co/600x600?text=Post";
                           }}
                         />

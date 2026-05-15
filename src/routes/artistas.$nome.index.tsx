@@ -77,7 +77,7 @@ function ArtistDashboard() {
       <div className="relative h-[30vh] min-h-[240px] overflow-hidden">
         <img 
           src={driveImg(artist.foto, 1200) || artist.foto} 
-          onError={(e) = loading="lazy" decoding="async"> {
+          onError={(e) => {
             const img = e.currentTarget;
             if (img.src !== artist.foto) img.src = artist.foto;
           }}
@@ -99,7 +99,7 @@ function ArtistDashboard() {
               <div className="size-24 rounded-[2rem] overflow-hidden border-2 border-primary/30 shadow-2xl shrink-0 bg-secondary">
                  <img 
                   src={driveImg(artist.foto, 400) || artist.foto} 
-                  onError={(e) = loading="lazy" decoding="async"> {
+                  onError={(e) => {
                     const img = e.currentTarget;
                     if (img.src !== artist.foto) img.src = artist.foto;
                   }}
