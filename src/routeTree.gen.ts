@@ -35,6 +35,7 @@ import { Route as PlaylistsNovaRouteImport } from './routes/playlists.nova'
 import { Route as PlaylistsIdRouteImport } from './routes/playlists.$id'
 import { Route as GamesQueridometroRouteImport } from './routes/games.queridometro'
 import { Route as GamesPaparazziEscapeRouteImport } from './routes/games.paparazzi-escape'
+import { Route as GamesMemoriaFamaRouteImport } from './routes/games.memoria-fama'
 import { Route as GamesHitsProducerRouteImport } from './routes/games.hits-producer'
 import { Route as AlbumIdRouteImport } from './routes/album.$id'
 import { Route as AcoesTourRouteImport } from './routes/acoes.tour'
@@ -176,6 +177,11 @@ const GamesPaparazziEscapeRoute = GamesPaparazziEscapeRouteImport.update({
   path: '/games/paparazzi-escape',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GamesMemoriaFamaRoute = GamesMemoriaFamaRouteImport.update({
+  id: '/games/memoria-fama',
+  path: '/games/memoria-fama',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GamesHitsProducerRoute = GamesHitsProducerRouteImport.update({
   id: '/games/hits-producer',
   path: '/games/hits-producer',
@@ -250,6 +256,7 @@ export interface FileRoutesByFullPath {
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
   '/games/hits-producer': typeof GamesHitsProducerRoute
+  '/games/memoria-fama': typeof GamesMemoriaFamaRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
   '/games/queridometro': typeof GamesQueridometroRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
@@ -288,6 +295,7 @@ export interface FileRoutesByTo {
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
   '/games/hits-producer': typeof GamesHitsProducerRoute
+  '/games/memoria-fama': typeof GamesMemoriaFamaRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
   '/games/queridometro': typeof GamesQueridometroRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
@@ -327,6 +335,7 @@ export interface FileRoutesById {
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
   '/games/hits-producer': typeof GamesHitsProducerRoute
+  '/games/memoria-fama': typeof GamesMemoriaFamaRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
   '/games/queridometro': typeof GamesQueridometroRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
@@ -367,6 +376,7 @@ export interface FileRouteTypes {
     | '/acoes/tour'
     | '/album/$id'
     | '/games/hits-producer'
+    | '/games/memoria-fama'
     | '/games/paparazzi-escape'
     | '/games/queridometro'
     | '/playlists/$id'
@@ -405,6 +415,7 @@ export interface FileRouteTypes {
     | '/acoes/tour'
     | '/album/$id'
     | '/games/hits-producer'
+    | '/games/memoria-fama'
     | '/games/paparazzi-escape'
     | '/games/queridometro'
     | '/playlists/$id'
@@ -443,6 +454,7 @@ export interface FileRouteTypes {
     | '/acoes/tour'
     | '/album/$id'
     | '/games/hits-producer'
+    | '/games/memoria-fama'
     | '/games/paparazzi-escape'
     | '/games/queridometro'
     | '/playlists/$id'
@@ -482,6 +494,7 @@ export interface RootRouteChildren {
   AcoesTourRoute: typeof AcoesTourRoute
   AlbumIdRoute: typeof AlbumIdRouteWithChildren
   GamesHitsProducerRoute: typeof GamesHitsProducerRoute
+  GamesMemoriaFamaRoute: typeof GamesMemoriaFamaRoute
   GamesPaparazziEscapeRoute: typeof GamesPaparazziEscapeRoute
   GamesQueridometroRoute: typeof GamesQueridometroRoute
   PlaylistsIdRoute: typeof PlaylistsIdRouteWithChildren
@@ -680,6 +693,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GamesPaparazziEscapeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/games/memoria-fama': {
+      id: '/games/memoria-fama'
+      path: '/games/memoria-fama'
+      fullPath: '/games/memoria-fama'
+      preLoaderRoute: typeof GamesMemoriaFamaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/games/hits-producer': {
       id: '/games/hits-producer'
       path: '/games/hits-producer'
@@ -799,6 +819,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcoesTourRoute: AcoesTourRoute,
   AlbumIdRoute: AlbumIdRouteWithChildren,
   GamesHitsProducerRoute: GamesHitsProducerRoute,
+  GamesMemoriaFamaRoute: GamesMemoriaFamaRoute,
   GamesPaparazziEscapeRoute: GamesPaparazziEscapeRoute,
   GamesQueridometroRoute: GamesQueridometroRoute,
   PlaylistsIdRoute: PlaylistsIdRouteWithChildren,
@@ -815,3 +836,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
