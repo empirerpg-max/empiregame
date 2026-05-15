@@ -106,6 +106,7 @@ function SocialPage() {
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState("");
   const [profileFollowers, setProfileFollowers] = useState("0");
+  const [profileFollowing, setProfileFollowing] = useState("0");
   const [columns, setColumns] = useState(1);
   const [selectedNews, setSelectedNews] = useState<News | null>(null);
   const { user, ready } = useTelegramUser();
@@ -197,13 +198,13 @@ function SocialPage() {
     if (!editingProfileInfo || submitting) return;
     setSubmitting(true);
     try {
-      const p: SocialProfile = {
+      const p: any = {
         artista: editingProfileInfo.artista,
         rede: editingProfileInfo.rede,
         handle: profileHandle || "@",
         avatar_url: profileAvatar || "",
         bio: profileBio || "",
-        seguidores: Number(profileFollowers) || 0
+        seguindo: Number(profileFollowing) || 0,
       };
       const tgId = user?.id || "";
       const res = await (api as any).salvarPerfilSocial(p, tgId);
@@ -636,8 +637,8 @@ function SocialPage() {
               const handle = perfil?.handle || ('@' + selectedIndustryArtist.nome.toLowerCase().replace(/\s+/g, ''));
               const cleanHandle = handle.replace(/^@/, '');
               const bio = perfil?.bio || selectedIndustryArtist.descricao || '';
-              const followers = perfil?.seguidores || 0;
-              const following = Math.max(1, Math.floor(followers / 250));
+              const followers = (perfil as any)?.seguidores || 0;
+              const following = (perfil as any)?.seguindo || 0;
               const totalLikes = artistPosts.reduce((s, p) => s + (p.analytics?.likes || 0), 0);
               const avatarSrc = perfil?.avatar_url ? driveImg(perfil.avatar_url) : undefined;
               const avatarFallback = (
@@ -692,25 +693,6 @@ function SocialPage() {
                       <div className="grid grid-cols-2 gap-2 mt-4">
                         <button className="py-1.5 rounded-lg text-[13px] font-bold text-white bg-gradient-to-r from-[#fa7e1e] via-[#d62976] to-[#4f5bd5]">Seguir</button>
                         <button className="py-1.5 rounded-lg text-[13px] font-bold bg-zinc-100 border border-zinc-200">Mensagem</button>
-                      </div>
-                      {/* Highlights */}
-                      <div className="flex gap-4 overflow-x-auto pb-1 mt-5 no-scrollbar">
-                        {artistPosts.slice(0, 5).map((p, i) => (
-                          <div key={p.id} className="flex flex-col items-center gap-1 shrink-0">
-                            <div className="p-[2px] rounded-full border-2 border-zinc-200">
-                              <div className="size-14 rounded-full overflow-hidden bg-zinc-100">
-                                {p.media_url ? <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" /> : <div className="w-full h-full bg-gradient-to-br from-pink-400 to-orange-300" />}
-                              </div>
-                            </div>
-                            <span className="text-[10px] text-black/70 font-bold">{p.subtipo === 'Story' ? 'Story' : `Post ${i + 1}`}</span>
-                          </div>
-                        ))}
-                        <div className="flex flex-col items-center gap-1 shrink-0">
-                          <div className="size-14 rounded-full border-2 border-dashed border-zinc-300 flex items-center justify-center text-zinc-400">
-                            <Plus className="size-6" />
-                          </div>
-                          <span className="text-[10px] text-black/50 font-bold">Novo</span>
-                        </div>
                       </div>
                     </div>
                     {/* Tabs */}
@@ -903,7 +885,8 @@ function SocialPage() {
                             setProfileHandle(perfil?.handle || "@");
                             setProfileAvatar(perfil?.avatar_url || "");
                             setProfileBio(perfil?.bio || "");
-                            setProfileFollowers(String(perfil?.seguidores || "0"));
+                            setProfileFollowers(String((perfil as any)?.seguidores || "0"));
+                            setProfileFollowing(String((perfil as any)?.seguindo || "0"));
                             setIsProfileModalOpen(true);
                           }}
                           className="w-full py-2.5 bg-[#D0FF43] border-[2.5px] border-black rounded-xl text-[10px] font-black text-black uppercase shadow-[3px_3px_0px_#000] active:translate-y-[1px] active:shadow-none transition-all"
@@ -1128,14 +1111,20 @@ function SocialPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic text-black">Quantidade de Seguidores:</p>
+                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic">Seguindo (qtd. de pessoas que segue):</p>
                   <input 
                     type="number"
-                    value={profileFollowers}
-                    onChange={(e) => setProfileFollowers(e.target.value)}
+                    min={0}
+                    value={profileFollowing}
+                    onChange={(e) => setProfileFollowing(e.target.value.replace(/[^0-9]/g, ""))}
                     placeholder="0"
                     className={neoInput}
                   />
+                </div>
+
+                <div className="p-3 bg-zinc-50 border-2 border-dashed border-black/20 rounded-xl text-[10px] font-bold text-black/60 italic leading-snug">
+                  <span className="font-black uppercase text-black/80">Seguidores:</span> calculados automaticamente pela coluna <span className="font-black">G</span> da aba <span className="font-black">SOCIAL_PERFIS</span>.
+                  {" "}Atual: <span className="font-black text-black">{Number(profileFollowers).toLocaleString("pt-BR")}</span>.
                 </div>
 
                 <div className="space-y-1">
