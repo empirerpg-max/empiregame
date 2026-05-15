@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { BackButton } from "@/components/BackButton";
 import { useEffect, useState } from "react";
 import { ChevronLeft, Dice5, Loader2, Info, Trophy, Music } from "lucide-react";
 import { api, fmtEC, driveImg } from "@/lib/api";
@@ -120,9 +121,7 @@ function BetPage() {
 
   return (
     <main className="flex-1 mx-auto w-full max-w-2xl px-4 pt-6 pb-20">
-      <Link to="/" className="inline-flex items-center gap-1 text-muted-foreground mb-4">
-        <ChevronLeft className="size-4" /> Voltar
-      </Link>
+      <BackButton />
 
       <header className="mb-8">
         <div className="size-12 rounded-xl bg-purple-500/15 text-purple-500 grid place-items-center mb-4">

@@ -6,6 +6,7 @@ import {
   Scripts,
   useLocation,
   useRouter,
+  useRouterState,
 } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { 
@@ -241,6 +242,8 @@ function GlobalLinkModal({ onClose }: { onClose: () => void }) {
 }
 
 import appCss from "../styles.css?url";
+import logoIcon from "@/assets/logo-icon.png";
+import logoFull from "@/assets/logo-full.png";
 
 function NotFoundComponent() {
   return (
@@ -300,10 +303,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/png", href: logoIcon },
+      { rel: "apple-touch-icon", href: logoIcon },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "" },
       {
@@ -446,7 +448,7 @@ function RootInner() {
       {/* Top Bar */}
       <nav className="fixed top-0 inset-x-0 z-[60] bg-background/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 h-16 pt-[env(safe-area-inset-top)]" style={{ height: "calc(4rem + env(safe-area-inset-top))" }}>
          <Link to="/" className="flex items-center gap-2" onClick={() => haptic.selection()}>
-            <div className="size-8 rounded-lg bg-primary text-primary-foreground grid place-items-center font-black italic tracking-tighter">E</div>
+            <img src={logoIcon} alt="Empire" className="size-8 rounded-lg object-contain" />
             <span className="font-black italic uppercase tracking-tighter text-base">Empire Hub</span>
          </Link>
          <button 
@@ -605,10 +607,36 @@ function RootInner() {
         )}
       </AnimatePresence>
 
+      <RouteTransitionOverlay />
       <Outlet />
       <BottomNav />
       <Toaster position="top-center" richColors closeButton offset={80} />
     </div>
+  );
+}
+
+function RouteTransitionOverlay() {
+  const isLoading = useRouterState({ select: (s) => s.isLoading || s.isTransitioning });
+  return (
+    <AnimatePresence>
+      {isLoading && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-[100] grid place-items-center bg-background/85 backdrop-blur-sm pointer-events-none"
+        >
+          <motion.img
+            src={logoIcon}
+            alt=""
+            className="size-20 object-contain drop-shadow-[0_0_30px_rgba(var(--primary-rgb),0.5)]"
+            animate={{ scale: [1, 1.08, 1], opacity: [0.8, 1, 0.8] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
