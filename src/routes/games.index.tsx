@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Camera, ChevronLeft, Gamepad2, Heart, Music4, Play } from "lucide-react";
+import { Brain, Camera, ChevronLeft, Gamepad2, Heart, Music4, Play } from "lucide-react";
 
 export const Route = createFileRoute("/games/")({
   component: GamesHub,
@@ -25,6 +25,16 @@ const games = [
     risk: "Risco alto",
     route: "/games/paparazzi-escape" as const,
     icon: Camera,
+  },
+  {
+    id: "memoria-fama",
+    title: "Memória da Fama",
+    description:
+      "Grade 4×4 com seus artistas. 60s. Sem erros = FLAWLESS e prêmio até 3× a entrada.",
+    tag: "Memória",
+    risk: "Risco médio",
+    route: "/games/memoria-fama" as const,
+    icon: Brain,
   },
   {
     id: "queridometro",
