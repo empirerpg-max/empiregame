@@ -189,46 +189,91 @@ function drawBackground(dt) {
   px(W - 160, HORIZON_Y - 90, 14, 22, '#ffcc00');
 }
 
-// ─── CHÃO COM PISTAS EM PERSPECTIVA ─────────
+// ─── CHÃO PIXEL (asfalto + zebra) ───────────
 let roadOffset = 0;
 function drawRoad(dt) {
   roadOffset = (roadOffset + speed * dt * 0.5) % 1;
 
-  // Chão
-  const ground = ctx.createLinearGradient(0, HORIZON_Y, 0, H);
-  ground.addColorStop(0, '#0c0820');
-  ground.addColorStop(1, '#06030f');
-  ctx.fillStyle = ground;
-  ctx.fillRect(0, HORIZON_Y, W, H - HORIZON_Y);
+  // Calçada (faixa antes do horizonte)
+  px(0, HORIZON_Y, W, 6, '#3a1a55');
+  px(0, HORIZON_Y + 6, W, 2, '#ff4baa');
 
-  // Linhas convergindo no horizonte (laterais + divisórias de pistas)
-  const xs = [-1.5, -0.5, 0.5, 1.5]; // bordas laterais e divisórias entre pistas
-  ctx.strokeStyle = 'rgba(255,75,170,0.35)';
-  ctx.lineWidth = 1.5;
-  for (const lx of xs) {
-    const top = project(lx, 0, Z_SPAWN);
-    const bot = project(lx, 0, 0);
-    ctx.beginPath();
-    ctx.moveTo(top.x, top.y);
-    ctx.lineTo(bot.x, bot.y);
-    ctx.stroke();
+  // Asfalto: faixas horizontais alternadas pra dar textura "pixel"
+  const groundH = H - HORIZON_Y - 8;
+  const stripeH = 6;
+  for (let y = 0; y < groundH; y += stripeH * 2) {
+    px(0, HORIZON_Y + 8 + y,           W, stripeH, '#0a0618');
+    px(0, HORIZON_Y + 8 + y + stripeH, W, stripeH, '#08040f');
   }
 
-  // "Cílios" das pistas (faixas tracejadas em perspectiva)
-  ctx.fillStyle = 'rgba(75,240,255,0.25)';
-  for (let i = 0; i < 12; i++) {
-    const z = ((i + roadOffset) / 12) * Z_SPAWN;
-    for (const lx of [-0.5, 0.5]) {
-      const p = project(lx, 0, z);
-      const sz = 2 + (1 - p.scale) * 0; // visual mínimo
-      ctx.fillRect(p.x - 1, p.y - 1, 2 + (1 / (1 + z)) * 6, 2 + (1 / (1 + z)) * 4);
+  // Bordas neon laterais (raias da rua) em perspectiva — chunky
+  for (const lx of [-1.5, 1.5]) {
+    let prev = project(lx, 0, Z_SPAWN);
+    for (let i = 1; i <= 16; i++) {
+      const z = Z_SPAWN * (1 - i / 16);
+      const cur = project(lx, 0, z);
+      ctx.fillStyle = '#ff4baa';
+      ctx.fillRect(Math.round(cur.x) - 2, Math.round(cur.y), 4, 4);
+      prev = cur;
     }
   }
 
-  // Linha do horizonte glow
-  ctx.strokeStyle = 'rgba(75,240,255,0.4)';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, HORIZON_Y); ctx.lineTo(W, HORIZON_Y); ctx.stroke();
+  // Zebra das pistas (pixels grossos cada vez maiores)
+  for (let i = 0; i < 14; i++) {
+    const z = ((i + roadOffset) / 14) * Z_SPAWN;
+    for (const lx of [-0.5, 0.5]) {
+      const p = project(lx, 0, z);
+      const sz = 3 + (1 / (1 + z)) * 14;
+      px(p.x - sz / 2, p.y - sz / 2, sz, sz, '#4bf0ff');
+    }
+  }
+
+  // Linha do horizonte com glow simulado por 3 px stacks
+  px(0, HORIZON_Y - 2, W, 1, 'rgba(75,240,255,0.25)');
+  px(0, HORIZON_Y - 1, W, 1, 'rgba(75,240,255,0.55)');
+  px(0, HORIZON_Y,     W, 1, '#4bf0ff');
+}
+
+// ─── PAPARAZZI PURSUER (atrás do player) ────
+// Sprite pixel do paparazzi com câmera grande
+const PAPARAZZI_SPRITE = [
+  '..bbbbb..',
+  '.b00000b.',
+  'bccccccccb',
+  'b0c000c0b',
+  '.b00000b.',
+  'ssbbbbbss',
+  's0sbbb s0s',
+  '..bb.bb..',
+  '..bb.bb..',
+];
+const PAPARAZZI_PALETTE = {
+  '0': '#1a1a2a',  // preto roupa
+  'b': '#0a0a14',  // contorno
+  'c': '#444',     // câmera
+  's': '#ff4baa',  // luz/colete
+};
+let pursuerFlash = 0;
+function drawPaparazzi(dt) {
+  // Posição: canto inferior-esquerdo, com leve oscilação
+  const t = performance.now() / 200;
+  const baseS = Math.max(4, Math.floor(Math.min(W, H) * 0.012));
+  const sx = 24 + Math.sin(t) * 4;
+  const sy = FLOOR_Y - PAPARAZZI_SPRITE.length * baseS - 8 + Math.cos(t * 0.7) * 3;
+
+  // Sombra
+  px(sx + 4, FLOOR_Y - 4, PAPARAZZI_SPRITE[0].length * baseS - 6, 4, 'rgba(0,0,0,0.55)');
+  drawSprite(PAPARAZZI_SPRITE, PAPARAZZI_PALETTE, sx, sy, baseS);
+
+  // Flash de câmera aleatório
+  pursuerFlash -= dt;
+  if (pursuerFlash <= 0 && Math.random() < 0.012) pursuerFlash = 0.12;
+  if (pursuerFlash > 0) {
+    const fx = sx + 2 * baseS;
+    const fy = sy + 2 * baseS;
+    px(fx - baseS, fy - baseS, baseS * 4, baseS * 4, 'rgba(255,255,255,0.85)');
+    flashAlpha = Math.max(flashAlpha, 0.10);
+  }
 }
 
 // ─── PLAYER ──────────────────────────────────
