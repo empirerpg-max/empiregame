@@ -27,6 +27,16 @@ const games = [
     icon: Camera,
   },
   {
+    id: "memoria-fama",
+    title: "Memória da Fama",
+    description:
+      "Grade 4×4 com seus artistas. 60s. Sem erros = FLAWLESS e prêmio até 3× a entrada.",
+    tag: "Memória",
+    risk: "Risco médio",
+    route: "/games/memoria-fama" as const,
+    icon: Brain,
+  },
+  {
     id: "queridometro",
     title: "Queridômetro",
     description:
