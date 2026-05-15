@@ -1,9 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft, Gamepad2, Sparkles } from "lucide-react";
+import { ChevronLeft, Gamepad2, Music4, Play } from "lucide-react";
 
 export const Route = createFileRoute("/games/")({
   component: GamesHub,
 });
+
+const games = [
+  {
+    id: "hits-producer",
+    title: "O Produtor de Hits",
+    description:
+      "Acerte as notas no ritmo. Combo + precisão multiplicam sua aposta em E$C.",
+    tag: "Ritmo",
+    risk: "Risco alto",
+    route: "/games/hits-producer" as const,
+    icon: Music4,
+  },
+];
 
 function GamesHub() {
   return (
@@ -23,20 +36,45 @@ function GamesHub() {
           Empire <span className="text-primary">Games</span>
         </h1>
         <p className="text-muted-foreground text-[11px] font-bold mt-1 uppercase tracking-widest">
-          Em reconstrução
+          Aposte E$C, ganhe E$C
         </p>
       </header>
 
-      <section className="rounded-3xl border border-white/5 bg-card p-8 text-center flex flex-col items-center gap-4">
-        <Sparkles className="size-10 text-primary" />
-        <h2 className="text-lg font-black italic uppercase tracking-tight">
-          Novos jogos a caminho
-        </h2>
-        <p className="text-xs text-muted-foreground font-medium leading-relaxed max-w-sm">
-          O catálogo foi zerado para uma nova geração de minigames do império.
-          Em breve, novas experiências aparecem por aqui.
-        </p>
-      </section>
+      <div className="grid grid-cols-1 gap-3">
+        {games.map((g) => {
+          const Icon = g.icon;
+          return (
+            <Link
+              key={g.id}
+              to={g.route}
+              className="group flex items-center gap-4 p-5 rounded-3xl bg-card border border-white/5 hover:bg-white/[0.04] active:scale-[0.98] transition-all"
+            >
+              <div className="size-14 rounded-2xl bg-primary/15 text-primary grid place-items-center shrink-0">
+                <Icon className="size-7" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] uppercase font-black tracking-widest text-primary">
+                    {g.tag}
+                  </span>
+                  <span className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">
+                    · {g.risk}
+                  </span>
+                </div>
+                <h2 className="text-base font-black tracking-tight truncate">
+                  {g.title}
+                </h2>
+                <p className="text-[11px] text-muted-foreground font-medium truncate italic">
+                  {g.description}
+                </p>
+              </div>
+              <div className="size-10 rounded-full bg-primary text-primary-foreground grid place-items-center shrink-0 group-hover:scale-110 transition-transform">
+                <Play className="size-4 fill-current" />
+              </div>
+            </Link>
+          );
+        })}
+      </div>
     </main>
   );
 }
