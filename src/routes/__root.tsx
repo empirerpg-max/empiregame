@@ -6,6 +6,7 @@ import {
   Scripts,
   useLocation,
   useRouter,
+  useRouterState,
 } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { 
@@ -606,10 +607,36 @@ function RootInner() {
         )}
       </AnimatePresence>
 
+      <RouteTransitionOverlay />
       <Outlet />
       <BottomNav />
       <Toaster position="top-center" richColors closeButton offset={80} />
     </div>
+  );
+}
+
+function RouteTransitionOverlay() {
+  const isLoading = useRouterState({ select: (s) => s.isLoading || s.isTransitioning });
+  return (
+    <AnimatePresence>
+      {isLoading && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-[100] grid place-items-center bg-background/85 backdrop-blur-sm pointer-events-none"
+        >
+          <motion.img
+            src={logoIcon}
+            alt=""
+            className="size-20 object-contain drop-shadow-[0_0_30px_rgba(var(--primary-rgb),0.5)]"
+            animate={{ scale: [1, 1.08, 1], opacity: [0.8, 1, 0.8] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
