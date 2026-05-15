@@ -20,8 +20,8 @@ const games = [
     id: "paparazzi-escape",
     title: "Fuga do Paparazzi",
     description:
-      "Endless runner. Colete moedas no caminho e clique FUGIR antes de bater.",
-    tag: "Runner",
+      "3 pistas, pulo e esquiva. Colete moedas e clique FUGIR antes do flash final.",
+    tag: "Runner 3D",
     risk: "Risco alto",
     route: "/games/paparazzi-escape" as const,
     icon: Camera,

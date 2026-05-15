@@ -64,7 +64,7 @@ function PaparazziEscapePage() {
           Fuga do <span className="text-primary">Paparazzi</span>
         </h1>
         <p className="text-muted-foreground text-[11px] font-bold mt-1 uppercase tracking-widest">
-          Endless Runner · Risco vs Recompensa · 50 E$C de entrada
+          3 pistas · Pule · Esquive · 50 E$C de entrada
         </p>
       </header>
 

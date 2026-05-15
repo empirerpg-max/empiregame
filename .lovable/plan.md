@@ -1,69 +1,71 @@
-## Plano de migração — Empire Hub
+# Fuga do Paparazzi → Subway Surfers Edition
 
-### Diagnóstico do repositório
-- Stack: TanStack Router + React 19 + Tailwind v4 + Vite 7 + Express (SPA, sem SSR).
-- Roteamento: `createHashHistory` (URLs `/#/...`).
-- Dados: 100% client-side via `fetch` para o Apps Script (`src/lib/api.ts`). Nenhum `loader:` em rotas.
-- Telegram: `src/lib/telegram.ts` já tenta SDK + URL params + `initData` + cache. Script `telegram-web-app.js` já está no `<head>` (`index.html` e `__root.tsx`).
-- 50+ arquivos em `src/routes`, `src/components`, `src/lib`. Layout pronto (BottomNav, modais, motion).
+Reescrever o jogo HTML5 atual em `public/games/paparazzi-escape/` substituindo a mecânica de endless runner lateral por uma visão 3/4 com 3 pistas, pulo e esquiva. Mantém entrada de 50 E$C, cashout via FUGIR, perda total ao bater, integração via `sync_game_coins` e a estética Neon Glassmorphism.
 
-### Diferença vs template Lovable
-- Lovable usa TanStack **Start** (SSR no Cloudflare Workers) — não Express.
-- `__root.tsx` precisa fornecer `<html><head><body>` via `shellComponent`.
-- Não há `index.html`, `main.tsx`, nem `server.ts` próprio.
-- Routing pode continuar com hash (compatível com SSR desativado).
+## Mecânica (clássico Subway Surfers)
 
-### Etapas
+- **3 pistas fixas** (esquerda / centro / direita). Personagem trava no eixo Z aparente, só muda de pista.
+- **Inputs**:
+  - Swipe ←/→ ou setas/A,D → trocar pista
+  - Swipe ↑ ou ↑/Espaço → pulo (gravidade + arco)
+  - Swipe ↓ ou ↓ → esquiva/rolagem (hitbox baixa por ~500ms)
+- **Câmera fake 3/4**: projeção em perspectiva via escala+offset Y conforme distância (Z simulado em 2D Canvas, sem WebGL).
+- **Obstáculos** distribuídos por pista, com 3 tipos:
+  - `BARRICADE` (baixo) → precisa pular
+  - `CAMERA_DRONE` (alto) → precisa esquivar
+  - `BLOCK` (cheio) → precisa trocar de pista
+- **Moedas** em fileiras de 3-5, posicionáveis em arcos (acima de barricadas).
+- **Paparazzi perseguidor**: sprite atrás do player, "alcança" se o player tropeçar (animação de game over).
+- **Velocidade** acelera com a distância. Spawner usa intervalo decrescente.
 
-**1. Limpar template e instalar dependências faltantes**
-- Remover `src/routes/index.tsx` placeholder.
-- Adicionar via `bun add`: `motion`, `sonner`, `canvas-confetti` + `@types/canvas-confetti`, `embla-carousel-react`, `recharts`, `cmdk`, `vaul`, `input-otp`, `react-day-picker`, `react-hook-form`, `react-resizable-panels`, `date-fns`, `tw-animate-css` (a maior parte já existe; instalar só os ausentes).
+## Loop / Arquitetura
 
-**2. Copiar arquivos do repo**
-- `src/lib/api.ts`, `src/lib/telegram.ts`, `src/lib/notify.ts` → tal e qual.
-- `src/components/PlaylistEditor.tsx` → tal e qual.
-- `src/hooks/use-mobile.tsx` → mantém (já existe equivalente, sobrescrever).
-- Todas as 40+ rotas em `src/routes/*` → copiar inalteradas (já usam `createFileRoute` da TanStack Router, que é o mesmo import).
-- `src/styles.css` → mesclar tokens, fonts e `@theme` do repo no `styles.css` atual (preservar Inter + Press Start 2P + cores oklch do Empire).
+```
+game.js
+ ├─ Constantes (LANES_X, GRAVITY, JUMP_VY, SLIDE_MS, SPEED_BASE, SPEED_GROWTH)
+ ├─ State (screen, player{lane,y,vy,sliding}, obstacles[], coins[], distance, sessionCoins, speed)
+ ├─ Input Manager (touchstart/move/end → swipe; keydown) — separado do loop
+ ├─ Spawner (gera obstáculos + linhas de moedas a cada N px)
+ ├─ Physics tick (gravidade, slide timer, lane lerp)
+ ├─ Collision (AABB por pista + altura, considerando jump/slide)
+ ├─ Render (parallax 3 camadas + projeção 3/4 dos objetos por Z)
+ └─ Economia (callEmpire/sync_game_coins — inalterado)
+```
 
-**3. Adaptar `__root.tsx`**
-- Manter o pattern Lovable (`createRootRouteWithContext<{queryClient}>`, `RootShell` com `<html><head><body>`, `HeadContent`, `Scripts`).
-- Portar todo o JSX de UI do repo (`GlobalLinkModal`, `BottomNav`, `Toaster`, header com `useTelegramUser`, motion).
-- Incluir no `head()`: `telegram-web-app.js` script, fontes Google, meta `theme-color`, Open Graph.
-- Adicionar `<html lang="pt-BR" class="dark">` para preservar dark mode.
+Mantém separação `update()` / `draw()` e debit/credit já existentes em `transactEmpireCoins` / `syncEmpireCoins`.
 
-**4. Configurar router e desabilitar SSR**
-- Em `src/router.tsx`: adicionar `defaultSsr: false` ao `createRouter` (TanStack Start respeita) — todo o app renderiza só no cliente, evitando crash de `window`/`localStorage` durante SSR e mantendo o comportamento original do repo. Hash history pode ser opcionalmente removido (URLs ficam mais limpas) ou mantido para compatibilidade do bot atual — recomendo **remover hash history** (Telegram WebApp aceita URLs normais).
-- Manter `QueryClientProvider` que já está no template.
+## Visual (mantém Neon Glass)
 
-**5. Telegram WebApp — auto ID**
-- O hook `useTelegramUser` já cobre os 3 caminhos: SDK (`window.Telegram.WebApp.initDataUnsafe.user.id`), `?tgWebAppData` na URL/hash, e cache no `localStorage`.
-- Garantir que o bot esteja configurado no BotFather com **Menu Button → Web App** apontando para a URL publicada do Lovable. O Telegram injeta `tgWebAppData` automaticamente quando aberto via botão do bot — nenhuma mudança de URL é necessária.
-- Adicionar `tg.ready()` e `tg.expand()` no mount do root para tela cheia em mobile.
+- Fundo: skyline noturno + camada de luzes neon + chão de avenida com listras em perspectiva (linhas convergindo ao horizonte).
+- Player: silhueta neon com leve glow.
+- Obstáculos: barricadas de show com fitas neon, drones-câmera com flash branco no impacto.
+- Moedas: 🪙 com pulse glow.
+- HUD: reaproveita `style.css` atual (saldo da partida + distância + botão FUGIR).
 
-**6. Correção de bugs conhecidos**
-- `useTelegramUser`: o array de fallback tem `params.get("tgid")` duplicado — limpar.
-- Logs `console.log("DEBUG ...")` de produção — remover ou colocar atrás de `import.meta.env.DEV`.
-- Cache `localStorage` pode servir dados de outro usuário entre testes — invalidar quando SDK retornar ID diferente.
-- Em rotas que dependem de `user.id`, garantir guard `if (!ready) return loading` para evitar flash de "guest".
+## Telas / fluxo (sem mudança)
 
-**7. Otimização mobile**
-- Já existe `viewport-fit=cover`, `safe-area-inset-bottom` na BottomNav, `bg-background/85 backdrop-blur` — manter.
-- Adicionar `overscroll-behavior: none` no body para evitar pull-to-refresh dentro do Telegram.
-- Verificar zonas de toque (mínimo 44px) na BottomNav e modais.
-- Lazy-load das imagens do Drive (`loading="lazy"` em `<img>`).
+`MENU → LOADING (debita 50) → RUNNING (HUD + FUGIR) → DEAD ou CASHOUT_LOADING → SUCCESS`. Reuso integral do `index.html` atual.
 
-**8. Verificação final**
-- Rodar build (auto pelo harness) e checar `routeTree.gen.ts` regenerado.
-- Abrir preview e validar: home renderiza, BottomNav visível, modal de vincular abre, navegação entre rotas funciona, fonte Inter carregada.
-- Testar com `?id=810141686` na URL (simula usuário Telegram) e ver se "Meus Artistas" carrega via Apps Script.
+## Arquivos afetados
 
-### Detalhes técnicos
+- `public/games/paparazzi-escape/game.js` → **reescrever** com novo motor 3-lanes.
+- `public/games/paparazzi-escape/style.css` → pequenos ajustes (instruções de swipe no menu, ícones de pista).
+- `public/games/paparazzi-escape/index.html` → atualizar bloco `.rules` (swipe ←/→, ↑ pular, ↓ esquivar).
+- `src/routes/games.paparazzi-escape.tsx` → atualizar texto descritivo ("3 pistas, pule, esquive").
+- `src/routes/games.index.tsx` → atualizar `description` do card.
 
-- **Imports inalterados**: `@tanstack/react-router` é o mesmo pacote em Router e Start; `createFileRoute` funciona idêntico, então as 40+ rotas não precisam de edição.
-- **Apps Script CORS**: o deployment já está como "Anyone" — fetch direto do browser funciona, não precisa proxy.
-- **SSR off**: Lovable Start aceita `defaultSsr: false` no router; isso faz o Worker servir só o shell HTML e o cliente hidratar tudo. Equivalente ao SPA original.
-- **Hash history**: removido — a URL do bot não muda, o Telegram passa `tgWebAppData` no fragment automaticamente e nosso hook lê tanto `?` quanto `#`.
+Sem mudanças no Apps Script — `sync_game_coins` continua igual.
 
-### Próximas etapas (depois desta entrega)
-Você disse que tem outras já pensadas — implementaremos uma a uma após essa base estar rodando.
+## Detalhes técnicos
+
+- Projeção 3/4: para cada objeto com `z` (distância à frente), `screenY = horizonY + (canvasH-horizonY) * (1/(1+z*k))`, `scale = 1/(1+z*k)`, `screenX = laneCenterX(lane) * scale + canvasW/2 * (1-scale)`. Atualizar `z -= speed * dt` por frame; remover quando `z < -2`.
+- Hitbox: colisão dispara quando `z` cruza o plano do player (`z ≈ 0`) e a pista bate, considerando `player.y` (pulo) ou `player.sliding`.
+- Performance: limitar a ~30 obstáculos ativos, pool simples de objetos para evitar GC no mobile.
+- Touch: detectar swipe com threshold 30px e `Math.abs(dx) vs dy` para distinguir lateral de vertical.
+- Anti-doubleclick em FUGIR já existe — preservar.
+
+## Fora de escopo
+
+- Sem power-ups (ímã/escudo/hoverboard) — fica para iteração futura se você pedir.
+- Sem trilha sonora nova.
+- Sem alterações no backend.
