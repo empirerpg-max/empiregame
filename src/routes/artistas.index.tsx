@@ -34,13 +34,23 @@ function ArtistasList() {
 
   return (
     <main className="flex-1 mx-auto w-full max-w-2xl px-4 pt-6">
-      <header className="mb-4">
-        <p className="text-[11px] uppercase tracking-[0.2em] text-primary/70 font-black mb-1">
-          {filter === "all" ? "A Indústria" : "Seu Plantel"}
-        </p>
-        <h1 className="text-xl font-black tracking-tighter uppercase italic">
-          {filter === "all" ? "Empire Artists" : "Meus Artistas"}
-        </h1>
+      <header className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-primary/70 font-black mb-1">
+            {filter === "all" ? "A Indústria" : "Seu Plantel"}
+          </p>
+          <h1 className="text-xl font-black tracking-tighter uppercase italic">
+            {filter === "all" ? "Empire Artists" : "Meus Artistas"}
+          </h1>
+        </div>
+        {filter !== "all" && user && artists && artists.length > 0 && (
+          <button
+            onClick={() => (window as any).setShowLinkModal?.(true)}
+            className="px-4 py-2.5 rounded-2xl bg-primary/15 border border-primary/30 text-primary font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all hover:bg-primary/25"
+          >
+            + Artista
+          </button>
+        )}
       </header>
       {!user && ready && (
         <p className="text-sm text-muted-foreground">O acesso exige identificação imperial via Telegram.</p>
