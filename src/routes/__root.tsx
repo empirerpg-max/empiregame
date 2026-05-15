@@ -174,11 +174,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/130c3ca4-e5a2-42b6-b630-b40d622d345c/id-preview-b6ad8193--6634bb87-7b09-47bf-82c3-5047e8bc7caa.lovable.app-1777495380913.png",
       },
-      { name: "description", content: "Empire Hub Studio is a Telegram bot application for managing artist careers and social interactions." },
-      { property: "og:description", content: "Empire Hub Studio is a Telegram bot application for managing artist careers and social interactions." },
-      { name: "twitter:description", content: "Empire Hub Studio is a Telegram bot application for managing artist careers and social interactions." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de8b0c28-0fc0-4c33-a514-65dbb7cdd3d4/id-preview-56a4fc4c--1dfc0f66-4a5d-4eee-afb1-75282af91d1d.lovable.app-1778802833405.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de8b0c28-0fc0-4c33-a514-65dbb7cdd3d4/id-preview-56a4fc4c--1dfc0f66-4a5d-4eee-afb1-75282af91d1d.lovable.app-1778802833405.png" },
     ],
     links: [
       {
@@ -219,6 +214,7 @@ function BottomNav() {
   const items = [
     { to: "/", label: "Hub", icon: Home },
     { to: "/artistas", search: { filter: "mine" }, label: "Artistas", icon: Library },
+    { to: "/charts", label: "Charts", icon: TrendingUp },
     { to: "/social", label: "Social", icon: Share2 },
     { to: "/ranking", label: "Rank", icon: Star },
   ];
@@ -228,7 +224,7 @@ function BottomNav() {
       role="navigation"
       aria-label="Navegação principal"
     >
-      <div className="mx-auto max-w-md flex items-stretch justify-around px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="mx-auto max-w-md flex items-stretch justify-around px-1 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {items.map((it) => {
           const active = pathname === it.to || (it.to !== "/" && pathname.startsWith(it.to));
           const Icon = it.icon;
@@ -240,15 +236,15 @@ function BottomNav() {
               onClick={() => haptic.selection()}
               aria-label={it.label}
               aria-current={active ? "page" : undefined}
-              className={`relative flex flex-col items-center justify-center gap-0.5 min-h-11 min-w-11 flex-1 rounded-2xl transition-colors ${
+              className={`relative flex flex-col items-center justify-center gap-0.5 min-h-11 flex-1 rounded-2xl transition-colors ${
                 active ? "text-primary" : "text-muted-foreground"
               }`}
             >
               {active && (
                 <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-primary" />
               )}
-              <Icon className="size-[22px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${active ? "opacity-100" : "opacity-80"}`}>
+              <Icon className="size-[20px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+              <span className={`text-[9px] font-bold uppercase tracking-wider ${active ? "opacity-100" : "opacity-80"}`}>
                 {it.label}
               </span>
             </Link>
