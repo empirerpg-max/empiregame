@@ -33,6 +33,7 @@ import { Route as ArtistasIndexRouteImport } from './routes/artistas.index'
 import { Route as ToursNomeRouteImport } from './routes/tours.$nome'
 import { Route as PlaylistsNovaRouteImport } from './routes/playlists.nova'
 import { Route as PlaylistsIdRouteImport } from './routes/playlists.$id'
+import { Route as GamesHitsProducerRouteImport } from './routes/games.hits-producer'
 import { Route as AlbumIdRouteImport } from './routes/album.$id'
 import { Route as AcoesTourRouteImport } from './routes/acoes.tour'
 import { Route as AcoesCinemaRouteImport } from './routes/acoes.cinema'
@@ -163,6 +164,11 @@ const PlaylistsIdRoute = PlaylistsIdRouteImport.update({
   path: '/playlists/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GamesHitsProducerRoute = GamesHitsProducerRouteImport.update({
+  id: '/games/hits-producer',
+  path: '/games/hits-producer',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AlbumIdRoute = AlbumIdRouteImport.update({
   id: '/album/$id',
   path: '/album/$id',
@@ -231,6 +237,7 @@ export interface FileRoutesByFullPath {
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
+  '/games/hits-producer': typeof GamesHitsProducerRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
+  '/games/hits-producer': typeof GamesHitsProducerRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -302,6 +310,7 @@ export interface FileRoutesById {
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
+  '/games/hits-producer': typeof GamesHitsProducerRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -339,6 +348,7 @@ export interface FileRouteTypes {
     | '/acoes/cinema'
     | '/acoes/tour'
     | '/album/$id'
+    | '/games/hits-producer'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -374,6 +384,7 @@ export interface FileRouteTypes {
     | '/acoes/cinema'
     | '/acoes/tour'
     | '/album/$id'
+    | '/games/hits-producer'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -409,6 +420,7 @@ export interface FileRouteTypes {
     | '/acoes/cinema'
     | '/acoes/tour'
     | '/album/$id'
+    | '/games/hits-producer'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -445,6 +457,7 @@ export interface RootRouteChildren {
   AcoesCinemaRoute: typeof AcoesCinemaRoute
   AcoesTourRoute: typeof AcoesTourRoute
   AlbumIdRoute: typeof AlbumIdRouteWithChildren
+  GamesHitsProducerRoute: typeof GamesHitsProducerRoute
   PlaylistsIdRoute: typeof PlaylistsIdRouteWithChildren
   PlaylistsNovaRoute: typeof PlaylistsNovaRoute
   ToursNomeRoute: typeof ToursNomeRoute
@@ -627,6 +640,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlaylistsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/games/hits-producer': {
+      id: '/games/hits-producer'
+      path: '/games/hits-producer'
+      fullPath: '/games/hits-producer'
+      preLoaderRoute: typeof GamesHitsProducerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/album/$id': {
       id: '/album/$id'
       path: '/album/$id'
@@ -738,6 +758,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcoesCinemaRoute: AcoesCinemaRoute,
   AcoesTourRoute: AcoesTourRoute,
   AlbumIdRoute: AlbumIdRouteWithChildren,
+  GamesHitsProducerRoute: GamesHitsProducerRoute,
   PlaylistsIdRoute: PlaylistsIdRouteWithChildren,
   PlaylistsNovaRoute: PlaylistsNovaRoute,
   ToursNomeRoute: ToursNomeRoute,
