@@ -102,67 +102,91 @@ function laneToX(lane) {
   return (lane - 1) * (LANE_OFFSET / 0.18);
 }
 
-// ─── PARALLAX FUNDO ─────────────────────────
-const skyline = [];
-const neonLights = [];
-function initBackground() {
-  skyline.length = 0;
-  for (let i = 0; i < 14; i++) {
-    skyline.push({
-      x: Math.random() * W * 1.4 - W * 0.2,
-      w: 40 + Math.random() * 90,
-      h: 60 + Math.random() * 130,
-      hue: 240 + Math.random() * 60,
-    });
+// ─── PARALLAX FUNDO PIXEL ART ───────────────
+// 3 camadas de prédios chunky com janelas em grid (estilo pixel)
+const buildingsFar  = [];
+const buildingsMid  = [];
+const buildingsNear = [];
+const stars = [];
+function buildLayer(arr, count, minH, maxH, palette) {
+  arr.length = 0;
+  let x = -50;
+  while (x < W * 1.4) {
+    const w = 28 + Math.floor(Math.random() * 56);
+    const h = minH + Math.floor(Math.random() * (maxH - minH));
+    const c = palette[Math.floor(Math.random() * palette.length)];
+    const win = Math.random() < 0.85;
+    arr.push({ x, w, h, c, win, hue: Math.floor(Math.random() * 60) });
+    x += w + 2 + Math.floor(Math.random() * 6);
   }
-  neonLights.length = 0;
-  for (let i = 0; i < 40; i++) {
-    neonLights.push({
-      x: Math.random() * W,
-      y: HORIZON_Y - 8 + Math.random() * 14,
-      hue: Math.random() * 360,
-      r: 2 + Math.random() * 3,
-      a: 0.3 + Math.random() * 0.6,
-      vx: 20 + Math.random() * 30,
-    });
+}
+function initBackground() {
+  buildLayer(buildingsFar,  16, 50,  100, ['#1a1238', '#221a44', '#2a1a4e']);
+  buildLayer(buildingsMid,  14, 80,  170, ['#2a1450', '#3a1860', '#481a72']);
+  buildLayer(buildingsNear, 10, 120, 230, ['#10081e', '#180a26', '#220c34']);
+  stars.length = 0;
+  for (let i = 0; i < 60; i++) stars.push({ x: Math.random() * W, y: Math.random() * HORIZON_Y * 0.85, b: Math.random() < 0.3 });
+}
+
+function scrollLayer(arr, dx) {
+  for (const b of arr) {
+    b.x -= dx;
+    if (b.x + b.w < -20) {
+      const last = arr.reduce((m, o) => Math.max(m, o.x + o.w), 0);
+      b.x = last + 2 + Math.floor(Math.random() * 6);
+    }
+  }
+}
+function drawLayer(arr, windowColor, windowSize) {
+  for (const b of arr) {
+    px(b.x, HORIZON_Y - b.h, b.w, b.h, b.c);
+    // topo (antena/caixa d'água) chance
+    if (b.w > 36 && Math.random() < 0.0001) {} // estático: desenha só se sorteado na criação? simples:
+    // janelas em grid
+    if (b.win) {
+      const step = windowSize * 2;
+      for (let wy = HORIZON_Y - b.h + 6; wy < HORIZON_Y - 6; wy += step) {
+        for (let wx = b.x + 4; wx < b.x + b.w - 4; wx += step) {
+          // padrão pseudo-aleatório estável usando coords
+          if (((wx * 31 + wy * 17 + b.hue) >> 1) % 5 < 2) {
+            px(wx, wy, windowSize, windowSize, windowColor);
+          }
+        }
+      }
+    }
   }
 }
 
 function drawBackground(dt) {
-  // Céu
-  const sky = ctx.createLinearGradient(0, 0, 0, FLOOR_Y);
-  sky.addColorStop(0, '#04040e');
-  sky.addColorStop(0.6, '#0a0820');
-  sky.addColorStop(1, '#1a0a3a');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, FLOOR_Y);
+  // Céu pixel (3 faixas)
+  px(0, 0,                     W, HORIZON_Y * 0.45, '#08051a');
+  px(0, HORIZON_Y * 0.45,      W, HORIZON_Y * 0.30, '#140a30');
+  px(0, HORIZON_Y * 0.75,      W, HORIZON_Y * 0.25, '#2a0e4a');
 
-  // Skyline lento
-  for (const b of skyline) {
-    b.x -= speed * 4 * dt;
-    if (b.x + b.w < 0) { b.x = W + Math.random() * 80; b.w = 40 + Math.random() * 90; }
-    ctx.fillStyle = `hsl(${b.hue}, 35%, 10%)`;
-    ctx.fillRect(b.x, HORIZON_Y - b.h, b.w, b.h);
-    // janelinhas
-    ctx.fillStyle = `hsla(${b.hue + 20}, 80%, 65%, 0.35)`;
-    for (let wy = HORIZON_Y - b.h + 10; wy < HORIZON_Y - 6; wy += 12) {
-      for (let wx = b.x + 4; wx < b.x + b.w - 6; wx += 10) {
-        if (Math.random() > 0.7) ctx.fillRect(wx, wy, 3, 5);
-      }
-    }
+  // Estrelas
+  for (const s of stars) {
+    px(s.x, s.y, s.b ? 2 : 1, s.b ? 2 : 1, s.b ? '#ffeeff' : '#aaaadd');
   }
 
-  // Linha do horizonte com neon
-  for (const n of neonLights) {
-    n.x -= n.vx * dt;
-    if (n.x < -10) n.x = W + 10;
-    ctx.save();
-    ctx.globalAlpha = n.a;
-    ctx.fillStyle = `hsl(${n.hue}, 100%, 65%)`;
-    ctx.shadowBlur = 12; ctx.shadowColor = `hsl(${n.hue}, 100%, 70%)`;
-    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
+  // Lua pixel
+  px(W - 80, 36, 24, 24, '#ffe9b8');
+  px(W - 76, 32, 16, 4,  '#ffe9b8');
+  px(W - 80, 56, 24, 4,  '#ffe9b8');
+
+  // 3 camadas de prédios (parallax)
+  scrollLayer(buildingsFar,  speed * 0.6 * dt * 8);
+  drawLayer(buildingsFar, '#ffaa55', 2);
+
+  scrollLayer(buildingsMid,  speed * 1.4 * dt * 8);
+  drawLayer(buildingsMid, '#ffcc66', 3);
+
+  scrollLayer(buildingsNear, speed * 2.4 * dt * 8);
+  drawLayer(buildingsNear, '#ff66cc', 3);
+
+  // Letreiros neon flutuando (pixel)
+  px(60, HORIZON_Y - 60, 10, 18, '#ff4baa');
+  px(72, HORIZON_Y - 56, 6, 14,  '#4bf0ff');
+  px(W - 160, HORIZON_Y - 90, 14, 22, '#ffcc00');
 }
 
 // ─── CHÃO COM PISTAS EM PERSPECTIVA ─────────
