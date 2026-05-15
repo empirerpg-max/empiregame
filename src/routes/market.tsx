@@ -166,11 +166,10 @@ function MarketPage() {
 
       {tab === "catalogo" && (
         <>
-          {/* iFood Style Categories */}
           <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4 mb-8">
              <button
                onClick={() => setCat("ALL")}
-               className={`shrink-0 h-24 w-20 rounded-[2rem] flex flex-col items-center justify-center gap-2 border transition-all ${
+               className={`relative shrink-0 h-24 w-20 rounded-[2rem] flex flex-col items-center justify-center gap-2 border transition-all ${
                  cat === "ALL" ? "bg-primary border-primary text-primary-foreground shadow-xl shadow-primary/20" : "bg-card border-white/5 text-muted-foreground"
                }`}
              >
@@ -178,12 +177,17 @@ function MarketPage() {
                  <ShoppingBag className="size-5" />
                </div>
                <span className="text-[10px] font-black uppercase tracking-tighter">Tudo</span>
+               {items && items.length > 0 && (
+                 <span className={`absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black grid place-items-center ${cat === "ALL" ? "bg-white text-primary" : "bg-primary text-primary-foreground"}`}>
+                   {items.length}
+                 </span>
+               )}
              </button>
              {cats.map(c => (
                 <button
                   key={c}
                   onClick={() => setCat(c)}
-                  className={`shrink-0 h-24 w-20 rounded-[2rem] flex flex-col items-center justify-center gap-2 border transition-all ${
+                  className={`relative shrink-0 h-24 w-20 rounded-[2rem] flex flex-col items-center justify-center gap-2 border transition-all ${
                     cat === c ? "bg-primary border-primary text-primary-foreground shadow-xl shadow-primary/20" : "bg-card border-white/5 text-muted-foreground"
                   }`}
                 >
@@ -193,6 +197,11 @@ function MarketPage() {
                   <span className="text-[10px] font-black uppercase tracking-tighter truncate w-16 text-center">
                     {CAT_META[c]?.label || c}
                   </span>
+                  {counts[c] > 0 && (
+                    <span className={`absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black grid place-items-center ${cat === c ? "bg-white text-primary" : "bg-primary text-primary-foreground"}`}>
+                      {counts[c]}
+                    </span>
+                  )}
                 </button>
              ))}
           </div>
