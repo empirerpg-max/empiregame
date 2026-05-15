@@ -61,7 +61,7 @@ const CAT_META: Record<string, { label: string; icon: React.ReactNode; color: st
   }
 };
 
-const VISIBLE_CATS = ["MARKET", "IMOVEIS", "CARREIRA", "EXTRA"];
+
 
 function MarketPage() {
   const { user, ready } = useTelegramUser();
