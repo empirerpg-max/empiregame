@@ -54,13 +54,17 @@ type Post = {
   data: string;
 };
 
+// ✅ Correção: Tipagem flexível para capturar os dados, não importa como venham do banco
 type SocialProfile = {
   artista: string;
   rede: string;
   handle: string;
   bio: string;
-  avatar_url: string;
+  avatar_url?: string;
+  avatar?: string;
+  foto?: string;
   seguidores?: number;
+  seguindo?: number;
 };
 
 type News = {
@@ -128,7 +132,6 @@ function SocialPage() {
     const allArts = await api.listarTodos();
     setAllArtists(allArts);
     
-    // Auto-selecionar o primeiro como ativo se ainda não tiver
     if (arts.length > 0 && !activeArtist) {
       setActiveArtist(arts[0]);
       setSelectedArtist(arts[0].nome);
@@ -186,7 +189,6 @@ function SocialPage() {
       if (res.ok) {
         setNewComment("");
         loadComments(selectedPost.id);
-        // O contador de comentários no feed só atualiza no refresh ou atualizamos localmente
         setPosts(prev => prev.map(p => p.id === selectedPost.id ? { ...p, analytics: { ...p.analytics, comments: p.analytics.comments + 1 } } : p));
       }
     } finally {
@@ -198,11 +200,14 @@ function SocialPage() {
     if (!editingProfileInfo || submitting) return;
     setSubmitting(true);
     try {
+      // ✅ Correção: Enviamos os dados com várias chaves pro Apps Script mapear sem problemas
       const p: any = {
         artista: editingProfileInfo.artista,
         rede: editingProfileInfo.rede,
         handle: profileHandle || "@",
         avatar_url: profileAvatar || "",
+        avatar: profileAvatar || "", 
+        foto: profileAvatar || "",
         bio: profileBio || "",
         seguindo: Number(profileFollowing) || 0,
       };
@@ -276,13 +281,12 @@ function SocialPage() {
     }
   }
 
-  // Post creation modal
   const driveImg = (url: string | null | undefined) => {
     if (!url) return undefined;
     if (url.includes("lh3.googleusercontent.com")) return url;
     const m = String(url).match(/[-\w]{25,}/);
     if (!m) return url;
-    return `https://lh3.googleusercontent.com/d/${m[0]}=w600`;
+    return `https://lh3.googleusercontent.com/d/$${m[0]}=w600`;
   };
 
   const getPostStyles = (tipo: string) => {
@@ -294,7 +298,7 @@ function SocialPage() {
 
   const neoCard = "border-[3.5px] rounded-[24px] p-4 sm:p-5 mb-5 transition-all active:translate-x-[1px] active:translate-y-[1px]";
   const neoBadge = "px-2.5 py-0.5 rounded-full border-2 border-black text-[11px] font-black uppercase tracking-tight text-white text-center";
-  const neoInput = "w-full border-3 border-black rounded-[16px] p-3.5 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-[#3D8BFF]/20 text-black bg-white placeholder:text-black/30 transition-all";
+  const neoInput = "w-full border-[3px] border-black rounded-[16px] p-3.5 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-[#3D8BFF]/20 text-black bg-white placeholder:text-black/30 transition-all";
 
   return (
     <div className="flex-1 bg-[#F4F4F5] min-h-screen pb-32">
@@ -325,7 +329,6 @@ function SocialPage() {
           </div>
         </div>
 
-        {/* Active Artist Selector - Modern Scroll */}
         {myArtists.length > 0 && (
           <div className="mb-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-black/40 mb-3 px-1 italic">Interagir como:</p>
@@ -637,10 +640,14 @@ function SocialPage() {
               const handle = perfil?.handle || ('@' + selectedIndustryArtist.nome.toLowerCase().replace(/\s+/g, ''));
               const cleanHandle = handle.replace(/^@/, '');
               const bio = perfil?.bio || selectedIndustryArtist.descricao || '';
-              const followers = (perfil as any)?.seguidores || 0;
-              const following = (perfil as any)?.seguindo || 0;
+              const followers = perfil?.seguidores || 0;
+              const following = perfil?.seguindo || 0;
               const totalLikes = artistPosts.reduce((s, p) => s + (p.analytics?.likes || 0), 0);
-              const avatarSrc = perfil?.avatar_url ? driveImg(perfil.avatar_url) : undefined;
+              
+              // ✅ Correção: Busca garantida da imagem
+              const profileAvatarStr = perfil?.avatar_url || perfil?.avatar || perfil?.foto;
+              const avatarSrc = profileAvatarStr ? driveImg(profileAvatarStr) : undefined;
+              
               const avatarFallback = (
                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-black text-2xl italic">
                   {selectedIndustryArtist.nome[0]}
@@ -679,619 +686,4 @@ function SocialPage() {
                             {renderAvatar("size-20 rounded-full overflow-hidden bg-zinc-100")}
                           </div>
                         </div>
-                        <div className="flex-1 grid grid-cols-3 gap-2 text-center pt-3">
-                          <div><p className="font-black text-base">{artistPosts.length}</p><p className="text-[11px] text-black/60">posts</p></div>
-                          <div><p className="font-black text-base">{formatCount(followers)}</p><p className="text-[11px] text-black/60">seguidores</p></div>
-                          <div><p className="font-black text-base">{formatCount(following)}</p><p className="text-[11px] text-black/60">seguindo</p></div>
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <p className="font-black text-sm flex items-center gap-1">{selectedIndustryArtist.nome} <BadgeCheck className="size-4 text-[#3D8BFF]" fill="currentColor" /></p>
-                        <p className="text-[11px] uppercase text-black/50 font-bold tracking-wide">Artista</p>
-                        {bio && <p className="text-[13px] mt-1.5 leading-snug whitespace-pre-line">{bio}</p>}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 mt-4">
-                        <button className="py-1.5 rounded-lg text-[13px] font-bold text-white bg-gradient-to-r from-[#fa7e1e] via-[#d62976] to-[#4f5bd5]">Seguir</button>
-                        <button className="py-1.5 rounded-lg text-[13px] font-bold bg-zinc-100 border border-zinc-200">Mensagem</button>
-                      </div>
-                    </div>
-                    {/* Tabs */}
-                    <div className="grid grid-cols-3 mt-4 border-t border-zinc-200">
-                      <button className="py-2.5 flex items-center justify-center border-t-2 border-black text-black"><Grid3x3 className="size-5" /></button>
-                      <button className="py-2.5 flex items-center justify-center border-t-2 border-transparent text-black/40"><Film className="size-5" /></button>
-                      <button className="py-2.5 flex items-center justify-center border-t-2 border-transparent text-black/40"><Tag className="size-5" /></button>
-                    </div>
-                    {/* Grid */}
-                    {artistPosts.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-[2px] bg-zinc-200">
-                        {artistPosts.map((p) => (
-                          <button key={p.id} onClick={() => { setSelectedPost(p); loadComments(p.id); setIsCommentModalOpen(true); }} className="aspect-square bg-zinc-50 relative overflow-hidden group">
-                            {p.media_url ? (
-                              <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy"  decoding="async"/>
-                            ) : (
-                              <div className="w-full h-full bg-gradient-to-br from-pink-200 via-purple-200 to-orange-200 flex items-center justify-center p-2">
-                                <p className="text-[10px] text-black/70 font-bold line-clamp-3 text-left">{p.texto}</p>
-                              </div>
-                            )}
-                            {p.subtipo === 'Story' && <Film className="absolute top-1.5 right-1.5 size-3.5 text-white drop-shadow" />}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-16 flex flex-col items-center gap-2 text-black/40">
-                        <ImageIcon className="size-10" />
-                        <p className="text-xs font-bold">Nenhuma publicação ainda</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              // ============ TWITTER / X ============
-              if (industryViewTab === 'Twitter') {
-                return (
-                  <div className="-mx-4 bg-black text-white rounded-[24px] overflow-hidden border-[3px] border-black shadow-[6px_6px_0px_#1d9bf0]">
-                    <BackBar bg="bg-black/95 backdrop-blur" fg="text-white" accent="text-[#1d9bf0]" />
-                    {/* Banner */}
-                    <div className="h-28 bg-gradient-to-br from-[#1d9bf0] via-[#0a7bbf] to-[#15202b] relative" />
-                    <div className="px-4 pb-4 -mt-12">
-                      <div className="flex items-end justify-between">
-                        <div className="p-1 bg-black rounded-full">
-                          {renderAvatar("size-24 rounded-full overflow-hidden bg-zinc-800")}
-                        </div>
-                        <button className="mt-12 px-4 py-1.5 rounded-full bg-white text-black font-black text-sm">Seguir</button>
-                      </div>
-                      <div className="mt-3">
-                        <p className="font-black text-xl flex items-center gap-1.5">{selectedIndustryArtist.nome} <BadgeCheck className="size-5 text-[#1d9bf0]" fill="currentColor" /></p>
-                        <p className="text-sm text-zinc-500">{handle}</p>
-                        {bio && <p className="text-[14px] mt-2 leading-snug whitespace-pre-line">{bio}</p>}
-                        <div className="flex gap-4 mt-3 text-sm">
-                          <span><strong className="text-white">{formatCount(following)}</strong> <span className="text-zinc-500">Seguindo</span></span>
-                          <span><strong className="text-white">{formatCount(followers)}</strong> <span className="text-zinc-500">Seguidores</span></span>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Tabs */}
-                    <div className="grid grid-cols-4 border-b border-zinc-800">
-                      {['Posts', 'Respostas', 'Mídia', 'Curtidas'].map((t, i) => (
-                        <button key={t} className={`py-3.5 text-[13px] font-bold relative ${i === 0 ? 'text-white' : 'text-zinc-500'}`}>
-                          {t}
-                          {i === 0 && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 rounded-full bg-[#1d9bf0]" />}
-                        </button>
-                      ))}
-                    </div>
-                    {/* Timeline */}
-                    {artistPosts.length > 0 ? (
-                      <div>
-                        {artistPosts.map((p) => (
-                          <article key={p.id} className="flex gap-3 px-4 py-3 border-b border-zinc-800 hover:bg-white/[0.03] cursor-pointer text-left" onClick={() => { setSelectedPost(p); loadComments(p.id); setIsCommentModalOpen(true); }}>
-                            <div className="size-10 rounded-full overflow-hidden bg-zinc-800 shrink-0">
-                              {avatarSrc ? <img src={avatarSrc} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy"  decoding="async"/> : avatarFallback}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1 text-[14px]">
-                                <span className="font-black truncate">{selectedIndustryArtist.nome}</span>
-                                <BadgeCheck className="size-4 text-[#1d9bf0] shrink-0" fill="currentColor" />
-                                <span className="text-zinc-500 truncate">{handle}</span>
-                                <span className="text-zinc-500">·</span>
-                                <span className="text-zinc-500">{new Date(p.data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
-                              </div>
-                              <p className="text-[14px] mt-0.5 leading-snug whitespace-pre-line">{p.texto}</p>
-                              {p.media_url && (
-                                <div className="mt-2 rounded-2xl overflow-hidden border border-zinc-800 aspect-video bg-zinc-900">
-                                  <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy"  decoding="async"/>
-                                </div>
-                              )}
-                              <div className="flex justify-between mt-3 max-w-xs text-zinc-500 text-[12px]">
-                                <span className="flex items-center gap-1.5 hover:text-[#1d9bf0]"><MessageCircle className="size-4" /> {p.analytics.comments}</span>
-                                <span className="flex items-center gap-1.5 hover:text-[#00ba7c]"><Repeat2 className="size-4" /> 0</span>
-                                <button onClick={(e) => { e.stopPropagation(); handleLike(p.id); }} className="flex items-center gap-1.5 hover:text-[#f91880]"><Heart className="size-4" /> {p.analytics.likes}</button>
-                                <span className="flex items-center gap-1.5 hover:text-[#1d9bf0]"><Share2 className="size-4" /></span>
-                              </div>
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-20 flex flex-col items-center gap-2 text-zinc-600">
-                        <Twitter className="size-10" />
-                        <p className="text-xs font-bold">Sem posts ainda</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              // ============ TIKTOK ============
-              return (
-                <div className="-mx-4 bg-black text-white rounded-[24px] overflow-hidden border-[3px] border-black shadow-[6px_6px_0px_#FE2C55]">
-                  <BackBar bg="bg-black" fg="text-white" accent="text-[#25F4EE]" />
-                  <div className="px-5 pt-6 pb-5 flex flex-col items-center text-center">
-                    {renderAvatar("size-24 rounded-full overflow-hidden border-2 border-zinc-800 bg-zinc-900")}
-                    <p className="font-black text-lg mt-3 flex items-center gap-1">{handle} <BadgeCheck className="size-4 text-[#25F4EE]" fill="currentColor" /></p>
-                    <p className="text-[13px] text-zinc-400">{selectedIndustryArtist.nome}</p>
-                    <div className="flex gap-2 mt-3">
-                      <button className="px-6 py-1.5 rounded-md bg-[#FE2C55] font-bold text-sm">Seguir</button>
-                      <button className="px-3 py-1.5 rounded-md bg-zinc-800 font-bold text-sm">Mensagem</button>
-                      <button className="px-3 py-1.5 rounded-md bg-zinc-800 font-bold text-sm"><UserCircle className="size-4" /></button>
-                    </div>
-                    <div className="flex gap-6 mt-5">
-                      <div><p className="font-black text-base">{formatCount(following)}</p><p className="text-[11px] text-zinc-400">Seguindo</p></div>
-                      <div><p className="font-black text-base">{formatCount(followers)}</p><p className="text-[11px] text-zinc-400">Seguidores</p></div>
-                      <div><p className="font-black text-base">{formatCount(totalLikes)}</p><p className="text-[11px] text-zinc-400">Curtidas</p></div>
-                    </div>
-                    {bio && <p className="text-[13px] mt-4 leading-snug max-w-xs whitespace-pre-line">{bio}</p>}
-                  </div>
-                  {/* Tabs */}
-                  <div className="grid grid-cols-2 border-b border-zinc-800">
-                    <button className="py-3 flex items-center justify-center border-b-2 border-white text-white"><Grid3x3 className="size-5" /></button>
-                    <button className="py-3 flex items-center justify-center border-b-2 border-transparent text-zinc-500"><Heart className="size-5" /></button>
-                  </div>
-                  {/* Grid 9:16 */}
-                  {artistPosts.length > 0 ? (
-                    <div className="grid grid-cols-3 gap-[2px] bg-zinc-900">
-                      {artistPosts.map((p) => (
-                        <button key={p.id} onClick={() => { setSelectedPost(p); loadComments(p.id); setIsCommentModalOpen(true); }} className="aspect-[9/16] bg-zinc-900 relative overflow-hidden">
-                          {p.media_url ? (
-                            <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy"  decoding="async"/>
-                          ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-[#FE2C55]/40 via-black to-[#25F4EE]/30 flex items-center justify-center p-2">
-                              <p className="text-[10px] text-white/80 font-bold line-clamp-4 text-left">{p.texto}</p>
-                            </div>
-                          )}
-                          <div className="absolute inset-x-0 bottom-0 p-1.5 bg-gradient-to-t from-black/80 to-transparent flex items-center gap-1 text-white text-[11px] font-bold">
-                            <Play className="size-3 fill-current" />
-                            {formatCount(p.analytics.likes * 17 + 234)}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="py-16 flex flex-col items-center gap-2 text-zinc-600">
-                      <Music2 className="size-10" />
-                      <p className="text-xs font-bold">Nenhum vídeo ainda</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        ) : (
-          <div className="grid gap-6 text-black pb-20">
-            <h2 className="text-2xl font-black tracking-tighter uppercase italic text-center text-black">Redes <span className="text-[#3D8BFF]">Sociais</span></h2>
-            {myArtists.map(art => (
-              <div key={art.nome} className={neoCard}>
-                <div className="flex items-center gap-3 mb-4 text-black">
-                  <h3 className="font-black text-lg uppercase italic text-black">{art.nome}</h3>
-                </div>
-                
-                <div className="grid gap-3">
-                  {["Instagram", "Twitter", "TikTok"].map(rede => {
-                    const perfil = profiles.find(p => p.artista === art.nome && p.rede === rede);
-                    return (
-                      <div key={rede} className="flex flex-col gap-2 p-4 bg-white border-[3px] border-black rounded-xl text-black shadow-[4px_4px_0px_#000]">
-                        <div className="flex items-center justify-between text-black mb-1">
-                           <div className="flex items-center gap-2">
-                             {rede === "Instagram" && <Instagram className="size-4 text-black" />}
-                             {rede === "Twitter" && <Twitter className="size-4 text-black" />}
-                             {rede === "TikTok" && <Video className="size-4 text-black" />}
-                             <span className="text-[11px] font-black uppercase italic">{rede}</span>
-                           </div>
-                           <span className="text-[10px] font-black bg-black/5 px-2 py-0.5 rounded-md opacity-60 uppercase">{perfil ? perfil.handle : 'Sem Perfil'}</span>
-                        </div>
-                        <button 
-                          onClick={() => {
-                            setEditingProfileInfo({ artista: art.nome, rede });
-                            setProfileHandle(perfil?.handle || "@");
-                            setProfileAvatar(perfil?.avatar_url || "");
-                            setProfileBio(perfil?.bio || "");
-                            setProfileFollowers(String((perfil as any)?.seguidores || "0"));
-                            setProfileFollowing(String((perfil as any)?.seguindo || "0"));
-                            setIsProfileModalOpen(true);
-                          }}
-                          className="w-full py-2.5 bg-[#D0FF43] border-[2.5px] border-black rounded-xl text-[10px] font-black text-black uppercase shadow-[3px_3px_0px_#000] active:translate-y-[1px] active:shadow-none transition-all"
-                        >
-                          Configurar {rede}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            {myArtists.length === 0 && (
-              <p className="text-center font-bold text-black opacity-50 py-10">Você não possui artistas para gerenciar.</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Floating Plus Button */}
-      <button 
-        onClick={() => setIsModalOpen(true)}
-        className="fixed bottom-24 right-6 w-16 h-16 bg-[#D0FF43] border-[3px] border-black rounded-full shadow-[4px_4px_0px_#000] flex items-center justify-center transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[6px_6px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[0px_0px_0px_#000] z-50 text-black shadow-[4px_4px_0px_#000]"
-      >
-        <Plus className="size-8 stroke-[3] text-black" />
-      </button>
-
-        {/* Post Creation Modal */}
-        {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
-            <motion.div 
-              initial={{ y: 200 }}
-              animate={{ y: 0 }}
-              exit={{ y: 200 }}
-              className="bg-white border-[4px] border-black rounded-[30px] p-6 max-w-sm w-full shadow-[10px_10px_0px_#000] max-h-[90vh] overflow-y-auto"
-            >
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-black italic uppercase text-black italic">LANÇAR HYPE</h2>
-                <button 
-                  onClick={() => { setIsModalOpen(false); setSelectedType(null); setPostText(""); setImageUrl(""); }} 
-                  className="p-2 border-2 border-black rounded-full hover:bg-red-500 text-black transition-colors"
-                >
-                  <X className="size-4 stroke-[3]" />
-                </button>
-              </div>
-
-              {!selectedType ? (
-                <div className="grid gap-4">
-                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic">Selecione onde o hype vai rolar:</p>
-                  <button 
-                    onClick={() => setSelectedType("Instagram")}
-                    className="flex items-center gap-4 p-4 border-[3px] border-black rounded-[15px] bg-[#FFD166] font-black uppercase text-sm shadow-[4px_4px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[0px_0px_0px_#000] text-black"
-                  >
-                    <Instagram className="text-black" /> Instagram
-                  </button>
-                  <button 
-                    onClick={() => setSelectedType("Twitter")}
-                    className="flex items-center gap-4 p-4 border-[3px] border-black rounded-[15px] bg-[#3D8BFF] text-black font-black uppercase text-sm shadow-[4px_4px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[0px_0px_0px_#000]"
-                  >
-                    <Twitter className="text-black" /> Twitter (X)
-                  </button>
-                  <button 
-                    onClick={() => setSelectedType("TikTok")}
-                    className="flex items-center gap-4 p-4 border-[3px] border-black rounded-[15px] bg-[#D0FF43] font-black uppercase text-sm shadow-[4px_4px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[0px_0px_0px_#000] text-black"
-                  >
-                    <Video className="text-black" /> TikTok
-                  </button>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black uppercase text-black opacity-60 italic text-black">Postar como:</p>
-                    <div className={neoInput + " flex items-center gap-2 opacity-50 italic bg-zinc-50"}>
-                      <div className="size-5 rounded-full bg-black/10 flex items-center justify-center font-black text-[11px] overflow-hidden">
-                        {activeArtist?.foto ? <img src={activeArtist.foto} className="w-full h-full object-cover"  loading="lazy" decoding="async"/> : activeArtist?.nome[0]}
-                      </div>
-                      {activeArtist?.nome || "Magnata"}
-                    </div>
-                  </div>
-
-                  {selectedType === "Instagram" && (
-                    <div className="flex border-2 border-black rounded-lg overflow-hidden bg-white">
-                       <button onClick={() => setIgMode("Feed")} className={`flex-1 py-1.5 font-black text-[10px] uppercase ${igMode === "Feed" ? 'bg-black text-white' : 'bg-white text-black'}`}>Feed</button>
-                       <button onClick={() => setIgMode("Story")} className={`flex-1 py-1.5 font-black text-[10px] uppercase ${igMode === "Story" ? 'bg-black text-white' : 'bg-white text-black'}`}>Story</button>
-                    </div>
-                  )}
-                  
-                  <textarea 
-                    value={postText}
-                    onChange={(e) => setPostText(e.target.value)}
-                    placeholder="Escreva algo f*** aqui..."
-                    className={neoInput + " h-24 italic"}
-                  />
-
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black uppercase text-black opacity-60 italic text-black">URL da Mídia (IMG ou GIF):</p>
-                    <input 
-                      type="text"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://..."
-                      className={neoInput}
-                    />
-                  </div>
-
-                  <button 
-                    onClick={handlePost}
-                    disabled={submitting || !postText.trim() || !activeArtist}
-                    className="mt-2 p-4 bg-black text-white rounded-[20px] font-black uppercase italic tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-transform disabled:opacity-50 shadow-[4px_4px_0px_#D0FF43]"
-                  >
-                    {submitting ? "LANÇANDO..." : "LANÇAR AGORA"} <Send className="size-4" />
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-
-        {/* News Creation Modal */}
-        {isNewsModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
-            <motion.div 
-              initial={{ y: 200 }}
-              animate={{ y: 0 }}
-              exit={{ y: 200 }}
-              className="bg-white border-[4px] border-black rounded-[30px] p-6 max-w-sm w-full shadow-[10px_10px_0px_#000] max-h-[90vh] overflow-y-auto"
-            >
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-black italic uppercase text-black italic">NOVA MATÉRIA</h2>
-                <button 
-                  onClick={() => setIsNewsModalOpen(false)} 
-                  className="p-2 border-2 border-black rounded-full hover:bg-red-500 text-black transition-colors"
-                >
-                  <X className="size-4 stroke-[3]" />
-                </button>
-              </div>
-
-              <div className="grid gap-4">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic">Título da Matéria:</p>
-                  <input 
-                    type="text"
-                    value={newsTitle}
-                    onChange={(e) => setNewsTitle(e.target.value)}
-                    placeholder="Manchete impactante..."
-                    className={neoInput + " text-lg italic"}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic">Conteúdo:</p>
-                  <textarea 
-                    value={newsContent}
-                    onChange={(e) => setNewsContent(e.target.value)}
-                    placeholder="O que está acontecendo?"
-                    className={neoInput + " h-32 italic"}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic">Imagem de Capa (URL):</p>
-                  <input 
-                    type="text"
-                    value={newsImage}
-                    onChange={(e) => setNewsImage(e.target.value)}
-                    placeholder="https://..."
-                    className={neoInput}
-                  />
-                </div>
-
-                <div className="p-3 bg-zinc-50 border-2 border-black border-dashed rounded-xl flex items-center gap-2">
-                   <div className="size-6 rounded-full bg-black/10 overflow-hidden">
-                     {activeArtist?.foto ? <img src={activeArtist.foto} className="w-full h-full object-cover"  loading="lazy" decoding="async"/> : <UserCircle className="size-full opacity-20" />}
-                   </div>
-                   <p className="text-[10px] font-black uppercase opacity-60 italic">Publicar como <span className="text-black">{activeArtist?.nome}</span></p>
-                </div>
-
-                <button 
-                  onClick={handleSaveNews}
-                  disabled={submitting || !newsTitle.trim() || !activeArtist}
-                  className="mt-4 p-4 bg-black text-[#D0FF43] rounded-[20px] font-black uppercase italic tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-transform disabled:opacity-50 shadow-[4px_4px_0px_#D0FF43]"
-                >
-                  {submitting ? "PUBLICANDO..." : "PUBLICAR NEWS"} <Send className="size-4" />
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-      <AnimatePresence>
-        {isProfileModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
-            <motion.div 
-              initial={{ y: 100, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 100, opacity: 0 }}
-              className="bg-white border-[4px] border-black rounded-[30px] p-6 max-w-sm w-full shadow-[10px_10px_0px_#000]"
-            >
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex flex-col">
-                  <h2 className="text-xl font-black italic uppercase text-black leading-none">{editingProfileInfo?.rede}</h2>
-                  <p className="text-[10px] font-bold text-black opacity-60 uppercase italic">{editingProfileInfo?.artista}</p>
-                </div>
-                <button 
-                  onClick={() => setIsProfileModalOpen(false)} 
-                  className="p-2 border-2 border-black rounded-full hover:bg-red-500 text-black transition-colors"
-                >
-                  <X className="size-4 stroke-[3]" />
-                </button>
-              </div>
-
-              <div className="grid gap-4">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic">Handle (Usuário):</p>
-                  <input 
-                    type="text"
-                    value={profileHandle}
-                    onChange={(e) => setProfileHandle(e.target.value)}
-                    placeholder="@nome"
-                    className={neoInput}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic">Seguindo (qtd. de pessoas que segue):</p>
-                  <input 
-                    type="number"
-                    min={0}
-                    value={profileFollowing}
-                    onChange={(e) => setProfileFollowing(e.target.value.replace(/[^0-9]/g, ""))}
-                    placeholder="0"
-                    className={neoInput}
-                  />
-                </div>
-
-                <div className="p-3 bg-zinc-50 border-2 border-dashed border-black/20 rounded-xl text-[10px] font-bold text-black/60 italic leading-snug">
-                  <span className="font-black uppercase text-black/80">Seguidores:</span> calculados automaticamente pela coluna <span className="font-black">G</span> da aba <span className="font-black">SOCIAL_PERFIS</span>.
-                  {" "}Atual: <span className="font-black text-black">{Number(profileFollowers).toLocaleString("pt-BR")}</span>.
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic">Foto de Perfil (URL):</p>
-                  <div className="flex gap-2">
-                    {profileAvatar && (
-                      <div className="size-12 rounded-xl border-2 border-black overflow-hidden flex-shrink-0 bg-zinc-100">
-                        <img src={driveImg(profileAvatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer"  loading="lazy" decoding="async"/>
-                      </div>
-                    )}
-                    <input 
-                      type="text"
-                      value={profileAvatar}
-                      onChange={(e) => setProfileAvatar(e.target.value)}
-                      placeholder="https://..."
-                      className={neoInput}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-black opacity-60 italic">Bio / Descrição:</p>
-                  <textarea 
-                    value={profileBio}
-                    onChange={(e) => setProfileBio(e.target.value)}
-                    placeholder="Fale um pouco sobre o artista..."
-                    className={neoInput + " h-20 italic"}
-                  />
-                </div>
-
-                <button 
-                  onClick={handleSaveProfile}
-                  disabled={submitting}
-                  className="mt-2 p-4 bg-[#D0FF43] text-black rounded-[20px] font-black uppercase italic tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-transform disabled:opacity-50 border-2 border-black shadow-[4px_4px_0px_#000]"
-                >
-                  {submitting ? "SALVANDO..." : "SALVAR PERFIL"}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {selectedNews && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
-            <motion.div 
-              layoutId={selectedNews.id}
-              className="bg-white text-black border-[4px] border-black rounded-[35px] max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col shadow-[20px_20px_0px_rgba(0,0,0,0.5)]"
-            >
-              <div className="relative h-64 flex-shrink-0">
-                {selectedNews.imagem ? (
-                  <img src={selectedNews.imagem} className="w-full h-full object-cover" referrerPolicy="no-referrer"  loading="lazy" decoding="async"/>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-[#3D8BFF]/20">
-                    <Newspaper className="size-20 text-black/10" />
-                  </div>
-                )}
-                <div className="absolute top-4 right-4">
-                   <button 
-                    onClick={() => setSelectedNews(null)} 
-                    className="size-10 bg-black/50 backdrop-blur-md text-white rounded-full flex items-center justify-center border border-white/20 hover:bg-black transition-colors"
-                   >
-                     <X className="size-5" />
-                   </button>
-                </div>
-                <div className="absolute bottom-6 left-6 right-6">
-                   <span className="bg-[#D0FF43] text-black px-3 py-1 font-black italic text-[10px] uppercase rounded-lg border-2 border-black shadow-[3px_3px_0px_#000] mb-2 inline-block">Flash News</span>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-6 pt-8 bg-zinc-50">
-                <div className="flex items-center gap-2 text-[10px] font-black uppercase text-black/40 mb-4 italic tracking-widest">
-                   <span className="text-black/60">Por {selectedNews.autor}</span>
-                   <span className="size-1 rounded-full bg-black/20" />
-                   <span className="text-black/60">{new Date(selectedNews.data).toLocaleDateString('pt-BR')}</span>
-                </div>
-                <h2 className="text-3xl font-black uppercase italic leading-[0.9] text-black tracking-tight mb-8 drop-shadow-sm">{selectedNews.titulo}</h2>
-                <div className="prose prose-sm font-bold text-zinc-800 leading-relaxed whitespace-pre-wrap text-[13px] border-l-4 border-[#3D8BFF]/20 pl-4">
-                   {selectedNews.conteudo}
-                </div>
-              </div>
-
-              <div className="p-6 bg-zinc-50 border-t-2 border-black/5 flex justify-center">
-                 <button 
-                  onClick={() => setSelectedNews(null)}
-                  className="px-8 py-3 bg-black text-white rounded-full font-black uppercase italic text-sm tracking-widest active:scale-95 transition-transform"
-                 >
-                   Fechar Gazette
-                 </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {isCommentModalOpen && selectedPost && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
-            <motion.div 
-              initial={{ y: 100, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 100, opacity: 0 }}
-              className="bg-white border-[4px] border-black rounded-[30px] p-6 max-w-md w-full shadow-[10px_10px_0px_#000] max-h-[90vh] flex flex-col"
-            >
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-black italic uppercase text-black italic">COMENS</h2>
-                <button 
-                  onClick={() => setIsCommentModalOpen(false)} 
-                  className="p-2 border-2 border-black rounded-full hover:bg-red-500 text-black transition-colors"
-                >
-                  <X className="size-4 stroke-[3]" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-1">
-                {/* O Post original resumido */}
-                <div className="p-3 bg-[#F4F4F5] rounded-xl border-2 border-black/10">
-                   <p className="text-[10px] font-black uppercase opacity-50 mb-1">{selectedPost.autor}</p>
-                   <p className="text-sm font-bold text-black">{selectedPost.texto}</p>
-                </div>
-
-                <div className="space-y-4">
-                   {comments.map((c, idx) => (
-                     <div key={idx} className="flex gap-3">
-                        <div className="size-8 rounded-full bg-[#FFD166] border-2 border-black flex items-center justify-center font-black text-[10px] flex-shrink-0 overflow-hidden">
-                           {c.avatar ? (
-                             <img src={driveImg(c.avatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer"  loading="lazy" decoding="async"/>
-                           ) : (
-                             c.autor[0]
-                           )}
-                        </div>
-                        <div className="flex-1">
-                           <p className="text-[10px] font-black text-black leading-none">{c.autor}</p>
-                           <p className="text-xs font-bold text-black opacity-80 mt-1">{c.texto}</p>
-                        </div>
-                     </div>
-                   ))}
-                   {comments.length === 0 && (
-                     <p className="text-center font-bold text-black opacity-40 py-10">Nenhum comentário por aqui ainda.</p>
-                   )}
-                </div>
-              </div>
-
-              <div className="pt-4 border-t-4 border-black">
-                <div className="flex gap-2">
-                  <input 
-                    type="text"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    placeholder={activeArtist ? `Comentar como ${activeArtist.nome}...` : "Selecione um artista..."}
-                    className={neoInput + " flex-1"}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-                  />
-                  <button 
-                    onClick={handleAddComment}
-                    disabled={submitting || !newComment.trim() || !activeArtist}
-                    className="p-3 bg-black text-white rounded-xl border-2 border-black active:scale-90 transition-transform shadow-[2px_2px_0px_#D0FF43]"
-                  >
-                    <Send className="size-5" />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+                        <div className="flex-1 grid grid-cols-3 gap-2 text-center
