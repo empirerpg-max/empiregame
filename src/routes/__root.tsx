@@ -42,76 +42,199 @@ import { api, driveImg, type Artist } from "@/lib/api";
 
 function GlobalLinkModal({ onClose }: { onClose: () => void }) {
   const { user } = useTelegramUser();
-  const [available, setAvailable] = useState<Artist[]>([]);
+  const [tab, setTab] = useState<"link" | "create">("link");
+  const [available, setAvailable] = useState<Artist[] | null>(null);
   const [q, setQ] = useState("");
-  const [linking, setLinking] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [linking, setLinking] = useState(false);
+
+  // Form criar
+  const [novoNome, setNovoNome] = useState("");
+  const [novoFoto, setNovoFoto] = useState("");
+  const [novoGravadora, setNovoGravadora] = useState("");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     api.getArtistasSemId().then(setAvailable);
   }, []);
 
-  const filtered = available.filter(a => a.nome.toLowerCase().includes(q.toLowerCase()));
+  const filtered = (available || []).filter(a => a.nome.toLowerCase().includes(q.toLowerCase()));
 
-  const handleLink = async (nome: string) => {
-    if (!user || user.id === "guest") return;
-    setLinking(nome);
+  const toggle = (nome: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(nome)) next.delete(nome); else next.add(nome);
+      return next;
+    });
+  };
+
+  const handleLinkAll = async () => {
+    if (!user || user.id === "guest" || selected.size === 0) return;
+    setLinking(true);
+    let ok = 0, fail = 0;
+    for (const nome of selected) {
+      try {
+        const res = await api.vincularArtista(nome, user.id);
+        if (res.ok) ok++; else fail++;
+      } catch { fail++; }
+    }
+    setLinking(false);
+    if (ok > 0) {
+      toast.success(`${ok} artista${ok > 1 ? "s" : ""} vinculado${ok > 1 ? "s" : ""}!`, {
+        description: fail > 0 ? `${fail} falharam.` : "Império expandido.",
+      });
+      setAvailable(prev => (prev || []).filter(x => !selected.has(x.nome)));
+      setSelected(new Set());
+      onClose();
+    } else {
+      toast.error("Nenhum vínculo concluído");
+    }
+  };
+
+  const handleCreate = async () => {
+    if (!user || user.id === "guest") {
+      toast.error("Conecte seu Telegram primeiro");
+      return;
+    }
+    if (!novoNome.trim() || !novoGravadora.trim()) {
+      toast.error("Nome e gravadora são obrigatórios");
+      return;
+    }
+    setCreating(true);
     try {
-      const res = await api.vincularArtista(nome, user.id);
+      const res = await api.criarArtista({
+        nome: novoNome.trim(),
+        foto: novoFoto.trim(),
+        gravadora: novoGravadora.trim(),
+        telegram_id: user.id,
+      });
       if (res.ok) {
-        toast.success("Vínculo estabelecido!", { description: `${nome} agora faz parte do seu império.` });
-        setAvailable(prev => prev.filter(x => x.nome !== nome));
+        toast.success("Artista criado!", { description: `${novoNome} entrou no seu plantel.` });
+        setNovoNome(""); setNovoFoto(""); setNovoGravadora("");
         onClose();
       } else {
-        toast.error(res.erro || "Falha ao vincular");
+        toast.error(res.erro || "Falha ao criar");
       }
-    } catch (e) {
+    } catch {
       toast.error("Erro na conexão");
     } finally {
-      setLinking(null);
+      setCreating(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-       <motion.div 
+       <motion.div
          initial={{ y: 20, opacity: 0 }}
          animate={{ y: 0, opacity: 1 }}
-         className="w-full max-w-sm bg-card border border-white/10 rounded-[3rem] p-6 shadow-2xl relative max-h-[80vh] flex flex-col"
+         className="w-full max-w-sm bg-card border border-white/10 rounded-[3rem] p-6 shadow-2xl relative max-h-[85vh] flex flex-col"
        >
-          <button onClick={onClose} className="absolute top-4 right-4 p-2 opacity-50 hover:opacity-100"><X className="size-5" /></button>
-          
-          <h3 className="text-lg font-black tracking-tighter mb-1 text-center decoration-primary decoration-2 underline underline-offset-2">Vincular Artista</h3>
-          <p className="text-[11px] text-muted-foreground uppercase font-black tracking-widest text-center mb-4 opacity-60">Assine contrato com uma lenda disponível</p>
-          
-          <div className="relative mb-4">
-             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-             <input 
-               value={q}
-               onChange={e => setQ(e.target.value)}
-               placeholder="Buscar artista..."
-               className="w-full h-12 bg-white/5 border border-white/10 rounded-2xl pl-10 pr-4 text-sm font-bold uppercase tracking-tighter"
-             />
+          <button onClick={onClose} className="absolute top-4 right-4 p-2 opacity-50 hover:opacity-100 z-10"><X className="size-5" /></button>
+
+          <h3 className="text-lg font-black tracking-tighter mb-1 text-center">Gerenciar Artistas</h3>
+          <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest text-center mb-4 opacity-60">Vincule existentes ou crie um novo</p>
+
+          {/* Tabs */}
+          <div className="grid grid-cols-2 gap-2 p-1 bg-white/[0.03] border border-white/5 rounded-2xl mb-4">
+            <button
+              onClick={() => setTab("link")}
+              className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === "link" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"}`}
+            >Vincular</button>
+            <button
+              onClick={() => setTab("create")}
+              className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === "create" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"}`}
+            >Criar Novo</button>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-2 pr-2 scrollbar-hide py-2">
-             {filtered.map(a => (
-               <div key={a.nome} className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/5 group hover:bg-white/[0.06] transition-colors">
-                  <div className="size-10 rounded-xl bg-primary/10 grid place-items-center font-black text-primary text-xs flex-shrink-0">{a.nome[0]}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-black text-xs truncate uppercase tracking-tight">{a.nome}</p>
-                    <p className="text-[11px] text-muted-foreground uppercase font-black opacity-40">{a.gravadora}</p>
-                  </div>
-                  <button 
-                    disabled={!!linking}
-                    onClick={() => handleLink(a.nome)}
-                    className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50 shadow-lg shadow-primary/20"
-                  >
-                    {linking === a.nome ? "..." : "Vincular"}
-                  </button>
-               </div>
-             ))}
-             {available.length === 0 && <div className="text-center py-10 opacity-20"><Library className="size-10 mx-auto mb-2" /><p className="text-[10px] font-black uppercase">Nenhum artista vago</p></div>}
-          </div>
+          {tab === "link" ? (
+            <>
+              <div className="relative mb-3">
+                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                 <input
+                   value={q}
+                   onChange={e => setQ(e.target.value)}
+                   placeholder="Buscar artista..."
+                   className="w-full h-11 bg-white/5 border border-white/10 rounded-2xl pl-10 pr-4 text-sm font-bold uppercase tracking-tighter outline-none focus:border-primary/40"
+                 />
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-hide py-1 min-h-[200px]">
+                 {available === null ? (
+                   <div className="space-y-2">
+                     {Array.from({ length: 4 }).map((_, i) => (
+                       <div key={i} className="h-14 rounded-2xl bg-white/[0.03] animate-pulse" />
+                     ))}
+                   </div>
+                 ) : filtered.length === 0 ? (
+                   <div className="text-center py-10 opacity-30"><Library className="size-10 mx-auto mb-2" /><p className="text-[10px] font-black uppercase">Nenhum artista vago</p></div>
+                 ) : filtered.map(a => {
+                   const isSel = selected.has(a.nome);
+                   return (
+                     <button
+                       key={a.nome}
+                       onClick={() => toggle(a.nome)}
+                       className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all text-left ${isSel ? "bg-primary/15 border-primary/40" : "bg-white/[0.03] border-white/5 hover:bg-white/[0.06]"}`}
+                     >
+                        <div className={`size-5 rounded-md border-2 flex-shrink-0 grid place-items-center transition-all ${isSel ? "bg-primary border-primary" : "border-white/20"}`}>
+                          {isSel && <span className="text-[10px] font-black text-primary-foreground">✓</span>}
+                        </div>
+                        <div className="size-9 rounded-xl bg-primary/10 grid place-items-center font-black text-primary text-xs flex-shrink-0">{a.nome[0]}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-xs truncate uppercase tracking-tight">{a.nome}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase font-black opacity-50 truncate">{a.gravadora}</p>
+                        </div>
+                     </button>
+                   );
+                 })}
+              </div>
+
+              <button
+                disabled={selected.size === 0 || linking}
+                onClick={handleLinkAll}
+                className="mt-4 w-full h-14 rounded-[2rem] bg-primary text-primary-foreground font-black uppercase text-[11px] tracking-[0.2em] active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-[0_10px_30px_rgba(var(--primary-rgb),0.3)]"
+              >
+                {linking ? "Vinculando..." : selected.size === 0 ? "Selecione ao menos um" : `Vincular ${selected.size} artista${selected.size > 1 ? "s" : ""}`}
+              </button>
+            </>
+          ) : (
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5 block">Nome do artista *</label>
+                <input
+                  value={novoNome}
+                  onChange={e => setNovoNome(e.target.value)}
+                  placeholder="Ex: Lana Empire"
+                  className="w-full h-12 bg-white/5 border border-white/10 rounded-2xl px-4 text-sm font-bold outline-none focus:border-primary/40"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5 block">Foto (link Google Drive)</label>
+                <input
+                  value={novoFoto}
+                  onChange={e => setNovoFoto(e.target.value)}
+                  placeholder="https://drive.google.com/file/d/..."
+                  className="w-full h-12 bg-white/5 border border-white/10 rounded-2xl px-4 text-xs font-bold outline-none focus:border-primary/40"
+                />
+                <p className="text-[9px] text-muted-foreground/60 mt-1 px-1">Cole o link de compartilhamento do Drive. Opcional.</p>
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5 block">Gravadora *</label>
+                <input
+                  value={novoGravadora}
+                  onChange={e => setNovoGravadora(e.target.value)}
+                  placeholder="Ex: Independent, Empire Records..."
+                  className="w-full h-12 bg-white/5 border border-white/10 rounded-2xl px-4 text-sm font-bold outline-none focus:border-primary/40"
+                />
+              </div>
+              <button
+                disabled={creating || !novoNome.trim() || !novoGravadora.trim()}
+                onClick={handleCreate}
+                className="mt-2 w-full h-14 rounded-[2rem] bg-primary text-primary-foreground font-black uppercase text-[11px] tracking-[0.2em] active:scale-95 transition-all disabled:opacity-30 shadow-[0_10px_30px_rgba(var(--primary-rgb),0.3)]"
+              >
+                {creating ? "Criando..." : "Criar Artista"}
+              </button>
+            </div>
+          )}
        </motion.div>
     </div>
   );
