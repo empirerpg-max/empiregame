@@ -637,8 +637,8 @@ function SocialPage() {
               const handle = perfil?.handle || ('@' + selectedIndustryArtist.nome.toLowerCase().replace(/\s+/g, ''));
               const cleanHandle = handle.replace(/^@/, '');
               const bio = perfil?.bio || selectedIndustryArtist.descricao || '';
-              const followers = perfil?.seguidores || 0;
-              const following = Math.max(1, Math.floor(followers / 250));
+              const followers = (perfil as any)?.seguidores || 0;
+              const following = (perfil as any)?.seguindo || 0;
               const totalLikes = artistPosts.reduce((s, p) => s + (p.analytics?.likes || 0), 0);
               const avatarSrc = perfil?.avatar_url ? driveImg(perfil.avatar_url) : undefined;
               const avatarFallback = (
