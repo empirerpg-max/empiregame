@@ -344,6 +344,20 @@ function RootInner() {
             className="fixed inset-0 z-50 bg-background pt-20 px-6 overflow-y-auto"
           >
              <div className="space-y-4 pb-12">
+                <Link
+                  to="/acesso-rapido"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-4 p-5 rounded-3xl bg-primary/15 border border-primary/30 text-primary hover:bg-primary/20 transition-all"
+                >
+                   <div className="size-11 rounded-2xl bg-primary text-primary-foreground grid place-items-center">
+                      <Send className="size-5" />
+                   </div>
+                   <div className="flex-1 min-w-0">
+                      <p className="font-black uppercase tracking-widest text-xs">Acesso Rápido</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Canais oficiais Telegram</p>
+                   </div>
+                </Link>
+
                 <MenuCategory 
                   title="Empire Studio" 
                   icon={Library}
@@ -371,7 +385,6 @@ function RootInner() {
                   title="Empire Coliseum" 
                   icon={Swords}
                   items={[
-                    { to: "/charts", label: "Charts", icon: TrendingUp },
                     { to: "/duelo", label: "Duelos", icon: Swords },
                     { to: "/hall", label: "Hall of Fame", icon: Crown },
                   ]} 
@@ -398,6 +411,9 @@ function RootInner() {
                       <HelpCircle className="size-5" />
                       <span className="font-black uppercase tracking-widest text-[10px]">Guia de Sobrevivência</span>
                    </Link>
+                   <p className="text-center text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground/30 pt-4">
+                      Empire Hub · v1.0.0
+                   </p>
                 </div>
              </div>
           </motion.div>
