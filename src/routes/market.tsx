@@ -61,7 +61,7 @@ const CAT_META: Record<string, { label: string; icon: React.ReactNode; color: st
   }
 };
 
-const VISIBLE_CATS = ["MARKET", "IMOVEIS", "CARREIRA", "EXTRA"];
+
 
 function MarketPage() {
   const { user, ready } = useTelegramUser();
@@ -70,6 +70,7 @@ function MarketPage() {
   const [items, setItems] = useState<MarketItem[] | null>(null);
   const [mural, setMural] = useState<MuralItem[] | null>(null);
   const [artists, setArtists] = useState<Artist[]>([]);
+  const [catOrder, setCatOrder] = useState<string[]>([]);
   const [buying, setBuying] = useState<
     { kind: "market"; item: MarketItem } | { kind: "mural"; item: MuralItem } | null
   >(null);
@@ -78,6 +79,7 @@ function MarketPage() {
   useEffect(() => {
     api.listarMarket().then(setItems);
     api.listarMural().then(setMural);
+    api.listarCategoriasMarket().then(setCatOrder).catch(() => setCatOrder([]));
   }, []);
 
   useEffect(() => {
@@ -85,10 +87,29 @@ function MarketPage() {
     api.meusArtistas(user.id).then(setArtists);
   }, [ready, user]);
 
+  // Categorias ordenadas pelo CONFIG_SISTEMA. Categorias presentes nos itens
+  // mas não listadas no config aparecem ao final, em ordem alfabética.
   const cats = useMemo(() => {
     if (!items) return [];
-    const fromData = Array.from(new Set(items.map((i) => i.categoria)));
-    return fromData.sort();
+    const presentes = new Set(items.map((i) => i.categoria).filter(Boolean));
+    const oficiais = catOrder.filter((c) => presentes.has(c));
+    const extras = Array.from(presentes)
+      .filter((c) => !catOrder.includes(c))
+      .sort();
+    return [...oficiais, ...extras];
+  }, [items, catOrder]);
+
+  // Garante que a categoria selecionada ainda existe após o reload
+  useEffect(() => {
+    if (cat !== "ALL" && cats.length && !cats.includes(cat)) setCat("ALL");
+  }, [cats, cat]);
+
+  const counts = useMemo(() => {
+    const m: Record<string, number> = {};
+    (items || []).forEach((i) => {
+      m[i.categoria] = (m[i.categoria] || 0) + 1;
+    });
+    return m;
   }, [items]);
 
   const filtered = useMemo(() => {
@@ -145,11 +166,10 @@ function MarketPage() {
 
       {tab === "catalogo" && (
         <>
-          {/* iFood Style Categories */}
           <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4 mb-8">
              <button
                onClick={() => setCat("ALL")}
-               className={`shrink-0 h-24 w-20 rounded-[2rem] flex flex-col items-center justify-center gap-2 border transition-all ${
+               className={`relative shrink-0 h-24 w-20 rounded-[2rem] flex flex-col items-center justify-center gap-2 border transition-all ${
                  cat === "ALL" ? "bg-primary border-primary text-primary-foreground shadow-xl shadow-primary/20" : "bg-card border-white/5 text-muted-foreground"
                }`}
              >
@@ -157,12 +177,17 @@ function MarketPage() {
                  <ShoppingBag className="size-5" />
                </div>
                <span className="text-[10px] font-black uppercase tracking-tighter">Tudo</span>
+               {items && items.length > 0 && (
+                 <span className={`absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black grid place-items-center ${cat === "ALL" ? "bg-white text-primary" : "bg-primary text-primary-foreground"}`}>
+                   {items.length}
+                 </span>
+               )}
              </button>
              {cats.map(c => (
                 <button
                   key={c}
                   onClick={() => setCat(c)}
-                  className={`shrink-0 h-24 w-20 rounded-[2rem] flex flex-col items-center justify-center gap-2 border transition-all ${
+                  className={`relative shrink-0 h-24 w-20 rounded-[2rem] flex flex-col items-center justify-center gap-2 border transition-all ${
                     cat === c ? "bg-primary border-primary text-primary-foreground shadow-xl shadow-primary/20" : "bg-card border-white/5 text-muted-foreground"
                   }`}
                 >
@@ -172,6 +197,11 @@ function MarketPage() {
                   <span className="text-[10px] font-black uppercase tracking-tighter truncate w-16 text-center">
                     {CAT_META[c]?.label || c}
                   </span>
+                  {counts[c] > 0 && (
+                    <span className={`absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black grid place-items-center ${cat === c ? "bg-white text-primary" : "bg-primary text-primary-foreground"}`}>
+                      {counts[c]}
+                    </span>
+                  )}
                 </button>
              ))}
           </div>
