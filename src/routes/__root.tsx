@@ -318,9 +318,9 @@ function RootInner() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background pb-24 pt-16">
+    <div className="min-h-screen flex flex-col bg-background pb-24" style={{ paddingTop: "calc(4rem + env(safe-area-inset-top))" }}>
       {/* Top Bar */}
-      <nav className="fixed top-0 inset-x-0 z-[60] h-16 bg-background/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6">
+      <nav className="fixed top-0 inset-x-0 z-[60] bg-background/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 h-16 pt-[env(safe-area-inset-top)]" style={{ height: "calc(4rem + env(safe-area-inset-top))" }}>
          <Link to="/" className="flex items-center gap-2" onClick={() => haptic.selection()}>
             <div className="size-8 rounded-lg bg-primary text-primary-foreground grid place-items-center font-black italic tracking-tighter">E</div>
             <span className="font-black italic uppercase tracking-tighter text-base">Empire Hub</span>
@@ -483,7 +483,7 @@ function RootInner() {
 
       <Outlet />
       <BottomNav />
-      <Toaster position="top-center" richColors closeButton />
+      <Toaster position="top-center" richColors closeButton offset={80} />
     </div>
   );
 }
