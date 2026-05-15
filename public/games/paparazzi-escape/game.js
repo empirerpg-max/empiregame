@@ -84,7 +84,7 @@ function resize() {
   FLOOR_Y = H * FLOOR_RATIO;
   ROAD_HALF = W * 0.45;
 }
-window.addEventListener('resize', resize);
+window.addEventListener('resize', () => { resize(); ctx.imageSmoothingEnabled = false; initBackground(); });
 resize();
 
 // ─── PROJEÇÃO 3/4 ───────────────────────────
