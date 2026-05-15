@@ -346,7 +346,7 @@ function SocialPage() {
                       }`}>
                          <div className="w-full h-full rounded-full overflow-hidden bg-zinc-100 border-[1px] border-transparent">
                            {imgUrl ? (
-                             <img 
+                             <img loading="lazy" decoding="async" 
                               src={imgUrl} 
                               className="w-full h-full object-cover" 
                               referrerPolicy="no-referrer"
@@ -409,7 +409,7 @@ function SocialPage() {
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full border-2 border-black overflow-hidden flex-shrink-0 bg-[#FFD166] flex items-center justify-center font-black text-black">
                           {post.avatar ? (
-                            <img 
+                            <img loading="lazy" decoding="async" 
                               src={driveImg(post.avatar)} 
                               className="w-full h-full object-cover" 
                               referrerPolicy="no-referrer"
@@ -441,7 +441,7 @@ function SocialPage() {
                     {post.tipo === "Instagram" && post.subtipo === "Story" ? (
                       <div className="relative aspect-[9/16] bg-black border-2 border-black rounded-[15px] overflow-hidden mb-4 shadow-[4px_4px_0px_#000]">
                         {post.media_url ? (
-                          <img 
+                          <img loading="lazy" decoding="async" 
                             src={driveImg(post.media_url)} 
                             className="w-full h-full object-cover" 
                             referrerPolicy="no-referrer" 
@@ -458,7 +458,7 @@ function SocialPage() {
                       </div>
                     ) : post.media_url && (
                       <div className="aspect-square bg-muted border-2 border-black rounded-[15px] overflow-hidden mb-4 shadow-[4px_4px_0px_#000]">
-                        <img 
+                        <img loading="lazy" decoding="async" 
                           src={driveImg(post.media_url)} 
                           className="w-full h-full object-cover" 
                           referrerPolicy="no-referrer" 
