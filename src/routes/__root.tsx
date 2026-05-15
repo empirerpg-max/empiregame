@@ -32,7 +32,7 @@ import {
   Search,
   HelpCircle,
   Share2,
-} from "lucide-react";
+  Send,
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
