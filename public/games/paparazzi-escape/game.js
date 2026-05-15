@@ -277,46 +277,101 @@ function drawPaparazzi(dt) {
 }
 
 // ─── PLAYER ──────────────────────────────────
+// Sprites pixel do artista (correndo / pulando / deslizando)
+const ART_RUN_A = [
+  '...kkkk...',
+  '..kffffk..',
+  '..kf..fk..',  // óculos escuros
+  '..kbbbbk..',
+  '..ffffff..',  // pele
+  '.pppppppp.',  // jaqueta
+  '.pyyyyyypp',
+  '.pyyyyyypp',
+  '..bbbbbb..',  // cinto
+  '..jj..jj..',  // calça
+  '..jj..jj..',
+  '..jj..jj..',
+  '..ss..ss..',  // tênis (correndo: pés desencontrados)
+];
+const ART_RUN_B = [
+  '...kkkk...',
+  '..kffffk..',
+  '..kf..fk..',
+  '..kbbbbk..',
+  '..ffffff..',
+  '.pppppppp.',
+  '.pyyyyyypp',
+  '.pyyyyyypp',
+  '..bbbbbb..',
+  '..jj..jj..',
+  '..jj..jj..',
+  '..jj..jj..',
+  '...ssss...',
+];
+const ART_JUMP = [
+  '...kkkk...',
+  '..kffffk..',
+  '..kf..fk..',
+  '..kbbbbk..',
+  '..ffffff..',
+  '.pyypppyp.',  // braços abertos
+  'ppyyyyyypp',
+  '.pyyyyyyp.',
+  '..bbbbbb..',
+  '..jjjjjj..',
+  '...jjjj...',
+  '..ss..ss..',
+];
+const ART_SLIDE = [
+  '...........',
+  '...........',
+  '...........',
+  '...........',
+  '..kkkk.....',
+  '.kffffkpppp',
+  '.kf..fpppppp',
+  '.kbbbbpyyypp',
+  '..ffbbbbbbbp',
+  '..jjjjjjjjj.',
+  '..ssssssss..',
+];
+const ART_PALETTE = {
+  'k': '#1a0820',  // contorno
+  'b': '#0a0410',
+  'f': '#ffd5b8',  // pele
+  'p': '#ff4baa',  // jaqueta neon (rosa)
+  'y': '#4bf0ff',  // detalhe ciano
+  'j': '#22154a',  // calça
+  's': '#ffcc00',  // tênis
+};
+
+// ─── PLAYER ──────────────────────────────────
 function drawPlayer() {
-  // Posição lateral interpola entre lanes
   const laneX = laneToX(player.laneVisual);
   const p = project(laneX, player.y, 0);
   const baseSize = Math.min(W, H) * 0.07;
-
   const sliding = isSliding();
-  const bodyH = sliding ? baseSize * 1.0 : baseSize * 1.7;
-  const bodyW = sliding ? baseSize * 1.4 : baseSize * 0.9;
+  const inAir = !player.onGround;
 
-  ctx.save();
-  // Sombra no chão
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.beginPath();
-  ctx.ellipse(p.x, FLOOR_Y + 4, bodyW * 0.7, bodyW * 0.22, 0, 0, Math.PI * 2);
-  ctx.fill();
+  const sprite = sliding ? ART_SLIDE : (inAir ? ART_JUMP : (Math.floor(performance.now() / 90) % 2 ? ART_RUN_A : ART_RUN_B));
+  const cols = sprite[0].length;
+  const rows = sprite.length;
+  const scale = Math.max(3, Math.floor(baseSize / 6));
+  const sw = cols * scale;
+  const sh = rows * scale;
 
-  // Corpo neon
-  const cy = p.y - bodyH * 0.55;
-  ctx.shadowBlur = 22; ctx.shadowColor = '#ff4baa';
-  ctx.fillStyle = '#ff4baa';
-  ctx.beginPath();
-  ctx.ellipse(p.x, cy, bodyW * 0.5, bodyH * 0.45, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Sombra
+  px(p.x - sw * 0.45, FLOOR_Y + 2, sw * 0.9, 4, 'rgba(0,0,0,0.5)');
 
-  // Cabeça (escondida quando deslizando)
-  if (!sliding) {
-    ctx.fillStyle = '#ffd5b8';
-    ctx.beginPath();
-    ctx.arc(p.x, cy - bodyH * 0.55, baseSize * 0.42, 0, Math.PI * 2);
-    ctx.fill();
+  // Glow neon (4 px stacks pra simular aura sem blur)
+  ctx.globalAlpha = 0.35;
+  for (const off of [[-2,0],[2,0],[0,-2],[0,2]]) {
+    drawSprite(sprite, { 'p': '#ff4baa', 'y': '#4bf0ff' }, p.x - sw / 2 + off[0], p.y - sh + off[1], scale);
   }
+  ctx.globalAlpha = 1;
 
-  // Trail neon
-  ctx.globalAlpha = 0.25;
-  ctx.fillStyle = '#4bf0ff';
-  ctx.beginPath();
-  ctx.ellipse(p.x, p.y + 2, bodyW * 0.55, baseSize * 0.18, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  // Sprite principal
+  drawSprite(sprite, ART_PALETTE, p.x - sw / 2, p.y - sh, scale);
 }
 
 // ─── OBSTÁCULOS / MOEDAS ─────────────────────
