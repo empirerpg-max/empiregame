@@ -885,7 +885,8 @@ function SocialPage() {
                             setProfileHandle(perfil?.handle || "@");
                             setProfileAvatar(perfil?.avatar_url || "");
                             setProfileBio(perfil?.bio || "");
-                            setProfileFollowers(String(perfil?.seguidores || "0"));
+                            setProfileFollowers(String((perfil as any)?.seguidores || "0"));
+                            setProfileFollowing(String((perfil as any)?.seguindo || "0"));
                             setIsProfileModalOpen(true);
                           }}
                           className="w-full py-2.5 bg-[#D0FF43] border-[2.5px] border-black rounded-xl text-[10px] font-black text-black uppercase shadow-[3px_3px_0px_#000] active:translate-y-[1px] active:shadow-none transition-all"
