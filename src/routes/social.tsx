@@ -649,7 +649,7 @@ function SocialPage() {
               const renderAvatar = (className: string) => (
                 <div className={className}>
                   {avatarSrc ? (
-                    <img src={avatarSrc} className="w-full h-full object-cover" referrerPolicy="no-referrer" crossOrigin="anonymous" loading="lazy" onError={(e) = decoding="async"> { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <img src={avatarSrc} className="w-full h-full object-cover" referrerPolicy="no-referrer" crossOrigin="anonymous" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : avatarFallback}
                 </div>
               );

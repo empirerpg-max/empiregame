@@ -115,7 +115,7 @@ function ArtistasList() {
                             alt={a.nome}
                             loading="lazy"
                             className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-110"
-                            onError={(e) = decoding="async"> {
+                            onError={(e) => {
                               (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1514525253361-bee8718a300c?w=400&h=400&fit=crop";
                             }}
                           />
