@@ -375,7 +375,6 @@ function RootInner() {
                   title="Empire Coliseum" 
                   icon={Swords}
                   items={[
-                    { to: "/ranking", label: "Rankings", icon: Star },
                     { to: "/charts", label: "Charts", icon: TrendingUp },
                     { to: "/duelo", label: "Duelos", icon: Swords },
                     { to: "/hall", label: "Hall of Fame", icon: Crown },
