@@ -112,7 +112,9 @@ function ArtistDashboard() {
                     <span className="px-1.5 py-0.5 rounded-full bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest border border-primary/20 leading-none">
                        {artist.gravadora}
                     </span>
-                    <span className="text-[11px] font-black text-white/50 uppercase tracking-widest italic">{artist.genero}</span>
+                    {artist.genero && !/GMT|\d{4}.*\d{2}:\d{2}|^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/i.test(String(artist.genero)) && (
+                       <span className="text-[11px] font-black text-white/50 uppercase tracking-widest italic">{artist.genero}</span>
+                    )}
                  </div>
                   <h1 className="text-xl sm:text-2xl font-black italic uppercase tracking-tighter leading-tight mb-1 drop-shadow-xl break-words">
                     {artist.nome}
