@@ -88,9 +88,7 @@ function IncubadoraPage() {
 
   return (
     <main className="flex-1 mx-auto w-full max-w-2xl px-4 pt-6 pb-20">
-      <Link to="/" className="inline-flex items-center gap-1 text-muted-foreground mb-4">
-        <ChevronLeft className="size-4" /> Voltar
-      </Link>
+      <BackButton />
 
       <header className="mb-8">
         <div className="size-12 rounded-xl bg-blue-500/15 text-blue-500 grid place-items-center mb-4">
