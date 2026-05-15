@@ -520,13 +520,11 @@ async function triggerGameOver() {
   document.getElementById('go-wager-lost').textContent = `Aposta perdida: ${selectedWager} 🪙`;
   document.getElementById('go-score').textContent = `Pontuação: ${score} | Combo máx: x${maxCombo}`;
 
-  const savingEl = document.getElementById('go-saving');
-  const retryBtn = document.getElementById('btn-retry');
+  // A aposta já foi debitada no startGame — não chamamos sync de novo aqui.
+  // Apenas garantimos uma micro-pausa para a UI assentar e liberamos o botão.
   savingEl.classList.remove('hidden');
   retryBtn.disabled = true;
-
-  await syncEmpireCoins('telegram-user', selectedWager, 0);
-
+  await new Promise(r => setTimeout(r, 250));
   savingEl.classList.add('hidden');
   retryBtn.disabled = false;
 }
