@@ -4,7 +4,15 @@
 ================================================ */
 
 // ─── CONSTANTES ──────────────────────────────
-const WEBHOOK_URL = 'https://SEU_WEBHOOK_AQUI.com/api/empire-coins';
+// Backend Empire (Apps Script). Mesma URL usada pelo client em src/lib/api.ts.
+const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwxbkUndhZPtFvtK1uIFTkPNN-m6WeiFVMU3IDzuahsC0oQp8Ba2GLQFOAPkWv8eiA3/exec';
+
+// Identificação do jogador e do artista que está apostando — vindos via query string
+// (a rota React /games/hits-producer injeta ?tg=...&artist=... antes de abrir o iframe).
+const URL_PARAMS = new URLSearchParams(window.location.search);
+const TELEGRAM_ID = (URL_PARAMS.get('tg') || 'guest').trim();
+const ARTIST_NAME = (URL_PARAMS.get('artist') || '').trim();
+const GAME_ID = 'produtor-de-hits';
 const GAME_DURATION = 60;       // segundos até VICTORY
 const LANE_COUNT = 4;
 const NOTE_SPEED_BASE = 250;    // px/s
