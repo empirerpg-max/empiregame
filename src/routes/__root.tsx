@@ -33,6 +33,7 @@ import {
   HelpCircle,
   Share2,
   Send,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
