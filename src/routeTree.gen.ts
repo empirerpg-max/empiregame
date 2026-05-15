@@ -25,6 +25,7 @@ import { Route as DueloRouteImport } from './routes/duelo'
 import { Route as ChartsRouteImport } from './routes/charts'
 import { Route as BetRouteImport } from './routes/bet'
 import { Route as AlbunsRouteImport } from './routes/albuns'
+import { Route as AcessoRapidoRouteImport } from './routes/acesso-rapido'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ToursIndexRouteImport } from './routes/tours.index'
 import { Route as PlaylistsIndexRouteImport } from './routes/playlists.index'
@@ -125,6 +126,11 @@ const BetRoute = BetRouteImport.update({
 const AlbunsRoute = AlbunsRouteImport.update({
   id: '/albuns',
   path: '/albuns',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcessoRapidoRoute = AcessoRapidoRouteImport.update({
+  id: '/acesso-rapido',
+  path: '/acesso-rapido',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -235,6 +241,7 @@ const AlbumIdEditarRoute = AlbumIdEditarRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/acesso-rapido': typeof AcessoRapidoRoute
   '/albuns': typeof AlbunsRoute
   '/bet': typeof BetRoute
   '/charts': typeof ChartsRoute
@@ -274,6 +281,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/acesso-rapido': typeof AcessoRapidoRoute
   '/albuns': typeof AlbunsRoute
   '/bet': typeof BetRoute
   '/charts': typeof ChartsRoute
@@ -314,6 +322,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/acesso-rapido': typeof AcessoRapidoRoute
   '/albuns': typeof AlbunsRoute
   '/bet': typeof BetRoute
   '/charts': typeof ChartsRoute
@@ -355,6 +364,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/acesso-rapido'
     | '/albuns'
     | '/bet'
     | '/charts'
@@ -394,6 +404,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/acesso-rapido'
     | '/albuns'
     | '/bet'
     | '/charts'
@@ -433,6 +444,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/acesso-rapido'
     | '/albuns'
     | '/bet'
     | '/charts'
@@ -473,6 +485,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AcessoRapidoRoute: typeof AcessoRapidoRoute
   AlbunsRoute: typeof AlbunsRoute
   BetRoute: typeof BetRoute
   ChartsRoute: typeof ChartsRoute
@@ -621,6 +634,13 @@ declare module '@tanstack/react-router' {
       path: '/albuns'
       fullPath: '/albuns'
       preLoaderRoute: typeof AlbunsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/acesso-rapido': {
+      id: '/acesso-rapido'
+      path: '/acesso-rapido'
+      fullPath: '/acesso-rapido'
+      preLoaderRoute: typeof AcessoRapidoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -798,6 +818,7 @@ const PlaylistsIdRouteWithChildren = PlaylistsIdRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AcessoRapidoRoute: AcessoRapidoRoute,
   AlbunsRoute: AlbunsRoute,
   BetRoute: BetRoute,
   ChartsRoute: ChartsRoute,

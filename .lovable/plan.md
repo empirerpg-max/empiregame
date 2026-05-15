@@ -1,71 +1,80 @@
-# Fuga do Paparazzi → Subway Surfers Edition
+# Plano de Ajustes Finais + Revisão Pré-lançamento
 
-Reescrever o jogo HTML5 atual em `public/games/paparazzi-escape/` substituindo a mecânica de endless runner lateral por uma visão 3/4 com 3 pistas, pulo e esquiva. Mantém entrada de 50 E$C, cashout via FUGIR, perda total ao bater, integração via `sync_game_coins` e a estética Neon Glassmorphism.
+## 1. Memória da Fama — tempo
 
-## Mecânica (clássico Subway Surfers)
+`public/games/memoria-fama/game.js`:
+- `GAME_DURATION`: 60 → **40s**
+- Ajustar `SPEED_BONUS_THRESHOLD` de 30 → **20s** (manter proporção do bônus de velocidade que destrava cap de 3× entrada)
+- Texto da tela MENU/instruções: "60 segundos" → "40 segundos"
 
-- **3 pistas fixas** (esquerda / centro / direita). Personagem trava no eixo Z aparente, só muda de pista.
-- **Inputs**:
-  - Swipe ←/→ ou setas/A,D → trocar pista
-  - Swipe ↑ ou ↑/Espaço → pulo (gravidade + arco)
-  - Swipe ↓ ou ↓ → esquiva/rolagem (hitbox baixa por ~500ms)
-- **Câmera fake 3/4**: projeção em perspectiva via escala+offset Y conforme distância (Z simulado em 2D Canvas, sem WebGL).
-- **Obstáculos** distribuídos por pista, com 3 tipos:
-  - `BARRICADE` (baixo) → precisa pular
-  - `CAMERA_DRONE` (alto) → precisa esquivar
-  - `BLOCK` (cheio) → precisa trocar de pista
-- **Moedas** em fileiras de 3-5, posicionáveis em arcos (acima de barricadas).
-- **Paparazzi perseguidor**: sprite atrás do player, "alcança" se o player tropeçar (animação de game over).
-- **Velocidade** acelera com a distância. Spawner usa intervalo decrescente.
+## 2. Footer com 5 botões (adicionar Charts)
 
-## Loop / Arquitetura
+`src/routes/__root.tsx` → `BottomNav`:
+- Nova ordem: **Hub · Artistas · Charts · Social · Rank**
+- Charts vai ao centro (posição de destaque), ícone `TrendingUp`
+- Reduzir padding horizontal interno dos itens pra caber bem em 360px (já usa `flex-1`, ok)
 
-```
-game.js
- ├─ Constantes (LANES_X, GRAVITY, JUMP_VY, SLIDE_MS, SPEED_BASE, SPEED_GROWTH)
- ├─ State (screen, player{lane,y,vy,sliding}, obstacles[], coins[], distance, sessionCoins, speed)
- ├─ Input Manager (touchstart/move/end → swipe; keydown) — separado do loop
- ├─ Spawner (gera obstáculos + linhas de moedas a cada N px)
- ├─ Physics tick (gravidade, slide timer, lane lerp)
- ├─ Collision (AABB por pista + altura, considerando jump/slide)
- ├─ Render (parallax 3 camadas + projeção 3/4 dos objetos por Z)
- └─ Economia (callEmpire/sync_game_coins — inalterado)
-```
+## 3. Remover "Charts" do hambúrguer
 
-Mantém separação `update()` / `draw()` e debit/credit já existentes em `transactEmpireCoins` / `syncEmpireCoins`.
+`__root.tsx` → categoria **Empire Coliseum**:
+- Remover item `{ to: "/charts", label: "Charts", icon: TrendingUp }`
+- Sobram: Duelos, Hall of Fame
 
-## Visual (mantém Neon Glass)
+## 4. Acesso Rápido — página dedicada `/acesso-rapido`
 
-- Fundo: skyline noturno + camada de luzes neon + chão de avenida com listras em perspectiva (linhas convergindo ao horizonte).
-- Player: silhueta neon com leve glow.
-- Obstáculos: barricadas de show com fitas neon, drones-câmera com flash branco no impacto.
-- Moedas: 🪙 com pulse glow.
-- HUD: reaproveita `style.css` atual (saldo da partida + distância + botão FUGIR).
+Criar `src/routes/acesso-rapido.tsx`:
+- Header com ícone Telegram + título "Acesso Rápido"
+- Grid de cards (2 colunas mobile) — cada card tem ícone, label e abre o link via `openExternal()` do `@/lib/telegram`
+- Lista (8 canais):
 
-## Telas / fluxo (sem mudança)
+  | Label | URL |
+  |---|---|
+  | News | https://t.me/empirenews1 |
+  | Social | https://t.me/empiresocial1 |
+  | Vídeos | https://t.me/+abAEzgGvI5E5MjA5 |
+  | Álbuns | https://t.me/+g3oxVuzryNkwYzVh |
+  | Singles | https://t.me/+b92qIsQP4BU3YjUx |
+  | Eventos | https://t.me/empireeventos |
+  | Avisos | https://t.me/empireinfos1 | 
+  | Central de Ajuda | https://t.me/+LRE37LcEnOdmMWQx |
 
-`MENU → LOADING (debita 50) → RUNNING (HUD + FUGIR) → DEAD ou CASHOUT_LOADING → SUCCESS`. Reuso integral do `index.html` atual.
+- Ícones distintos por tipo (Newspaper, MessageCircle, Video, Disc3, Music2, Calendar, Bell, LifeBuoy)
 
-## Arquivos afetados
+`__root.tsx` → menu hambúrguer:
+- Inserir botão **Acesso Rápido** no TOPO (antes de Empire Studio), estilo destacado: card grande primário com ícone `Send` (Telegram), atalho rápido pra rota.
 
-- `public/games/paparazzi-escape/game.js` → **reescrever** com novo motor 3-lanes.
-- `public/games/paparazzi-escape/style.css` → pequenos ajustes (instruções de swipe no menu, ícones de pista).
-- `public/games/paparazzi-escape/index.html` → atualizar bloco `.rules` (swipe ←/→, ↑ pular, ↓ esquivar).
-- `src/routes/games.paparazzi-escape.tsx` → atualizar texto descritivo ("3 pistas, pule, esquive").
-- `src/routes/games.index.tsx` → atualizar `description` do card.
+## 5. Revisão pré-lançamento — achados e correções
 
-Sem mudanças no Apps Script — `sync_game_coins` continua igual.
+Varri `src/routes/`, `__root.tsx`, hub, lib. Pontos a corrigir/conferir:
 
-## Detalhes técnicos
+### Críticos
+- **SEO/meta duplicados**: `__root.tsx` declara `description`, `og:description`, `twitter:description` e `og:image` duas vezes (linhas 151–181). O segundo conjunto sobrescreve o primeiro mas suja o `<head>`. Deduplicar mantendo só a versão final.
+- **Modais fora de `AnimatePresence` válido**: o bloco `showIdModal` está dentro de `<AnimatePresence>` mas sem `key` no `motion.div` raiz — anima abertura mas não saída. Adicionar `key` ou trocar pelo padrão usado em `GlobalLinkModal`.
 
-- Projeção 3/4: para cada objeto com `z` (distância à frente), `screenY = horizonY + (canvasH-horizonY) * (1/(1+z*k))`, `scale = 1/(1+z*k)`, `screenX = laneCenterX(lane) * scale + canvasW/2 * (1-scale)`. Atualizar `z -= speed * dt` por frame; remover quando `z < -2`.
-- Hitbox: colisão dispara quando `z` cruza o plano do player (`z ≈ 0`) e a pista bate, considerando `player.y` (pulo) ou `player.sliding`.
-- Performance: limitar a ~30 obstáculos ativos, pool simples de objetos para evitar GC no mobile.
-- Touch: detectar swipe com threshold 30px e `Math.abs(dx) vs dy` para distinguir lateral de vertical.
-- Anti-doubleclick em FUGIR já existe — preservar.
+### Importantes (UX comum em apps mobile)
+- **Empty state global**: rotas como `/albuns`, `/playlists`, `/leiloes` precisam revisão pra garantir mensagem amigável quando lista vazia (revisar uma a uma na implementação).
+- **Estado de erro de rede**: hoje vários `useEffect` com `.then(setX)` sem `.catch`. Adicionar fallback de erro padronizado pelo menos no Hub e Charts (Hub já tem, replicar padrão).
+- **Pull-to-refresh**: não há gesto nativo; o botão sync no Hub cobre, mas confirmar que `/charts`, `/ranking`, `/social` têm botão de refresh visível.
+- **Loading skeletons consistentes**: padrão dos charts é bom (`animate-pulse`); validar que todas as rotas usam (rapidão).
+- **Safe-area**: BottomNav já trata `env(safe-area-inset-bottom)`. Top bar não tem `env(safe-area-inset-top)` — em iPhone com notch dentro do Telegram pode comer o conteúdo. Adicionar `pt-[env(safe-area-inset-top)]` no `<nav>` top.
+- **Acessibilidade**: links externos do Acesso Rápido precisam `rel="noopener noreferrer"` e `aria-label`.
+- **Botão hambúrguer**: já tem `aria-expanded` ✓.
 
-## Fora de escopo
+### Pequenos polimentos
+- **Tutorial**: link "Guia de Sobrevivência" só aparece no rodapé do menu — manter, mas garantir que primeiro acesso (sem `user.id` válido) sugere o tutorial.
+- **Toaster**: posição `top-center` pode bater com top bar fixo (h-16). Ajustar `offset` ou trocar pra `bottom-center` (acima do BottomNav).
+- **Versão do app no menu**: adicionar rodapé discreto com versão (ex: "v1.0.0") no fim do hambúrguer — útil pra suporte.
 
-- Sem power-ups (ímã/escudo/hoverboard) — fica para iteração futura se você pedir.
-- Sem trilha sonora nova.
-- Sem alterações no backend.
+### Conferências (não bloqueiam, mas valem checar)
+- 4 jogos integrados: confirmar que todos chamam `sync_game_coins` corretamente após premiação (paparazzi, hits, memória, queridômetro).
+- Webhook do Apps Script: confirmar que casos `queridometro_status` e `queridometro_votar` foram adicionados ao `doPost` (responsabilidade tua no script).
+- Imagens via `driveImg`: se Drive ficar fora do ar, app trava em alguns lugares — valeria um onError genérico que cai num placeholder local (small win).
+
+## Arquivos que serão tocados
+
+- `public/games/memoria-fama/game.js` (tempo)
+- `public/games/memoria-fama/index.html` (texto "60s" se houver)
+- `src/routes/__root.tsx` (BottomNav, hambúrguer, meta dedup, safe-area, toaster, versão, botão Acesso Rápido)
+- `src/routes/acesso-rapido.tsx` (nova rota)
+
+Após o "Implementar plano", aplico tudo de uma vez e te entrego um resumo curto do que mudou + o que fica como sugestão futura.

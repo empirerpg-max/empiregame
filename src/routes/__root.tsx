@@ -32,6 +32,7 @@ import {
   Search,
   HelpCircle,
   Share2,
+  Send,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
@@ -174,11 +175,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/130c3ca4-e5a2-42b6-b630-b40d622d345c/id-preview-b6ad8193--6634bb87-7b09-47bf-82c3-5047e8bc7caa.lovable.app-1777495380913.png",
       },
-      { name: "description", content: "Empire Hub Studio is a Telegram bot application for managing artist careers and social interactions." },
-      { property: "og:description", content: "Empire Hub Studio is a Telegram bot application for managing artist careers and social interactions." },
-      { name: "twitter:description", content: "Empire Hub Studio is a Telegram bot application for managing artist careers and social interactions." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de8b0c28-0fc0-4c33-a514-65dbb7cdd3d4/id-preview-56a4fc4c--1dfc0f66-4a5d-4eee-afb1-75282af91d1d.lovable.app-1778802833405.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de8b0c28-0fc0-4c33-a514-65dbb7cdd3d4/id-preview-56a4fc4c--1dfc0f66-4a5d-4eee-afb1-75282af91d1d.lovable.app-1778802833405.png" },
     ],
     links: [
       {
@@ -219,6 +215,7 @@ function BottomNav() {
   const items = [
     { to: "/", label: "Hub", icon: Home },
     { to: "/artistas", search: { filter: "mine" }, label: "Artistas", icon: Library },
+    { to: "/charts", label: "Charts", icon: TrendingUp },
     { to: "/social", label: "Social", icon: Share2 },
     { to: "/ranking", label: "Rank", icon: Star },
   ];
@@ -228,7 +225,7 @@ function BottomNav() {
       role="navigation"
       aria-label="Navegação principal"
     >
-      <div className="mx-auto max-w-md flex items-stretch justify-around px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="mx-auto max-w-md flex items-stretch justify-around px-1 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {items.map((it) => {
           const active = pathname === it.to || (it.to !== "/" && pathname.startsWith(it.to));
           const Icon = it.icon;
@@ -240,15 +237,15 @@ function BottomNav() {
               onClick={() => haptic.selection()}
               aria-label={it.label}
               aria-current={active ? "page" : undefined}
-              className={`relative flex flex-col items-center justify-center gap-0.5 min-h-11 min-w-11 flex-1 rounded-2xl transition-colors ${
+              className={`relative flex flex-col items-center justify-center gap-0.5 min-h-11 flex-1 rounded-2xl transition-colors ${
                 active ? "text-primary" : "text-muted-foreground"
               }`}
             >
               {active && (
                 <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-primary" />
               )}
-              <Icon className="size-[22px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${active ? "opacity-100" : "opacity-80"}`}>
+              <Icon className="size-[20px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+              <span className={`text-[9px] font-bold uppercase tracking-wider ${active ? "opacity-100" : "opacity-80"}`}>
                 {it.label}
               </span>
             </Link>
@@ -321,9 +318,9 @@ function RootInner() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background pb-24 pt-16">
+    <div className="min-h-screen flex flex-col bg-background pb-24" style={{ paddingTop: "calc(4rem + env(safe-area-inset-top))" }}>
       {/* Top Bar */}
-      <nav className="fixed top-0 inset-x-0 z-[60] h-16 bg-background/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6">
+      <nav className="fixed top-0 inset-x-0 z-[60] bg-background/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 h-16 pt-[env(safe-area-inset-top)]" style={{ height: "calc(4rem + env(safe-area-inset-top))" }}>
          <Link to="/" className="flex items-center gap-2" onClick={() => haptic.selection()}>
             <div className="size-8 rounded-lg bg-primary text-primary-foreground grid place-items-center font-black italic tracking-tighter">E</div>
             <span className="font-black italic uppercase tracking-tighter text-base">Empire Hub</span>
@@ -348,6 +345,20 @@ function RootInner() {
             className="fixed inset-0 z-50 bg-background pt-20 px-6 overflow-y-auto"
           >
              <div className="space-y-4 pb-12">
+                <Link
+                  to="/acesso-rapido"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-4 p-5 rounded-3xl bg-primary/15 border border-primary/30 text-primary hover:bg-primary/20 transition-all"
+                >
+                   <div className="size-11 rounded-2xl bg-primary text-primary-foreground grid place-items-center">
+                      <Send className="size-5" />
+                   </div>
+                   <div className="flex-1 min-w-0">
+                      <p className="font-black uppercase tracking-widest text-xs">Acesso Rápido</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Canais oficiais Telegram</p>
+                   </div>
+                </Link>
+
                 <MenuCategory 
                   title="Empire Studio" 
                   icon={Library}
@@ -375,7 +386,6 @@ function RootInner() {
                   title="Empire Coliseum" 
                   icon={Swords}
                   items={[
-                    { to: "/charts", label: "Charts", icon: TrendingUp },
                     { to: "/duelo", label: "Duelos", icon: Swords },
                     { to: "/hall", label: "Hall of Fame", icon: Crown },
                   ]} 
@@ -402,6 +412,9 @@ function RootInner() {
                       <HelpCircle className="size-5" />
                       <span className="font-black uppercase tracking-widest text-[10px]">Guia de Sobrevivência</span>
                    </Link>
+                   <p className="text-center text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground/30 pt-4">
+                      Empire Hub · v1.0.0
+                   </p>
                 </div>
              </div>
           </motion.div>
@@ -470,7 +483,7 @@ function RootInner() {
 
       <Outlet />
       <BottomNav />
-      <Toaster position="top-center" richColors closeButton />
+      <Toaster position="top-center" richColors closeButton offset={80} />
     </div>
   );
 }
