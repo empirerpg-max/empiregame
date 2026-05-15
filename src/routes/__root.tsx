@@ -234,6 +234,7 @@ function BottomNav() {
               key={it.to}
               to={it.to}
               search={it.search}
+              preload="intent"
               onClick={() => haptic.selection()}
               aria-label={it.label}
               aria-current={active ? "page" : undefined}
