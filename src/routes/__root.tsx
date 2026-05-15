@@ -375,7 +375,6 @@ function RootInner() {
                   title="Empire Coliseum" 
                   icon={Swords}
                   items={[
-                    { to: "/ranking", label: "Rankings", icon: Star },
                     { to: "/charts", label: "Charts", icon: TrendingUp },
                     { to: "/duelo", label: "Duelos", icon: Swords },
                     { to: "/hall", label: "Hall of Fame", icon: Crown },
@@ -387,7 +386,6 @@ function RootInner() {
                   title="Empire Extras" 
                   icon={Radio}
                   items={[
-                    { to: "/social", label: "Empire Social", icon: Share2 },
                     { to: "/radar", label: "Radar Feed", icon: Radio },
                     { to: "/filantropia", label: "Filantropia", icon: HandHeart },
                     { to: "/games", label: "Jogos", icon: Gamepad2 },
