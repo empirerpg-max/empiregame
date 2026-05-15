@@ -28,15 +28,73 @@ function TourDetails() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      api.listarTodos(),
-      api.listTours(),
-      api.getAgendaTour(nome)
-    ]).then(([artists, toursList, agendaData]) => {
-      const art = artists.find(a => a.nome === nome);
-      setArtist(art || null);
+useEffect(() => {
+  setLoading(true);
+  Promise.all([
+    api.listarTodos(),
+    api.listTours(),
+    api.getAgendaTour(nome)
+  ]).then(([artists, toursList, agendaData]) => {
+    const art = artists.find(a => a.nome === nome);
+    setArtist(art || null);
+
+    const tFromList = toursList.find(t => t.artista === nome);
+    
+    if (tFromList) {
+      // ✅ Parse da agenda (pode vir como string ou array)
+      let agenda = [];
+      if (typeof tFromList.agenda === 'string') {
+        try {
+          agenda = JSON.parse(tFromList.agenda);
+        } catch (e) {
+          agenda = [];
+        }
+      } else if (Array.isArray(tFromList.agenda)) {
+        agenda = tFromList.agenda;
+      }
+      
+      console.log('Agenda carregada:', agenda); // DEBUG
+      
+      setTourDetails({
+        titulo: tFromList.titulo || "The Empire Tour",
+        tipo: tFromList.porte || "Arena",
+        status: tFromList.status || "Em andamento",
+        qtd: Number(tFromList.total_shows || 0),
+        shows_realizados: Number(tFromList.show_atual || 0),
+        local_atual: tFromList.local_atual || "Mundial",
+        arrecadacao_total: Number(tFromList.arrecadacao_total || 0),
+        agenda: agenda,  // ✅ Agenda preenchida com dados reais
+        foto: tFromList.foto || ""
+      });
+    } else if (art && art.tour_info) {
+      // Fallback: tenta pegar agenda do tour_info no artista
+      let info: any = art.tour_info;
+      if (typeof info === "string") {
+        try {
+          const cleanJson = info.trim().replace(/^"+|"+$/g, "");
+          info = JSON.parse(cleanJson);
+        } catch { 
+          info = {}; 
+        }
+      }
+      
+      // Se houver agenda em tour_info, use-a
+      const agendaFallback = info.agenda || [];
+      
+      setTourDetails({
+        titulo: info.titulo || "The Empire Tour",
+        tipo: info.tipo || "Arena",
+        status: info.status || "Em andamento",
+        qtd: Number(info.qtd || 10),
+        shows_realizados: Number(info.shows_realizados || 0),
+        local_atual: info.continente || "Mundial",
+        arrecadacao_total: 0,
+        agenda: agendaFallback  // ✅ Usa agenda do tour_info
+      });
+    }
+    setLoading(false);
+  });
+}, [nome]);
 
       const tFromList = toursList.find(t => t.artista === nome);
       
