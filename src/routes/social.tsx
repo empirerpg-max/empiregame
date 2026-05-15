@@ -693,25 +693,6 @@ function SocialPage() {
                         <button className="py-1.5 rounded-lg text-[13px] font-bold text-white bg-gradient-to-r from-[#fa7e1e] via-[#d62976] to-[#4f5bd5]">Seguir</button>
                         <button className="py-1.5 rounded-lg text-[13px] font-bold bg-zinc-100 border border-zinc-200">Mensagem</button>
                       </div>
-                      {/* Highlights */}
-                      <div className="flex gap-4 overflow-x-auto pb-1 mt-5 no-scrollbar">
-                        {artistPosts.slice(0, 5).map((p, i) => (
-                          <div key={p.id} className="flex flex-col items-center gap-1 shrink-0">
-                            <div className="p-[2px] rounded-full border-2 border-zinc-200">
-                              <div className="size-14 rounded-full overflow-hidden bg-zinc-100">
-                                {p.media_url ? <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" /> : <div className="w-full h-full bg-gradient-to-br from-pink-400 to-orange-300" />}
-                              </div>
-                            </div>
-                            <span className="text-[10px] text-black/70 font-bold">{p.subtipo === 'Story' ? 'Story' : `Post ${i + 1}`}</span>
-                          </div>
-                        ))}
-                        <div className="flex flex-col items-center gap-1 shrink-0">
-                          <div className="size-14 rounded-full border-2 border-dashed border-zinc-300 flex items-center justify-center text-zinc-400">
-                            <Plus className="size-6" />
-                          </div>
-                          <span className="text-[10px] text-black/50 font-bold">Novo</span>
-                        </div>
-                      </div>
                     </div>
                     {/* Tabs */}
                     <div className="grid grid-cols-3 mt-4 border-t border-zinc-200">
