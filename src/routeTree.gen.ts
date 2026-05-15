@@ -33,11 +33,6 @@ import { Route as ArtistasIndexRouteImport } from './routes/artistas.index'
 import { Route as ToursNomeRouteImport } from './routes/tours.$nome'
 import { Route as PlaylistsNovaRouteImport } from './routes/playlists.nova'
 import { Route as PlaylistsIdRouteImport } from './routes/playlists.$id'
-import { Route as GamesStudioPetRouteImport } from './routes/games.studio-pet'
-import { Route as GamesQueridometroRouteImport } from './routes/games.queridometro'
-import { Route as GamesPopstarQuestRouteImport } from './routes/games.popstar-quest'
-import { Route as GamesPaparazziEscapeRouteImport } from './routes/games.paparazzi-escape'
-import { Route as GamesHitsProducerRouteImport } from './routes/games.hits-producer'
 import { Route as AlbumIdRouteImport } from './routes/album.$id'
 import { Route as AcoesTourRouteImport } from './routes/acoes.tour'
 import { Route as AcoesCinemaRouteImport } from './routes/acoes.cinema'
@@ -168,31 +163,6 @@ const PlaylistsIdRoute = PlaylistsIdRouteImport.update({
   path: '/playlists/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GamesStudioPetRoute = GamesStudioPetRouteImport.update({
-  id: '/games/studio-pet',
-  path: '/games/studio-pet',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GamesQueridometroRoute = GamesQueridometroRouteImport.update({
-  id: '/games/queridometro',
-  path: '/games/queridometro',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GamesPopstarQuestRoute = GamesPopstarQuestRouteImport.update({
-  id: '/games/popstar-quest',
-  path: '/games/popstar-quest',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GamesPaparazziEscapeRoute = GamesPaparazziEscapeRouteImport.update({
-  id: '/games/paparazzi-escape',
-  path: '/games/paparazzi-escape',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GamesHitsProducerRoute = GamesHitsProducerRouteImport.update({
-  id: '/games/hits-producer',
-  path: '/games/hits-producer',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AlbumIdRoute = AlbumIdRouteImport.update({
   id: '/album/$id',
   path: '/album/$id',
@@ -261,11 +231,6 @@ export interface FileRoutesByFullPath {
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
-  '/games/hits-producer': typeof GamesHitsProducerRoute
-  '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
-  '/games/popstar-quest': typeof GamesPopstarQuestRoute
-  '/games/queridometro': typeof GamesQueridometroRoute
-  '/games/studio-pet': typeof GamesStudioPetRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -301,11 +266,6 @@ export interface FileRoutesByTo {
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
-  '/games/hits-producer': typeof GamesHitsProducerRoute
-  '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
-  '/games/popstar-quest': typeof GamesPopstarQuestRoute
-  '/games/queridometro': typeof GamesQueridometroRoute
-  '/games/studio-pet': typeof GamesStudioPetRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -342,11 +302,6 @@ export interface FileRoutesById {
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
-  '/games/hits-producer': typeof GamesHitsProducerRoute
-  '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
-  '/games/popstar-quest': typeof GamesPopstarQuestRoute
-  '/games/queridometro': typeof GamesQueridometroRoute
-  '/games/studio-pet': typeof GamesStudioPetRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/tours/$nome': typeof ToursNomeRoute
@@ -384,11 +339,6 @@ export interface FileRouteTypes {
     | '/acoes/cinema'
     | '/acoes/tour'
     | '/album/$id'
-    | '/games/hits-producer'
-    | '/games/paparazzi-escape'
-    | '/games/popstar-quest'
-    | '/games/queridometro'
-    | '/games/studio-pet'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -424,11 +374,6 @@ export interface FileRouteTypes {
     | '/acoes/cinema'
     | '/acoes/tour'
     | '/album/$id'
-    | '/games/hits-producer'
-    | '/games/paparazzi-escape'
-    | '/games/popstar-quest'
-    | '/games/queridometro'
-    | '/games/studio-pet'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -464,11 +409,6 @@ export interface FileRouteTypes {
     | '/acoes/cinema'
     | '/acoes/tour'
     | '/album/$id'
-    | '/games/hits-producer'
-    | '/games/paparazzi-escape'
-    | '/games/popstar-quest'
-    | '/games/queridometro'
-    | '/games/studio-pet'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/tours/$nome'
@@ -505,11 +445,6 @@ export interface RootRouteChildren {
   AcoesCinemaRoute: typeof AcoesCinemaRoute
   AcoesTourRoute: typeof AcoesTourRoute
   AlbumIdRoute: typeof AlbumIdRouteWithChildren
-  GamesHitsProducerRoute: typeof GamesHitsProducerRoute
-  GamesPaparazziEscapeRoute: typeof GamesPaparazziEscapeRoute
-  GamesPopstarQuestRoute: typeof GamesPopstarQuestRoute
-  GamesQueridometroRoute: typeof GamesQueridometroRoute
-  GamesStudioPetRoute: typeof GamesStudioPetRoute
   PlaylistsIdRoute: typeof PlaylistsIdRouteWithChildren
   PlaylistsNovaRoute: typeof PlaylistsNovaRoute
   ToursNomeRoute: typeof ToursNomeRoute
@@ -692,41 +627,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlaylistsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/games/studio-pet': {
-      id: '/games/studio-pet'
-      path: '/games/studio-pet'
-      fullPath: '/games/studio-pet'
-      preLoaderRoute: typeof GamesStudioPetRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/games/queridometro': {
-      id: '/games/queridometro'
-      path: '/games/queridometro'
-      fullPath: '/games/queridometro'
-      preLoaderRoute: typeof GamesQueridometroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/games/popstar-quest': {
-      id: '/games/popstar-quest'
-      path: '/games/popstar-quest'
-      fullPath: '/games/popstar-quest'
-      preLoaderRoute: typeof GamesPopstarQuestRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/games/paparazzi-escape': {
-      id: '/games/paparazzi-escape'
-      path: '/games/paparazzi-escape'
-      fullPath: '/games/paparazzi-escape'
-      preLoaderRoute: typeof GamesPaparazziEscapeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/games/hits-producer': {
-      id: '/games/hits-producer'
-      path: '/games/hits-producer'
-      fullPath: '/games/hits-producer'
-      preLoaderRoute: typeof GamesHitsProducerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/album/$id': {
       id: '/album/$id'
       path: '/album/$id'
@@ -838,11 +738,6 @@ const rootRouteChildren: RootRouteChildren = {
   AcoesCinemaRoute: AcoesCinemaRoute,
   AcoesTourRoute: AcoesTourRoute,
   AlbumIdRoute: AlbumIdRouteWithChildren,
-  GamesHitsProducerRoute: GamesHitsProducerRoute,
-  GamesPaparazziEscapeRoute: GamesPaparazziEscapeRoute,
-  GamesPopstarQuestRoute: GamesPopstarQuestRoute,
-  GamesQueridometroRoute: GamesQueridometroRoute,
-  GamesStudioPetRoute: GamesStudioPetRoute,
   PlaylistsIdRoute: PlaylistsIdRouteWithChildren,
   PlaylistsNovaRoute: PlaylistsNovaRoute,
   ToursNomeRoute: ToursNomeRoute,
@@ -857,3 +752,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
