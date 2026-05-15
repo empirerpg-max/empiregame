@@ -73,7 +73,7 @@ function PlaylistsPage() {
                     src={driveImg(p.capa_url, 200)}
                     alt=""
                     className="w-full h-full object-cover"
-                  />
+                   loading="lazy" decoding="async"/>
                 ) : (
                   <ListMusic className="size-6 text-muted-foreground" />
                 )}

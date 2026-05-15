@@ -136,7 +136,7 @@ function ToursIndex() {
                         src={driveImg(t.foto, 400)}
                         alt={t.artista}
                         className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-110"
-                      />
+                       loading="lazy" decoding="async"/>
                     ) : (
                       <Crown className="size-10 text-primary/40 group-hover:scale-110 group-hover:text-primary transition-all duration-500" />
                     )}

@@ -81,7 +81,7 @@ export function ArtistLoginOverlay({ onSelect, gameName }: ArtistLoginOverlayPro
                   className="w-full flex items-center gap-4 bg-white/5 border border-white/10 p-5 rounded-[28px] hover:bg-white/10 hover:border-primary transition-all group"
                 >
                   <div className="size-16 rounded-2xl overflow-hidden border border-white/10 bg-white/5 flex-shrink-0">
-                    <img src={driveImg(art.foto)} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                    <img src={driveImg(art.foto)} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer"  loading="lazy" decoding="async"/>
                   </div>
                   <div className="flex-1 text-left">
                     <h3 className="text-white font-cabinet font-black italic uppercase text-lg leading-tight group-hover:text-primary transition-colors">

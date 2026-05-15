@@ -351,7 +351,7 @@ function SocialPage() {
                               className="w-full h-full object-cover" 
                               referrerPolicy="no-referrer"
                               crossOrigin="anonymous"
-                              onError={(e) => {
+                              onError={(e) = loading="lazy" decoding="async"> {
                                 const target = e.target as HTMLImageElement;
                                 target.onerror = null;
                                 target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(art.nome)}&background=3D8BFF&color=fff&size=128&bold=true`;
@@ -414,7 +414,7 @@ function SocialPage() {
                               className="w-full h-full object-cover" 
                               referrerPolicy="no-referrer"
                               crossOrigin="anonymous"
-                              onError={(e) => {
+                              onError={(e) = loading="lazy" decoding="async"> {
                                 const target = e.target as HTMLImageElement;
                                 target.style.display = 'none';
                                 if (target.parentElement) {
@@ -445,7 +445,7 @@ function SocialPage() {
                             src={driveImg(post.media_url)} 
                             className="w-full h-full object-cover" 
                             referrerPolicy="no-referrer" 
-                            onError={(e) => {
+                            onError={(e) = loading="lazy" decoding="async"> {
                               (e.target as HTMLImageElement).src = "https://placehold.co/600x1067?text=Story";
                             }}
                           />
@@ -462,7 +462,7 @@ function SocialPage() {
                           src={driveImg(post.media_url)} 
                           className="w-full h-full object-cover" 
                           referrerPolicy="no-referrer" 
-                          onError={(e) => {
+                          onError={(e) = loading="lazy" decoding="async"> {
                             (e.target as HTMLImageElement).src = "https://placehold.co/600x600?text=Post";
                           }}
                         />
@@ -522,7 +522,7 @@ function SocialPage() {
                 >
                   <div className="aspect-[16/9] bg-zinc-100 relative border-b-[3.5px] border-black overflow-hidden">
                     {item.imagem ? (
-                      <img src={driveImg(item.imagem)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
+                      <img src={driveImg(item.imagem)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer"  loading="lazy" decoding="async"/>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-[#D0FF43]/10">
                          <Newspaper className="size-12 text-black/5" />
@@ -649,7 +649,7 @@ function SocialPage() {
               const renderAvatar = (className: string) => (
                 <div className={className}>
                   {avatarSrc ? (
-                    <img src={avatarSrc} className="w-full h-full object-cover" referrerPolicy="no-referrer" crossOrigin="anonymous" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <img src={avatarSrc} className="w-full h-full object-cover" referrerPolicy="no-referrer" crossOrigin="anonymous" loading="lazy" onError={(e) = decoding="async"> { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : avatarFallback}
                 </div>
               );
@@ -707,7 +707,7 @@ function SocialPage() {
                         {artistPosts.map((p) => (
                           <button key={p.id} onClick={() => { setSelectedPost(p); loadComments(p.id); setIsCommentModalOpen(true); }} className="aspect-square bg-zinc-50 relative overflow-hidden group">
                             {p.media_url ? (
-                              <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+                              <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy"  decoding="async"/>
                             ) : (
                               <div className="w-full h-full bg-gradient-to-br from-pink-200 via-purple-200 to-orange-200 flex items-center justify-center p-2">
                                 <p className="text-[10px] text-black/70 font-bold line-clamp-3 text-left">{p.texto}</p>
@@ -766,7 +766,7 @@ function SocialPage() {
                         {artistPosts.map((p) => (
                           <article key={p.id} className="flex gap-3 px-4 py-3 border-b border-zinc-800 hover:bg-white/[0.03] cursor-pointer text-left" onClick={() => { setSelectedPost(p); loadComments(p.id); setIsCommentModalOpen(true); }}>
                             <div className="size-10 rounded-full overflow-hidden bg-zinc-800 shrink-0">
-                              {avatarSrc ? <img src={avatarSrc} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" /> : avatarFallback}
+                              {avatarSrc ? <img src={avatarSrc} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy"  decoding="async"/> : avatarFallback}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1 text-[14px]">
@@ -779,7 +779,7 @@ function SocialPage() {
                               <p className="text-[14px] mt-0.5 leading-snug whitespace-pre-line">{p.texto}</p>
                               {p.media_url && (
                                 <div className="mt-2 rounded-2xl overflow-hidden border border-zinc-800 aspect-video bg-zinc-900">
-                                  <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+                                  <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy"  decoding="async"/>
                                 </div>
                               )}
                               <div className="flex justify-between mt-3 max-w-xs text-zinc-500 text-[12px]">
@@ -833,7 +833,7 @@ function SocialPage() {
                       {artistPosts.map((p) => (
                         <button key={p.id} onClick={() => { setSelectedPost(p); loadComments(p.id); setIsCommentModalOpen(true); }} className="aspect-[9/16] bg-zinc-900 relative overflow-hidden">
                           {p.media_url ? (
-                            <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+                            <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy"  decoding="async"/>
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-[#FE2C55]/40 via-black to-[#25F4EE]/30 flex items-center justify-center p-2">
                               <p className="text-[10px] text-white/80 font-bold line-clamp-4 text-left">{p.texto}</p>
@@ -961,7 +961,7 @@ function SocialPage() {
                     <p className="text-[10px] font-black uppercase text-black opacity-60 italic text-black">Postar como:</p>
                     <div className={neoInput + " flex items-center gap-2 opacity-50 italic bg-zinc-50"}>
                       <div className="size-5 rounded-full bg-black/10 flex items-center justify-center font-black text-[11px] overflow-hidden">
-                        {activeArtist?.foto ? <img src={activeArtist.foto} className="w-full h-full object-cover" /> : activeArtist?.nome[0]}
+                        {activeArtist?.foto ? <img src={activeArtist.foto} className="w-full h-full object-cover"  loading="lazy" decoding="async"/> : activeArtist?.nome[0]}
                       </div>
                       {activeArtist?.nome || "Magnata"}
                     </div>
@@ -1059,7 +1059,7 @@ function SocialPage() {
 
                 <div className="p-3 bg-zinc-50 border-2 border-black border-dashed rounded-xl flex items-center gap-2">
                    <div className="size-6 rounded-full bg-black/10 overflow-hidden">
-                     {activeArtist?.foto ? <img src={activeArtist.foto} className="w-full h-full object-cover" /> : <UserCircle className="size-full opacity-20" />}
+                     {activeArtist?.foto ? <img src={activeArtist.foto} className="w-full h-full object-cover"  loading="lazy" decoding="async"/> : <UserCircle className="size-full opacity-20" />}
                    </div>
                    <p className="text-[10px] font-black uppercase opacity-60 italic">Publicar como <span className="text-black">{activeArtist?.nome}</span></p>
                 </div>
@@ -1132,7 +1132,7 @@ function SocialPage() {
                   <div className="flex gap-2">
                     {profileAvatar && (
                       <div className="size-12 rounded-xl border-2 border-black overflow-hidden flex-shrink-0 bg-zinc-100">
-                        <img src={driveImg(profileAvatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <img src={driveImg(profileAvatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer"  loading="lazy" decoding="async"/>
                       </div>
                     )}
                     <input 
@@ -1177,7 +1177,7 @@ function SocialPage() {
             >
               <div className="relative h-64 flex-shrink-0">
                 {selectedNews.imagem ? (
-                  <img src={selectedNews.imagem} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <img src={selectedNews.imagem} className="w-full h-full object-cover" referrerPolicy="no-referrer"  loading="lazy" decoding="async"/>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-[#3D8BFF]/20">
                     <Newspaper className="size-20 text-black/10" />
@@ -1252,7 +1252,7 @@ function SocialPage() {
                      <div key={idx} className="flex gap-3">
                         <div className="size-8 rounded-full bg-[#FFD166] border-2 border-black flex items-center justify-center font-black text-[10px] flex-shrink-0 overflow-hidden">
                            {c.avatar ? (
-                             <img src={driveImg(c.avatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                             <img src={driveImg(c.avatar)} className="w-full h-full object-cover" referrerPolicy="no-referrer"  loading="lazy" decoding="async"/>
                            ) : (
                              c.autor[0]
                            )}

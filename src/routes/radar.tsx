@@ -39,7 +39,7 @@ function RadarPage() {
                 alt={r.nome}
                 loading="lazy"
                 className="size-12 rounded-lg object-cover bg-secondary"
-              />
+               decoding="async"/>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold truncate">{r.nome}</p>
                 <p className="text-xs text-muted-foreground">{r.acao}</p>

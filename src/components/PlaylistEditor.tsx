@@ -180,7 +180,7 @@ export function PlaylistEditor({ existing }: { existing?: PlaylistPayload }) {
                   src={driveImg(t.capa_url, 80)}
                   alt=""
                   className="size-8 rounded object-cover"
-                />
+                 loading="lazy" decoding="async"/>
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold truncate">{t.titulo}</p>

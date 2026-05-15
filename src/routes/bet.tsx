@@ -192,7 +192,7 @@ function BetPage() {
                   onClick={() => addSongToBet(m)}
                   className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 text-left transition-colors group"
                 >
-                  <img src={driveImg(m.capa, 40)} className="size-8 rounded object-cover border border-white/10" />
+                  <img src={driveImg(m.capa, 40)} className="size-8 rounded object-cover border border-white/10"  loading="lazy" decoding="async"/>
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-black leading-none mb-1">{m.musica}</p>
                     <p className="text-[11px] text-muted-foreground font-bold">{m.artista}</p>
@@ -231,7 +231,7 @@ function BetPage() {
                       src={driveImg(m.capa, 100)}
                       alt=""
                       className="size-12 rounded-xl object-cover bg-secondary p-0.5 border border-white/10"
-                    />
+                     loading="lazy" decoding="async"/>
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-black truncate">{m.musica}</p>

@@ -119,7 +119,7 @@ function AlbumForm() {
         <div className="flex gap-4">
           <div className="size-32 rounded-xl overflow-hidden bg-card grid place-items-center shrink-0">
             {capa ? (
-              <img src={driveImgPreview(capa)} alt="capa" className="w-full h-full object-cover" />
+              <img src={driveImgPreview(capa)} alt="capa" className="w-full h-full object-cover"  loading="lazy" decoding="async"/>
             ) : (
               <ImageIcon className="size-8 text-muted-foreground" />
             )}
@@ -208,7 +208,7 @@ function AlbumForm() {
               <div key={i} className="flex gap-2 items-center">
                 <div className="size-12 rounded-lg bg-card overflow-hidden shrink-0">
                   {url && (
-                    <img src={driveImgPreview(url)} alt="" className="w-full h-full object-cover" />
+                    <img src={driveImgPreview(url)} alt="" className="w-full h-full object-cover"  loading="lazy" decoding="async"/>
                   )}
                 </div>
                 <Input
