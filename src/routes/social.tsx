@@ -632,113 +632,249 @@ function SocialPage() {
                     })}
                  </div>
               </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Network Detail Screen (Feed) */}
-                  <div className="flex flex-col items-center text-center gap-2">
-                    <button 
-                      onClick={() => setIndustryViewTab(null)}
-                      className="self-start text-[10px] font-black uppercase italic text-[#3D8BFF] mb-2 flex items-center gap-1"
-                    >
-                      <ChevronRight className="size-3 rotate-180" /> Voltar para Opções
-                    </button>
-                    
-                    {(() => {
-                      const perfil = profiles.find(p => p.artista === selectedIndustryArtist.nome && p.rede === industryViewTab);
-                      const artistPosts = posts.filter(p => p.autor === selectedIndustryArtist.nome && p.tipo === industryViewTab);
+            ) : (() => {
+              const perfil = profiles.find(p => p.artista === selectedIndustryArtist.nome && p.rede === industryViewTab);
+              const artistPosts = posts.filter(p => p.autor === selectedIndustryArtist.nome && p.tipo === industryViewTab);
+              const handle = perfil?.handle || ('@' + selectedIndustryArtist.nome.toLowerCase().replace(/\s+/g, ''));
+              const cleanHandle = handle.replace(/^@/, '');
+              const bio = perfil?.bio || selectedIndustryArtist.descricao || '';
+              const followers = perfil?.seguidores || 0;
+              const following = Math.max(1, Math.floor(followers / 250));
+              const totalLikes = artistPosts.reduce((s, p) => s + (p.analytics?.likes || 0), 0);
+              const avatarSrc = perfil?.avatar_url ? driveImg(perfil.avatar_url) : undefined;
+              const avatarFallback = (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-900 text-white font-black text-2xl italic">
+                  {selectedIndustryArtist.nome[0]}
+                </div>
+              );
+              const renderAvatar = (className: string) => (
+                <div className={className}>
+                  {avatarSrc ? (
+                    <img src={avatarSrc} className="w-full h-full object-cover" referrerPolicy="no-referrer" crossOrigin="anonymous" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  ) : avatarFallback}
+                </div>
+              );
 
-                      return (
-                        <>
-                          {perfil ? (
-                            <div className="w-full bg-black text-white border-[3.5px] border-black rounded-[25px] p-6 shadow-[8px_8px_0px_#3D8BFF] space-y-4 mb-6">
-                              <div className="flex items-center gap-4">
-                                <div className="size-16 rounded-full border-[3px] border-[#D0FF43] overflow-hidden bg-zinc-900 flex items-center justify-center">
-                                  {perfil.avatar_url ? (
-                                    <img 
-                                      src={driveImg(perfil.avatar_url)} 
-                                      className="w-full h-full object-cover"
-                                      referrerPolicy="no-referrer"
-                                      crossOrigin="anonymous"
-                                      onError={(e) => {
-                                        const target = e.target as HTMLImageElement;
-                                        target.style.display = 'none';
-                                        if (target.parentElement) {
-                                          target.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-zinc-800 text-white font-black text-xl italic">${perfil.handle[1]}</div>`;
-                                        }
-                                      }}
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full bg-[#3D8BFF] flex items-center justify-center text-white font-black italic text-xl">
-                                      {(perfil.handle || selectedIndustryArtist.nome)[0]}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex-1 text-left">
-                                  <h4 className="font-black text-xl text-[#D0FF43] leading-none">{perfil.handle}</h4>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <BarChart3 className="size-3 text-[#3D8BFF]" />
-                                    <span className="text-[10px] font-black uppercase text-white/60 italic">{perfil.seguidores?.toLocaleString() || 0} Seguidores</span>
-                                  </div>
-                                </div>
-                                <div className="shrink-0 p-3 bg-white/5 rounded-2xl border border-white/10">
-                                   {industryViewTab === "Instagram" && <Instagram className="size-6 text-[#FF4757]" />}
-                                   {industryViewTab === "Twitter" && <Twitter className="size-6 text-[#3D8BFF]" />}
-                                   {industryViewTab === "TikTok" && <Video className="size-6 text-white" />}
-                                </div>
+              const BackBar = ({ bg, fg, accent }: { bg: string; fg: string; accent: string }) => (
+                <div className={`flex items-center justify-between px-4 py-3 ${bg} ${fg} sticky top-[152px] z-30 border-b border-current/10`}>
+                  <button onClick={() => setIndustryViewTab(null)} className="flex items-center gap-1 text-sm font-bold">
+                    <ChevronLeft className="size-5" /> Voltar
+                  </button>
+                  <p className="font-bold text-sm flex items-center gap-1">
+                    {cleanHandle}
+                    <BadgeCheck className={`size-4 ${accent}`} fill="currentColor" />
+                  </p>
+                  <MoreVertical className="size-5 opacity-70" />
+                </div>
+              );
+
+              // ============ INSTAGRAM ============
+              if (industryViewTab === 'Instagram') {
+                return (
+                  <div className="-mx-4 bg-white text-black rounded-[24px] overflow-hidden border-[3px] border-black shadow-[6px_6px_0px_#000]">
+                    <BackBar bg="bg-white" fg="text-black" accent="text-[#3D8BFF]" />
+                    <div className="px-5 pt-5">
+                      <div className="flex items-start gap-6">
+                        <div className="p-[3px] rounded-full bg-gradient-to-tr from-[#feda75] via-[#fa7e1e] via-[#d62976] via-[#962fbf] to-[#4f5bd5]">
+                          <div className="p-[2px] bg-white rounded-full">
+                            {renderAvatar("size-20 rounded-full overflow-hidden bg-zinc-100")}
+                          </div>
+                        </div>
+                        <div className="flex-1 grid grid-cols-3 gap-2 text-center pt-3">
+                          <div><p className="font-black text-base">{artistPosts.length}</p><p className="text-[11px] text-black/60">posts</p></div>
+                          <div><p className="font-black text-base">{formatCount(followers)}</p><p className="text-[11px] text-black/60">seguidores</p></div>
+                          <div><p className="font-black text-base">{formatCount(following)}</p><p className="text-[11px] text-black/60">seguindo</p></div>
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <p className="font-black text-sm flex items-center gap-1">{selectedIndustryArtist.nome} <BadgeCheck className="size-4 text-[#3D8BFF]" fill="currentColor" /></p>
+                        <p className="text-[11px] uppercase text-black/50 font-bold tracking-wide">Artista</p>
+                        {bio && <p className="text-[13px] mt-1.5 leading-snug whitespace-pre-line">{bio}</p>}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mt-4">
+                        <button className="py-1.5 rounded-lg text-[13px] font-bold text-white bg-gradient-to-r from-[#fa7e1e] via-[#d62976] to-[#4f5bd5]">Seguir</button>
+                        <button className="py-1.5 rounded-lg text-[13px] font-bold bg-zinc-100 border border-zinc-200">Mensagem</button>
+                      </div>
+                      {/* Highlights */}
+                      <div className="flex gap-4 overflow-x-auto pb-1 mt-5 no-scrollbar">
+                        {artistPosts.slice(0, 5).map((p, i) => (
+                          <div key={p.id} className="flex flex-col items-center gap-1 shrink-0">
+                            <div className="p-[2px] rounded-full border-2 border-zinc-200">
+                              <div className="size-14 rounded-full overflow-hidden bg-zinc-100">
+                                {p.media_url ? <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" /> : <div className="w-full h-full bg-gradient-to-br from-pink-400 to-orange-300" />}
                               </div>
-                              <p className="text-sm font-bold text-white/90 border-l-3 border-[#D0FF43] pl-3 italic text-left">{perfil.bio}</p>
                             </div>
+                            <span className="text-[10px] text-black/70 font-bold">{p.subtipo === 'Story' ? 'Story' : `Post ${i + 1}`}</span>
+                          </div>
+                        ))}
+                        <div className="flex flex-col items-center gap-1 shrink-0">
+                          <div className="size-14 rounded-full border-2 border-dashed border-zinc-300 flex items-center justify-center text-zinc-400">
+                            <Plus className="size-6" />
+                          </div>
+                          <span className="text-[10px] text-black/50 font-bold">Novo</span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Tabs */}
+                    <div className="grid grid-cols-3 mt-4 border-t border-zinc-200">
+                      <button className="py-2.5 flex items-center justify-center border-t-2 border-black text-black"><Grid3x3 className="size-5" /></button>
+                      <button className="py-2.5 flex items-center justify-center border-t-2 border-transparent text-black/40"><Film className="size-5" /></button>
+                      <button className="py-2.5 flex items-center justify-center border-t-2 border-transparent text-black/40"><Tag className="size-5" /></button>
+                    </div>
+                    {/* Grid */}
+                    {artistPosts.length > 0 ? (
+                      <div className="grid grid-cols-3 gap-[2px] bg-zinc-200">
+                        {artistPosts.map((p) => (
+                          <button key={p.id} onClick={() => { setSelectedPost(p); loadComments(p.id); setIsCommentModalOpen(true); }} className="aspect-square bg-zinc-50 relative overflow-hidden group">
+                            {p.media_url ? (
+                              <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+                            ) : (
+                              <div className="w-full h-full bg-gradient-to-br from-pink-200 via-purple-200 to-orange-200 flex items-center justify-center p-2">
+                                <p className="text-[10px] text-black/70 font-bold line-clamp-3 text-left">{p.texto}</p>
+                              </div>
+                            )}
+                            {p.subtipo === 'Story' && <Film className="absolute top-1.5 right-1.5 size-3.5 text-white drop-shadow" />}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-16 flex flex-col items-center gap-2 text-black/40">
+                        <ImageIcon className="size-10" />
+                        <p className="text-xs font-bold">Nenhuma publicação ainda</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // ============ TWITTER / X ============
+              if (industryViewTab === 'Twitter') {
+                return (
+                  <div className="-mx-4 bg-black text-white rounded-[24px] overflow-hidden border-[3px] border-black shadow-[6px_6px_0px_#1d9bf0]">
+                    <BackBar bg="bg-black/95 backdrop-blur" fg="text-white" accent="text-[#1d9bf0]" />
+                    {/* Banner */}
+                    <div className="h-28 bg-gradient-to-br from-[#1d9bf0] via-[#0a7bbf] to-[#15202b] relative" />
+                    <div className="px-4 pb-4 -mt-12">
+                      <div className="flex items-end justify-between">
+                        <div className="p-1 bg-black rounded-full">
+                          {renderAvatar("size-24 rounded-full overflow-hidden bg-zinc-800")}
+                        </div>
+                        <button className="mt-12 px-4 py-1.5 rounded-full bg-white text-black font-black text-sm">Seguir</button>
+                      </div>
+                      <div className="mt-3">
+                        <p className="font-black text-xl flex items-center gap-1.5">{selectedIndustryArtist.nome} <BadgeCheck className="size-5 text-[#1d9bf0]" fill="currentColor" /></p>
+                        <p className="text-sm text-zinc-500">{handle}</p>
+                        {bio && <p className="text-[14px] mt-2 leading-snug whitespace-pre-line">{bio}</p>}
+                        <div className="flex gap-4 mt-3 text-sm">
+                          <span><strong className="text-white">{formatCount(following)}</strong> <span className="text-zinc-500">Seguindo</span></span>
+                          <span><strong className="text-white">{formatCount(followers)}</strong> <span className="text-zinc-500">Seguidores</span></span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Tabs */}
+                    <div className="grid grid-cols-4 border-b border-zinc-800">
+                      {['Posts', 'Respostas', 'Mídia', 'Curtidas'].map((t, i) => (
+                        <button key={t} className={`py-3.5 text-[13px] font-bold relative ${i === 0 ? 'text-white' : 'text-zinc-500'}`}>
+                          {t}
+                          {i === 0 && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 rounded-full bg-[#1d9bf0]" />}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Timeline */}
+                    {artistPosts.length > 0 ? (
+                      <div>
+                        {artistPosts.map((p) => (
+                          <article key={p.id} className="flex gap-3 px-4 py-3 border-b border-zinc-800 hover:bg-white/[0.03] cursor-pointer text-left" onClick={() => { setSelectedPost(p); loadComments(p.id); setIsCommentModalOpen(true); }}>
+                            <div className="size-10 rounded-full overflow-hidden bg-zinc-800 shrink-0">
+                              {avatarSrc ? <img src={avatarSrc} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" /> : avatarFallback}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1 text-[14px]">
+                                <span className="font-black truncate">{selectedIndustryArtist.nome}</span>
+                                <BadgeCheck className="size-4 text-[#1d9bf0] shrink-0" fill="currentColor" />
+                                <span className="text-zinc-500 truncate">{handle}</span>
+                                <span className="text-zinc-500">·</span>
+                                <span className="text-zinc-500">{new Date(p.data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+                              </div>
+                              <p className="text-[14px] mt-0.5 leading-snug whitespace-pre-line">{p.texto}</p>
+                              {p.media_url && (
+                                <div className="mt-2 rounded-2xl overflow-hidden border border-zinc-800 aspect-video bg-zinc-900">
+                                  <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
+                                </div>
+                              )}
+                              <div className="flex justify-between mt-3 max-w-xs text-zinc-500 text-[12px]">
+                                <span className="flex items-center gap-1.5 hover:text-[#1d9bf0]"><MessageCircle className="size-4" /> {p.analytics.comments}</span>
+                                <span className="flex items-center gap-1.5 hover:text-[#00ba7c]"><Repeat2 className="size-4" /> 0</span>
+                                <button onClick={(e) => { e.stopPropagation(); handleLike(p.id); }} className="flex items-center gap-1.5 hover:text-[#f91880]"><Heart className="size-4" /> {p.analytics.likes}</button>
+                                <span className="flex items-center gap-1.5 hover:text-[#1d9bf0]"><Share2 className="size-4" /></span>
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-20 flex flex-col items-center gap-2 text-zinc-600">
+                        <Twitter className="size-10" />
+                        <p className="text-xs font-bold">Sem posts ainda</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // ============ TIKTOK ============
+              return (
+                <div className="-mx-4 bg-black text-white rounded-[24px] overflow-hidden border-[3px] border-black shadow-[6px_6px_0px_#FE2C55]">
+                  <BackBar bg="bg-black" fg="text-white" accent="text-[#25F4EE]" />
+                  <div className="px-5 pt-6 pb-5 flex flex-col items-center text-center">
+                    {renderAvatar("size-24 rounded-full overflow-hidden border-2 border-zinc-800 bg-zinc-900")}
+                    <p className="font-black text-lg mt-3 flex items-center gap-1">{handle} <BadgeCheck className="size-4 text-[#25F4EE]" fill="currentColor" /></p>
+                    <p className="text-[13px] text-zinc-400">{selectedIndustryArtist.nome}</p>
+                    <div className="flex gap-2 mt-3">
+                      <button className="px-6 py-1.5 rounded-md bg-[#FE2C55] font-bold text-sm">Seguir</button>
+                      <button className="px-3 py-1.5 rounded-md bg-zinc-800 font-bold text-sm">Mensagem</button>
+                      <button className="px-3 py-1.5 rounded-md bg-zinc-800 font-bold text-sm"><UserCircle className="size-4" /></button>
+                    </div>
+                    <div className="flex gap-6 mt-5">
+                      <div><p className="font-black text-base">{formatCount(following)}</p><p className="text-[11px] text-zinc-400">Seguindo</p></div>
+                      <div><p className="font-black text-base">{formatCount(followers)}</p><p className="text-[11px] text-zinc-400">Seguidores</p></div>
+                      <div><p className="font-black text-base">{formatCount(totalLikes)}</p><p className="text-[11px] text-zinc-400">Curtidas</p></div>
+                    </div>
+                    {bio && <p className="text-[13px] mt-4 leading-snug max-w-xs whitespace-pre-line">{bio}</p>}
+                  </div>
+                  {/* Tabs */}
+                  <div className="grid grid-cols-2 border-b border-zinc-800">
+                    <button className="py-3 flex items-center justify-center border-b-2 border-white text-white"><Grid3x3 className="size-5" /></button>
+                    <button className="py-3 flex items-center justify-center border-b-2 border-transparent text-zinc-500"><Heart className="size-5" /></button>
+                  </div>
+                  {/* Grid 9:16 */}
+                  {artistPosts.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-[2px] bg-zinc-900">
+                      {artistPosts.map((p) => (
+                        <button key={p.id} onClick={() => { setSelectedPost(p); loadComments(p.id); setIsCommentModalOpen(true); }} className="aspect-[9/16] bg-zinc-900 relative overflow-hidden">
+                          {p.media_url ? (
+                            <img src={driveImg(p.media_url)} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
                           ) : (
-                            <div className="w-full py-10 bg-white border-[3px] border-black rounded-[25px] flex flex-col items-center gap-3">
-                              <ImageOff className="size-10 opacity-20" />
-                              <p className="font-black uppercase italic opacity-30 text-xs">Perfil não configurado no {industryViewTab}</p>
+                            <div className="w-full h-full bg-gradient-to-br from-[#FE2C55]/40 via-black to-[#25F4EE]/30 flex items-center justify-center p-2">
+                              <p className="text-[10px] text-white/80 font-bold line-clamp-4 text-left">{p.texto}</p>
                             </div>
                           )}
-
-                          <div className="w-full space-y-4 pt-4 border-t-4 border-black/5">
-                            <h5 className="text-left font-black uppercase italic text-[10px] text-black/40 px-2 tracking-widest">Feed de Postagens</h5>
-                            {artistPosts.length > 0 ? (
-                              artistPosts.map(post => (
-                                <motion.div 
-                                  key={post.id}
-                                  initial={{ opacity: 0, x: -10 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  className={`${neoCard} ${getPostStyles(post.tipo)}`}
-                                >
-                                  <div className="flex items-center gap-2 mb-3">
-                                     <div className="size-8 rounded-full border-2 border-black overflow-hidden bg-[#FFD166] flex items-center justify-center font-black text-[10px]">
-                                        {perfil?.avatar_url ? <img src={driveImg(perfil.avatar_url)} className="w-full h-full object-cover" /> : post.autor[0]}
-                                     </div>
-                                     <div className="text-left">
-                                        <p className="text-[10px] font-black uppercase text-black leading-none">{selectedIndustryArtist.nome}</p>
-                                        <p className="text-[11px] font-black opacity-50 uppercase">{perfil?.handle || '@' + selectedIndustryArtist.nome.toLowerCase()}</p>
-                                     </div>
-                                  </div>
-
-                                  {post.media_url && (
-                                    <div className="aspect-square bg-muted border-2 border-black rounded-[15px] overflow-hidden mb-3 shadow-[3px_3px_0px_#000]">
-                                      <img 
-                                        src={driveImg(post.media_url)} 
-                                        className="w-full h-full object-cover" 
-                                        referrerPolicy="no-referrer"
-                                        crossOrigin="anonymous"
-                                        onError={(e) => { (e.target as HTMLImageElement).src = "https://placehold.co/600x600?text=IMG+OFF"; }}
-                                      />
-                                    </div>
-                                  )}
-                                  <p className="font-bold text-sm leading-snug text-black text-left">{post.texto}</p>
-                                </motion.div>
-                              ))
-                            ) : (
-                              <p className="text-center font-black uppercase italic opacity-20 py-12 text-[10px]">Nenhum post encontrado nesta rede</p>
-                            )}
+                          <div className="absolute inset-x-0 bottom-0 p-1.5 bg-gradient-to-t from-black/80 to-transparent flex items-center gap-1 text-white text-[11px] font-bold">
+                            <Play className="size-3 fill-current" />
+                            {formatCount(p.analytics.likes * 17 + 234)}
                           </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-              </div>
-            )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-16 flex flex-col items-center gap-2 text-zinc-600">
+                      <Music2 className="size-10" />
+                      <p className="text-xs font-bold">Nenhum vídeo ainda</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <div className="grid gap-6 text-black pb-20">
