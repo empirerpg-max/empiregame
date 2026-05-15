@@ -23,11 +23,9 @@ import {
   BadgeCheck,
   Play,
   Music2,
-  Bookmark,
   Repeat2,
   Film,
   Tag,
-  Settings,
 } from "lucide-react";
 
 function formatCount(n: number | undefined): string {
