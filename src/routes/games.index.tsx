@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft, Gamepad2, Music4, Play } from "lucide-react";
+import { Camera, ChevronLeft, Gamepad2, Music4, Play } from "lucide-react";
 
 export const Route = createFileRoute("/games/")({
   component: GamesHub,
@@ -15,6 +15,16 @@ const games = [
     risk: "Risco alto",
     route: "/games/hits-producer" as const,
     icon: Music4,
+  },
+  {
+    id: "paparazzi-escape",
+    title: "Fuga do Paparazzi",
+    description:
+      "Endless runner. Colete moedas no caminho e clique FUGIR antes de bater.",
+    tag: "Runner",
+    risk: "Risco alto",
+    route: "/games/paparazzi-escape" as const,
+    icon: Camera,
   },
 ];
 
