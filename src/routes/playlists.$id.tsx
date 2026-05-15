@@ -56,7 +56,7 @@ function PlaylistView() {
         <div className="flex items-end gap-4">
           <div className="size-40 rounded-xl bg-secondary overflow-hidden grid place-items-center shadow-2xl">
             {pl.capa_url ? (
-              <img src={driveImg(pl.capa_url, 500)} alt="" className="w-full h-full object-cover" />
+              <img src={driveImg(pl.capa_url, 500)} alt="" className="w-full h-full object-cover"  loading="lazy" decoding="async"/>
             ) : (
               <ListMusic className="size-14 text-muted-foreground" />
             )}
@@ -107,7 +107,7 @@ function PlaylistView() {
                     src={driveImg(t.capa_url, 80)}
                     alt=""
                     className="size-10 rounded object-cover"
-                  />
+                   loading="lazy" decoding="async"/>
                 ) : (
                   <span>{i + 1}</span>
                 )}

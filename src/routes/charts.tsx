@@ -18,6 +18,7 @@ function ChartsPage() {
         title="Empire Charts"
         className="w-full h-full border-0 block"
         allow="autoplay"
+        loading="lazy"
       />
     </div>
   );

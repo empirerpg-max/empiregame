@@ -95,7 +95,7 @@ function AlbumPage() {
             alt={album.titulo}
             className="size-48 sm:size-56 rounded-lg object-cover shadow-2xl bg-secondary"
             loading="eager"
-          />
+           decoding="async"/>
           <div className="flex-1 min-w-0">
             <p className="text-[10px] uppercase font-bold tracking-widest">Álbum</p>
             <h1 className="text-3xl sm:text-5xl font-black leading-tight mt-1">{album.titulo}</h1>
@@ -203,7 +203,7 @@ function AlbumPage() {
               src={driveImg(album.capa_url, 80)}
               alt=""
               className="size-10 rounded object-cover"
-            />
+             loading="lazy" decoding="async"/>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-bold truncate">{album.faixas[playingIdx].titulo}</p>
               <p className="text-[10px] text-muted-foreground truncate">
@@ -239,7 +239,7 @@ function AlbumPage() {
                   alt="contracapa"
                   className="w-full h-full object-cover"
                   loading="lazy"
-                />
+                 decoding="async"/>
               </button>
             )}
             {album.encarte?.map((u, i) => (
@@ -253,7 +253,7 @@ function AlbumPage() {
                   alt={`encarte ${i + 1}`}
                   className="w-full h-full object-cover"
                   loading="lazy"
-                />
+                 decoding="async"/>
               </button>
             ))}
           </div>
@@ -269,7 +269,7 @@ function AlbumPage() {
             src={driveImg(showEncarte, 1200)}
             alt=""
             className="max-w-full max-h-full rounded-lg"
-          />
+           loading="lazy" decoding="async"/>
         </div>
       )}
 

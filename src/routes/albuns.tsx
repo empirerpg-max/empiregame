@@ -64,7 +64,7 @@ function AlbunsPage() {
                     alt={a.titulo}
                     className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
                     loading="lazy"
-                  />
+                   decoding="async"/>
                 ) : (
                   <div className="w-full h-full grid place-items-center bg-card">
                     <Disc3 className="size-10 text-muted-foreground/30" />

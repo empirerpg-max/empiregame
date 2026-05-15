@@ -51,7 +51,7 @@ function Hall() {
                       alt={a.nome}
                       loading="lazy"
                       className="w-full h-full object-cover"
-                    />
+                     decoding="async"/>
                   </div>
                   <p className="text-xs font-bold truncate">{a.nome}</p>
                 </div>
@@ -75,7 +75,7 @@ function Hall() {
                   alt={a.nome}
                   loading="lazy"
                   className="size-12 rounded-lg object-cover bg-secondary"
-                />
+                 decoding="async"/>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold truncate">{a.nome}</p>
                   <p className="text-xs text-muted-foreground">{fmtMoney(a.fortuna_total)}</p>

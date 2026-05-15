@@ -75,7 +75,7 @@ function ArtistDashboard() {
     <main className="flex-1 pb-24 bg-background">
       {/* Visual Header */}
       <div className="relative h-[30vh] min-h-[240px] overflow-hidden">
-        <img 
+        <img loading="lazy" decoding="async" 
           src={driveImg(artist.foto, 1200) || artist.foto} 
           onError={(e) => {
             const img = e.currentTarget;
@@ -97,7 +97,7 @@ function ArtistDashboard() {
         <div className="absolute inset-x-6 bottom-6 z-20">
            <div className="flex items-end gap-4">
               <div className="size-24 rounded-[2rem] overflow-hidden border-2 border-primary/30 shadow-2xl shrink-0 bg-secondary">
-                 <img 
+                 <img loading="lazy" decoding="async" 
                   src={driveImg(artist.foto, 400) || artist.foto} 
                   onError={(e) => {
                     const img = e.currentTarget;
@@ -231,7 +231,7 @@ function ArtistDashboard() {
                          alt={a.titulo}
                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 grayscale group-hover:grayscale-0"
                          loading="lazy"
-                       />
+                        decoding="async"/>
                      )}
                    </div>
                    <p className="mt-2 text-[10px] font-black uppercase tracking-tight text-center truncate">{a.titulo}</p>

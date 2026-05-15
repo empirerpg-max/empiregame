@@ -67,7 +67,7 @@ function Ranking() {
                   alt={a.nome}
                   loading="lazy"
                   className="w-full h-full rounded-2xl object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
-                />
+                 decoding="async"/>
                 <div className={`absolute -top-2 -left-2 size-6 rounded-lg grid place-items-center text-[10px] font-black shadow-lg ${i === 0 ? "bg-amber-400 text-black" : i === 1 ? "bg-zinc-300 text-black" : i === 2 ? "bg-amber-700 text-white" : "bg-black text-white border border-white/10"}`}>
                    {i + 1}
                 </div>

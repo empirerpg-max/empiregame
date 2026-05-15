@@ -175,7 +175,7 @@ function ArtistasList() {
                         alt={a.nome}
                         loading="lazy"
                         className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
-                      />
+                       decoding="async"/>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-black text-sm tracking-tight truncate">{a.nome}</p>

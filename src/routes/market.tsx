@@ -276,7 +276,7 @@ function MarketPage() {
                         <p className="text-xs text-muted-foreground font-medium mb-4 italic">"{m.teaser || "Uma obra prima aguardando sua voz..."}"</p>
                         <div className="flex items-center gap-2 pt-4 border-t border-white/5">
                            <div className="size-6 rounded-full bg-secondary overflow-hidden">
-                              <img src="https://images.unsplash.com/photo-1514525253361-bee8718a300c?w=100&h=100&fit=crop" className="w-full h-full object-cover" />
+                              <img src="https://images.unsplash.com/photo-1514525253361-bee8718a300c?w=100&h=100&fit=crop" className="w-full h-full object-cover"  loading="lazy" decoding="async"/>
                            </div>
                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Vendedor: {m.vendedor}</span>
                         </div>

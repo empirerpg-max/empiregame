@@ -190,7 +190,7 @@ function FilantropiaPage() {
                    {radar.map((i, idx) => (
                       <div key={idx} className="flex items-center gap-4 p-4 rounded-[2rem] bg-card border border-white/5">
                          <div className="size-12 rounded-2xl overflow-hidden shrink-0 border border-white/5 bg-secondary">
-                            <img src={driveImg(i.foto, 100)} alt="" className="w-full h-full object-cover grayscale" />
+                            <img src={driveImg(i.foto, 100)} alt="" className="w-full h-full object-cover grayscale"  loading="lazy" decoding="async"/>
                          </div>
                          <div className="flex-1 min-w-0">
                             <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-0.5">Filantropia</p>

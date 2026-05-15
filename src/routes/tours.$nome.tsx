@@ -140,7 +140,7 @@ function TourDetails() {
             src={driveImg(info.foto, 800)} 
             className="w-full h-full object-cover object-top scale-105 blur-[2px] opacity-40 bg-black" 
             alt="" 
-          />
+           loading="lazy" decoding="async"/>
         ) : (
           <div className="w-full h-full bg-black flex items-center justify-center opacity-30">
             <Crown className="size-40 text-primary" />
@@ -164,7 +164,7 @@ function TourDetails() {
               className="size-20 rounded-[2.5rem] overflow-hidden border-2 border-primary/30 shadow-2xl mb-4 rotate-[-3deg] active:scale-95 transition-transform bg-black relative group"
             >
                {info.foto ? (
-                 <img src={driveImg(info.foto, 400)} className="w-full h-full object-cover object-top" alt={artist.nome} />
+                 <img src={driveImg(info.foto, 400)} className="w-full h-full object-cover object-top" alt={artist.nome}  loading="lazy" decoding="async"/>
                ) : (
                  <Crown className="size-10 m-auto text-primary" />
                )}

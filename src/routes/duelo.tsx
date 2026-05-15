@@ -161,7 +161,7 @@ function DueloPage() {
                   src={p1 ? (driveImg(p1.foto, 300) as string) : undefined}
                   className="w-full h-full object-cover"
                   alt=""
-                />
+                 loading="lazy" decoding="async"/>
                 {winner === p1 && (
                   <div className="absolute inset-0 bg-primary/20 grid place-items-center">
                     <Trophy className="size-12 text-white drop-shadow-lg" />
@@ -188,7 +188,7 @@ function DueloPage() {
                   src={p2 ? (driveImg(p2.foto, 300) as string) : undefined}
                   className="w-full h-full object-cover"
                   alt=""
-                />
+                 loading="lazy" decoding="async"/>
                 {winner === p2 && (
                   <div className="absolute inset-0 bg-destructive/20 grid place-items-center">
                     <Trophy className="size-12 text-white drop-shadow-lg" />
