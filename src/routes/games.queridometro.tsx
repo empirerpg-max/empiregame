@@ -454,40 +454,37 @@ function RankingTab({ items }: { items: RankItem[] }) {
   );
 }
 
-function RecebidosTab({ items }: { items: Recebido[] }) {
+function MuralTab({ items }: { items: ReacaoPublica[] }) {
   if (!items.length) {
     return (
       <p className="text-xs text-muted-foreground py-10 text-center">
-        Nenhum emoji recebido nesta semana.
+        Ainda ninguém mandou emoji essa semana.
       </p>
     );
   }
   return (
     <div className="space-y-2">
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold text-center mb-2">
+        Mural anônimo · remetentes ocultos
+      </p>
       {items.map((r, i) => (
         <div
           key={i}
           className="flex items-center gap-3 p-3 rounded-2xl border border-white/5 bg-card"
         >
-          <span className="text-2xl">{r.emoji || "❓"}</span>
+          <div
+            className="size-10 rounded-xl bg-secondary overflow-hidden bg-cover bg-center shrink-0"
+            style={{ backgroundImage: r.fotoPara ? `url(${r.fotoPara})` : undefined }}
+          />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-black truncate">
-              de <span className="text-pink-400">{r.de || "Anônimo"}</span>
+              para <span className="text-pink-400">{r.para || "—"}</span>
             </p>
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
               {r.data || ""}
             </p>
           </div>
-          {typeof r.valor === "number" && (
-            <span
-              className={`text-xs font-black tabular-nums ${
-                r.valor >= 0 ? "text-emerald-400" : "text-red-400"
-              }`}
-            >
-              {r.valor > 0 ? "+" : ""}
-              {r.valor}
-            </span>
-          )}
+          <span className="text-2xl">{r.emoji || "❓"}</span>
         </div>
       ))}
     </div>
