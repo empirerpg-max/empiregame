@@ -43,7 +43,7 @@ function QueridometroPage() {
   const [semana, setSemana] = useState<string>("");
   const [votosRestantes, setVotosRestantes] = useState<number>(0);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"votar" | "ranking" | "recebidos">("votar");
+  const [tab, setTab] = useState<"votar" | "ranking" | "mural">("votar");
 
   const [origem, setOrigem] = useState<string>("");
   const [destino, setDestino] = useState<string>("");
