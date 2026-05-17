@@ -64,7 +64,7 @@ function QueridometroPage() {
       ]);
       setSemana(status.semana || "");
       setVotosRestantes(status.votosRestantes ?? 0);
-      setRecebidos(Array.isArray(status.reacoesRecebidas) ? status.reacoesRecebidas : []);
+      // reacoesRecebidas (privado por artista) ignorado em favor do mural público
       setMural(Array.isArray(status.reacoesPublicas) ? status.reacoesPublicas : []);
       setRanking(Array.isArray(status.ranking) ? status.ranking : []);
 
