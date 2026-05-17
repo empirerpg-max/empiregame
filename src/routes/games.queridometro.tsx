@@ -30,6 +30,7 @@ const EMOJIS = [
 ];
 
 type Recebido = { de?: string; emoji?: string; valor?: number; data?: string };
+type ReacaoPublica = { para?: string; fotoPara?: string; emoji?: string; data?: string };
 type RankItem = { nome: string; foto?: string; pontos?: number };
 
 function QueridometroPage() {
