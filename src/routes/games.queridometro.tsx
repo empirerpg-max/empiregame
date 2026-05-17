@@ -183,7 +183,7 @@ function QueridometroPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-card rounded-full border border-white/5 mb-5">
-        {(["votar", "ranking", "recebidos"] as const).map((t) => (
+        {(["votar", "ranking", "mural"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
