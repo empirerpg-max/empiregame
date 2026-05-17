@@ -66,6 +66,7 @@ function QueridometroPage() {
       setSemana(status.semana || "");
       setVotosRestantes(status.votosRestantes ?? 0);
       setRecebidos(Array.isArray(status.reacoesRecebidas) ? status.reacoesRecebidas : []);
+      setMural(Array.isArray(status.reacoesPublicas) ? status.reacoesPublicas : []);
       setRanking(Array.isArray(status.ranking) ? status.ranking : []);
 
       // Meus artistas: prefere o que vem do backend, senão busca
