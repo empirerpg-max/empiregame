@@ -556,6 +556,7 @@ export const api = {
     ranking?: any[],
     votosRestantes?: number,
     reacoesRecebidas?: any[],
+    reacoesPublicas?: Array<{ para?: string; fotoPara?: string; emoji?: string; data?: string }>,
     configEmojis?: any[],
     semana?: string
   }> {
