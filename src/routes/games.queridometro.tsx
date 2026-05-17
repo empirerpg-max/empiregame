@@ -224,7 +224,7 @@ function QueridometroPage() {
       ) : tab === "ranking" ? (
         <RankingTab items={ranking} />
       ) : (
-        <RecebidosTab items={recebidos} />
+        <MuralTab items={mural} />
       )}
     </main>
   );
