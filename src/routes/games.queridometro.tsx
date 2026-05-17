@@ -38,7 +38,6 @@ function QueridometroPage() {
   const [meusArtistas, setMeusArtistas] = useState<Artist[] | null>(null);
   const [alvos, setAlvos] = useState<Artist[] | null>(null);
   const [ranking, setRanking] = useState<RankItem[]>([]);
-  const [recebidos, setRecebidos] = useState<Recebido[]>([]);
   const [mural, setMural] = useState<ReacaoPublica[]>([]);
   const [semana, setSemana] = useState<string>("");
   const [votosRestantes, setVotosRestantes] = useState<number>(0);
