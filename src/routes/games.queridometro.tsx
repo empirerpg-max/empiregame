@@ -30,6 +30,7 @@ const EMOJIS = [
 ];
 
 type Recebido = { de?: string; emoji?: string; valor?: number; data?: string };
+type ReacaoPublica = { para?: string; fotoPara?: string; emoji?: string; data?: string };
 type RankItem = { nome: string; foto?: string; pontos?: number };
 
 function QueridometroPage() {
@@ -37,11 +38,11 @@ function QueridometroPage() {
   const [meusArtistas, setMeusArtistas] = useState<Artist[] | null>(null);
   const [alvos, setAlvos] = useState<Artist[] | null>(null);
   const [ranking, setRanking] = useState<RankItem[]>([]);
-  const [recebidos, setRecebidos] = useState<Recebido[]>([]);
+  const [mural, setMural] = useState<ReacaoPublica[]>([]);
   const [semana, setSemana] = useState<string>("");
   const [votosRestantes, setVotosRestantes] = useState<number>(0);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"votar" | "ranking" | "recebidos">("votar");
+  const [tab, setTab] = useState<"votar" | "ranking" | "mural">("votar");
 
   const [origem, setOrigem] = useState<string>("");
   const [destino, setDestino] = useState<string>("");
@@ -63,7 +64,8 @@ function QueridometroPage() {
       ]);
       setSemana(status.semana || "");
       setVotosRestantes(status.votosRestantes ?? 0);
-      setRecebidos(Array.isArray(status.reacoesRecebidas) ? status.reacoesRecebidas : []);
+      // reacoesRecebidas (privado por artista) ignorado em favor do mural público
+      setMural(Array.isArray(status.reacoesPublicas) ? status.reacoesPublicas : []);
       setRanking(Array.isArray(status.ranking) ? status.ranking : []);
 
       // Meus artistas: prefere o que vem do backend, senão busca
@@ -180,7 +182,7 @@ function QueridometroPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-card rounded-full border border-white/5 mb-5">
-        {(["votar", "ranking", "recebidos"] as const).map((t) => (
+        {(["votar", "ranking", "mural"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -221,7 +223,7 @@ function QueridometroPage() {
       ) : tab === "ranking" ? (
         <RankingTab items={ranking} />
       ) : (
-        <RecebidosTab items={recebidos} />
+        <MuralTab items={mural} />
       )}
     </main>
   );
@@ -451,40 +453,37 @@ function RankingTab({ items }: { items: RankItem[] }) {
   );
 }
 
-function RecebidosTab({ items }: { items: Recebido[] }) {
+function MuralTab({ items }: { items: ReacaoPublica[] }) {
   if (!items.length) {
     return (
       <p className="text-xs text-muted-foreground py-10 text-center">
-        Nenhum emoji recebido nesta semana.
+        Ainda ninguém mandou emoji essa semana.
       </p>
     );
   }
   return (
     <div className="space-y-2">
+      <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold text-center mb-2">
+        Mural anônimo · remetentes ocultos
+      </p>
       {items.map((r, i) => (
         <div
           key={i}
           className="flex items-center gap-3 p-3 rounded-2xl border border-white/5 bg-card"
         >
-          <span className="text-2xl">{r.emoji || "❓"}</span>
+          <div
+            className="size-10 rounded-xl bg-secondary overflow-hidden bg-cover bg-center shrink-0"
+            style={{ backgroundImage: r.fotoPara ? `url(${r.fotoPara})` : undefined }}
+          />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-black truncate">
-              de <span className="text-pink-400">{r.de || "Anônimo"}</span>
+              para <span className="text-pink-400">{r.para || "—"}</span>
             </p>
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
               {r.data || ""}
             </p>
           </div>
-          {typeof r.valor === "number" && (
-            <span
-              className={`text-xs font-black tabular-nums ${
-                r.valor >= 0 ? "text-emerald-400" : "text-red-400"
-              }`}
-            >
-              {r.valor > 0 ? "+" : ""}
-              {r.valor}
-            </span>
-          )}
+          <span className="text-2xl">{r.emoji || "❓"}</span>
         </div>
       ))}
     </div>
