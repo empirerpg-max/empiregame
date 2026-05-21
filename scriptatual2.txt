@@ -58,6 +58,8 @@ function doGet(e) {
 function processAction(p) {
   const acao = p.acao || '';
   const tgId = String(p.telegram_id || p.tgId || p.tgid || '').trim();
+  if (acao == "pontosalvarplaylistecoin") return jsonOut(acaopontosalvarplaylistecoinp(p));
+  if (acao == 'pontolistarmusicasecoin') return jsonOut(acaopontolistarmusicasecoinp(p));
 
   if (acao === 'listar_acts')          return jsonOut(aba('ACTS').getDataRange().getValues().slice(1).map(_mapActs));
   if (acao === 'listar_todos')         return jsonOut(aba('DB_ARTISTAS').getDataRange().getValues().slice(1).map(_mapArtistaJogador));
@@ -875,6 +877,7 @@ function acao_ponto_listar_pontos_(p) {
   if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
   const sh=_ponto_ss_().getSheetByName('PONTOS');
   const vals=sh.getDataRange().getValues();
+  // Header fixo na linha 3 (índice 2)
   const headerRowIdx=2;
   const header=vals[headerRowIdx].map(String);
   const linhas=[];
@@ -888,6 +891,42 @@ function acao_ponto_listar_pontos_(p) {
   return{colunas:header,editaveis:PONTOS_EDITAVEIS,linhas};
 }
 
+function acao_ponto_salvar_playlist_ecoin_(p) {
+  try {
+    const tgId = String(p.tgId || '').trim();
+    const r = _jogador_por_tg_(tgId);
+    if (!r || !r.artistas.length) return { erro: 'Sem artistas vinculados.' };
+
+    const sh = SpreadsheetApp.openById(PONTO_SS_ID)
+      .getSheetByName('ECOIN + INVESTIMENTO');
+    if (!sh) return { erro: 'Aba ECOIN + INVESTIMENTO nao encontrada.' };
+
+    const colMap = { 'SPOTIFY': 7, 'APPLE MUSIC': 9, 'YOUTUBE': 11 };
+    const colIdx = colMap[String(p.plataforma || '').trim().toUpperCase()];
+    if (!colIdx) return { erro: 'Plataforma invalida: ' + p.plataforma };
+
+    const vals = sh.getDataRange().getValues();
+    let linhaAlvo = -1;
+    for (let i = 2; i < vals.length; i++) {
+      if (String(vals[i][colIdx - 1] || '').trim() === '') {
+        linhaAlvo = i + 1;
+        break;
+      }
+    }
+    if (linhaAlvo < 0) linhaAlvo = vals.length + 1;
+
+    const musicaAtual = String(sh.getRange(linhaAlvo, 3).getValue() || '').trim();
+    if (musicaAtual === '') sh.getRange(linhaAlvo, 3).setValue(p.musica);
+
+    sh.getRange(linhaAlvo, colIdx).setValue(p.playlist);
+    const saldo = sh.getRange(linhaAlvo, 4).getValue();
+
+    return { ok: true, message: '✅ ' + p.plataforma + ' salva!', linha: linhaAlvo, saldo };
+  } catch(e) {
+    return { erro: e.message };
+  }
+}
+
 function acao_ponto_distribuir_aleatorio_(p) {
   const tgId=String(p.tgId||p.telegram_id||p.tgid||'').trim();
   const r=_jogador_por_tg_(tgId);
@@ -897,6 +936,8 @@ function acao_ponto_distribuir_aleatorio_(p) {
   const vals=sh.getDataRange().getValues();
   const header=vals[2].map(String);
 
+  // Valores em decimal pois as células são formatadas como % na planilha
+  // (ex: 0.10 = 10,00%)
   const OPCOES = {
     'BILLBOARD HOT 100': [0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10],
     'SPOTIFY':           [0.30,0.40,0.50,0.60,0.70],
@@ -918,19 +959,22 @@ function acao_ponto_distribuir_aleatorio_(p) {
     const artista = String(vals[i][2]).trim();
     if(r.artistas.indexOf(artista) === -1) continue;
 
+    // Zerar colunas
     Object.values(colMap).forEach(c => sh.getRange(i+1, c+1).setValue(''));
 
     let distribuicao = null;
 
+    // Tenta até encontrar uma combinação que some exatamente 100
     for(let t=0; t<MAX_TENTATIVAS; t++){
       const resultado = {};
-      let restante = 1.0;
+      let restante = 1.0; // 1.0 = 100%
       const colunas = Object.keys(colMap).sort(() => Math.random() - 0.5);
 
       for(const nome of colunas){
         if(restante <= 0) break;
         const opcoes = OPCOES[nome].filter(v => v <= restante);
         if(!opcoes.length) continue;
+        // Pular aleatoriamente, mas nunca se for a única forma de completar
         const eUltima = colunas.slice(colunas.indexOf(nome)+1).every(n => !OPCOES[n].some(v => v <= restante));
         if(!eUltima && Math.random() < 0.5) continue;
         const valor = opcoes[Math.floor(Math.random() * opcoes.length)];
@@ -945,9 +989,11 @@ function acao_ponto_distribuir_aleatorio_(p) {
     }
 
     if(!distribuicao){
+      // Fallback garantido: 0.10 + 0.30 + 0.60 = 1.0
       distribuicao = {'BILLBOARD HOT 100':0.10,'SPOTIFY':0.30,'YOUTUBE':0.60};
     }
 
+    // Gravar na planilha
     Object.keys(distribuicao).forEach(nome => {
       if(colMap[nome] !== undefined){
         sh.getRange(i+1, colMap[nome]+1).setValue(distribuicao[nome]);
@@ -1002,5 +1048,230 @@ function acao_ponto_salvar_playlist_celula_(p) {
   if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
   const sh=_ponto_ss_().getSheetByName('ECOIN + INVESTIMENTO');
   if(!sh)return{erro:'Aba ECOIN + INVESTIMENTO não encontrada.'};
+  // Header na linha 2 (índice 1)
   const header=sh.getRange(2,1,1,sh.getLastColumn()).getValues()[0].map(String);
-  const colIdx=header.
+  const colIdx=header.indexOf(p.coluna);
+  if(colIdx<0)return{erro:'Coluna inválida: '+p.coluna};
+  // Coluna do artista pelo nome
+  const colArtista=header.indexOf('NOME DO ARTISTA');
+  const colArtIdx=colArtista>=0?colArtista:0;
+  // Linha real dos dados começa na linha 3 (índice 2 na planilha = linha 3)
+  const rowArtist=String(sh.getRange(p.linha,colArtIdx+1).getValue()).trim();
+  if(r.artistas.indexOf(rowArtist)===-1)return{erro:'Linha não pertence a você.'};
+  // Validar se já está preenchido por outro jogador
+  const cellAtual=sh.getRange(p.linha,colIdx+1).getValue();
+  if(cellAtual!==''&&cellAtual!==null&&cellAtual!==0){
+    // Verifica se o artista da linha é do jogador atual — se sim, pode sobrescrever
+    if(r.artistas.indexOf(rowArtist)===-1)return{erro:'Já preenchido por outro jogador.'};
+  }
+  // Validar playlist restrita de topo
+  const valorNormalizado=String(p.valor).trim();
+  let plataformaRestrita=null;
+  if(valorNormalizado===TOP_PLAYLISTS_RESTRITAS.spotify)plataformaRestrita='SPOTIFY';
+  if(valorNormalizado===TOP_PLAYLISTS_RESTRITAS.apple)plataformaRestrita='APPLE';
+  if(plataformaRestrita){
+    const colMusica=header.indexOf('NOME DA MÚSICA');
+    const musica=colMusica>=0?String(sh.getRange(p.linha,colMusica+1).getValue()).trim():'';
+    const artista=rowArtist;
+    if(!musica)return{erro:'Música não identificada na linha para validar restrição.'};
+    if(_playlist_top_ja_usada_(artista,musica,plataformaRestrita))return{ok:false,erro:'A música "'+musica+'" já utilizou a playlist topo de '+plataformaRestrita+'.'};
+    _registrar_top_playlist_(artista,musica,plataformaRestrita,valorNormalizado);
+  }
+  sh.getRange(p.linha,colIdx+1).setValue(p.valor);
+  return{ok:true,message:'✅ Salvo.'};
+}
+
+function acao_ponto_distribuir_playlists_auto_(p) {
+  const tgId=String(p.tgId||p.telegram_id||p.tgid||'').trim();
+  const r=_jogador_por_tg_(tgId);
+  if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
+  const sh=_ponto_ss_().getSheetByName('ECOIN + INVESTIMENTO');
+  const vals=sh.getDataRange().getValues();
+  const header=vals[0].map(String);
+  const buckets={};
+  for(let i=1;i<vals.length;i++){
+    const artista=String(vals[i][2]).trim();
+    if(!artista||r.artistas.indexOf(artista)===-1)continue;
+    if(!buckets[artista])buckets[artista]=[];
+    buckets[artista].push({linha:i+1,row:vals[i]});
+  }
+  let totalAplicadas=0;
+  const maxPorCol={6:PLAYLIST_MAX_SPOTIFY,8:PLAYLIST_MAX_APPLE,10:PLAYLIST_MAX_YOUTUBE};
+  const topPorCol={6:PLAYLISTS_SPOTIFY[0],8:PLAYLISTS_APPLE[0],10:PLAYLISTS_YOUTUBE[PLAYLISTS_YOUTUBE.length-1]};
+  Object.keys(buckets).forEach(artista=>{
+    const linhas=buckets[artista];
+    const saldoRow=linhas[linhas.length-1];
+    let saldo=Number(saldoRow.row[3])||0;
+    const maisRecente=linhas[linhas.length-1];
+    const musicaMaisRecente=String(maisRecente.row[4]||'').trim();
+    [6,8,10].forEach(colIdx=>{
+      const custo=maxPorCol[colIdx]; const playlistNome=topPorCol[colIdx];
+      const plataformaMap={6:'SPOTIFY',8:'APPLE',10:null}; const plat=plataformaMap[colIdx];
+      if(plat&&musicaMaisRecente){if(_playlist_top_ja_usada_(artista,musicaMaisRecente,plat))return;}
+      if(saldo>=custo){sh.getRange(maisRecente.linha,colIdx+1).setValue(playlistNome);saldo-=custo;totalAplicadas++;if(plat)_registrar_top_playlist_(artista,musicaMaisRecente,plat,playlistNome);}
+    });
+    for(let j=linhas.length-2;j>=0;j--){
+      const item=linhas[j];
+      [6,8,10].forEach(colIdx=>{
+        const atual=item.row[colIdx];
+        if(atual!==''&&atual!==null)return;
+        const custo=maxPorCol[colIdx];
+        if(saldo>=custo){sh.getRange(item.linha,colIdx+1).setValue(topPorCol[colIdx]);saldo-=custo;totalAplicadas++;}
+      });
+    }
+  });
+  return{ok:true,message:`✅ ${totalAplicadas} playlists distribuídas.`};
+}
+
+// ── PONTO — ECOIN (novos endpoints) ──
+
+// ID da planilha EDIÇÃO CHARTS / ECOIN + INVESTIMENTO
+const EDICAO_SS_ID = '1GPajSCp1TkJDEDOGZIrXxgZuNuRs7545buFntyDlpL8';
+
+function acao_ponto_listar_musicas_edicao_(p) {
+  const tgId=String(p.tgId||'').trim();
+  const r=_jogador_por_tg_(tgId);
+  if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
+  const ss=SpreadsheetApp.openById(EDICAO_SS_ID);
+  const sh=ss.getSheetByName('EDIÇÃO CHARTS');
+  if(!sh)return{erro:'Aba EDIÇÃO CHARTS não encontrada.'};
+  const vals=sh.getDataRange().getValues();
+  const musicas=[];
+  for(let i=1;i<vals.length;i++){
+    const musica=String(vals[i][1]||'').trim();
+    const actPrincipal=String(vals[i][7]||'').trim();
+    if(!musica)continue;
+    const pertence=r.artistas.some(a=>actPrincipal.toLowerCase().includes(a.toLowerCase())||musica.toLowerCase().includes(a.toLowerCase()));
+    if(pertence)musicas.push({linha:i+1,musica,artista:actPrincipal});
+  }
+  const unicas=[]; const vistas=new Set();
+  for(const m of musicas){if(!vistas.has(m.musica)){vistas.add(m.musica);unicas.push(m);}}
+  return{musicas:unicas};
+}
+
+function acao_ponto_saldo_ecoin_(p) {
+  const tgId=String(p.tgId||'').trim();
+  const r=_jogador_por_tg_(tgId);
+  if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
+  const ss=SpreadsheetApp.openById(PONTO_SS_ID);
+  const sh=ss.getSheetByName('ECOIN + INVESTIMENTO');
+  if(!sh)return{erro:'Aba ECOIN + INVESTIMENTO não encontrada.'};
+  const vals=sh.getDataRange().getValues();
+  // Header na linha 2 (índice 1); dados a partir do índice 2
+  const header=vals[1].map(String);
+  const colArtista=header.indexOf('NOME DO ARTISTA');
+  const colBanco=header.findIndex(h=>h.includes('BANK'));
+  const saldos={};
+  for(let i=2;i<vals.length;i++){
+    const artista=String(vals[i][colArtista>=0?colArtista:0]||'').trim();
+    const saldo=colBanco>=0?vals[i][colBanco]:vals[i][2];
+    if(artista&&r.artistas.some(a=>a.toLowerCase()===artista.toLowerCase())&&saldo!=='')saldos[artista]=saldo;
+  }
+  return{saldos};
+}
+
+function acao_ponto_salvar_playlist_ecoin_(p) {
+  try {
+    const tgId = String(p.tgId || p.telegramid || '').trim();
+    const r = _jogador_por_tg_(tgId);
+    if (!r || !r.artistas.length) return { erro: 'Sem artistas vinculados.' };
+
+    const sh = SpreadsheetApp.openById(PONTO_SS_ID)
+      .getSheetByName('ECOIN + INVESTIMENTO');
+    if (!sh) return { erro: 'Aba ECOIN + INVESTIMENTO nao encontrada.' };
+
+    // Col G=7 SPOTIFY | Col I=9 APPLE MUSIC | Col K=11 YOUTUBE
+    const colMap = { 'SPOTIFY': 7, 'APPLE MUSIC': 9, 'YOUTUBE': 11 };
+    const colIdx = colMap[String(p.plataforma || '').trim().toUpperCase()];
+    if (!colIdx) return { erro: 'Plataforma invalida: ' + p.plataforma };
+
+    const vals = sh.getDataRange().getValues();
+
+    // Busca próxima linha vazia na coluna alvo (a partir da linha 3 = índice 2)
+    let linhaAlvo = -1;
+    for (let i = 2; i < vals.length; i++) {
+      const celula = String(vals[i][colIdx - 1] || '').trim();
+      if (celula === '') {
+        linhaAlvo = i + 1; // +1 porque getRange usa base 1
+        break;
+      }
+    }
+
+    // Se não encontrou linha vazia, adiciona após a última
+    if (linhaAlvo < 0) linhaAlvo = vals.length + 1;
+
+    // Preenche o nome da música na coluna C (3) se ainda vazia
+    const colMusica = 3;
+    const musicaAtual = String(sh.getRange(linhaAlvo, colMusica).getValue() || '').trim();
+    if (musicaAtual === '') {
+      sh.getRange(linhaAlvo, colMusica).setValue(p.musica);
+    }
+
+    // Grava a playlist na coluna da plataforma
+    sh.getRange(linhaAlvo, colIdx).setValue(p.playlist);
+
+    // Lê o saldo da coluna D (4) para retornar ao app
+    const saldo = sh.getRange(linhaAlvo, 4).getValue();
+
+    return {
+      ok: true,
+      message: '✅ ' + p.plataforma + ' salva para "' + p.musica + '"',
+      linha: linhaAlvo,
+      saldo: saldo
+    };
+  } catch(e) {
+    return { erro: e.message };
+  }
+}
+function acaopontolistarmusicasecoinp(p) {
+  try {
+    const tgId = String(p.tgId || p.telegramid || p.tgid || '').trim();
+    const r = jogadorportg(tgId);
+    if (!r || !r.artistas.length) return { erro: 'Sem artistas vinculados.' };
+
+    const sh = pontoss().getSheetByName('PONTOS');
+    if (!sh) return { erro: 'Aba PONTOS nao encontrada.' };
+
+    const vals = sh.getDataRange().getValues();
+    const musicas = [];
+
+    for (let i = 3; i < vals.length; i++) { // começa na linha 4 (índice 3), após cabeçalho
+      const artista = String(vals[i][2]).trim(); // col C = índice 2
+      const musica  = String(vals[i][3]).trim(); // col D = índice 3
+      if (!artista || !musica) continue;
+      if (r.artistas.indexOf(artista) === -1) continue;
+      musicas.push({ linha: i + 1, artista, musica });
+    }
+
+    return { ok: true, musicas };
+  } catch(e) {
+    return { erro: e.message };
+  }
+}
+function acaopontosalvarplaylistecoinp(p) {
+  try {
+    const tgId = String(p.tgId || p.telegramid || p.tgid || '').trim();
+    const r = jogadorportg(tgId);
+    if (!r || !r.artistas.length) return { erro: 'Sem artistas vinculados.' };
+
+    const ss = SpreadsheetApp.openById(PONTOSSID);
+    const sh = ss.getSheetByName('ECOIN + INVESTIMENTO');
+    if (!sh) return { erro: 'Aba ECOIN + INVESTIMENTO nao encontrada.' };
+
+    const colMap = { 'SPOTIFY': 7, 'APPLE MUSIC': 9, 'YOUTUBE': 11 };
+    const colIdx = colMap[String(p.plataforma || '').trim().toUpperCase()];
+    if (!colIdx) return { erro: 'Plataforma invalida: ' + p.plataforma };
+
+    const linha = Number(p.linha);
+
+    sh.getRange(linha, 3).setValue(p.artista); // col C = artista
+    sh.getRange(linha, 5).setValue(p.musica);  // col E = música
+    sh.getRange(linha, colIdx).setValue(p.playlist);
+
+    const saldo = sh.getRange(linha, 4).getValue();
+
+    return { ok: true, message: p.plataforma + ' salva!', saldo, linha };
+  } catch(e) {
+    return { erro: e.message };
+  }
+}
