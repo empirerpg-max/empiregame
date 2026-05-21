@@ -673,4 +673,26 @@ export function driveDirectAudio(url: string | undefined | null): string | undef
   const m = String(url).match(/[-\w]{25,}/);
   if (!m) return undefined;
   return `https://drive.google.com/uc?export=download&id=${m[0]}`;
+// ---- PONTO Playlists ECOIN ----
+async listarMusicasEdicao(tgId: string): Promise<{
+  musicas?: Array<{ linha: number; musica: string; artista: string }>;
+  erro?: string;
+}> {
+  return call({ acao: 'ponto_listar_musicas_edicao', tgId });
+},
+async saldoEcoin(tgId: string): Promise<{
+  saldos?: Record<string, any>;
+  erro?: string;
+}> {
+  return call({ acao: 'ponto_saldo_ecoin', tgId });
+},
+async salvarPlaylistEcoin(p: {
+  tgId: string;
+  musica: string;
+  artista: string;
+  plataforma: string;
+  playlist: string;
+}): Promise<CommonResponse & { saldo?: any; linha?: number }> {
+  invalidateCache();
+  return call({ acao: 'ponto_salvar_playlist_ecoin', ...p });
 }
