@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useTelegramUser } from "@/lib/telegram";
 import { Loader2 } from "lucide-react";
 import { notify } from "@/lib/notify";
 
@@ -17,64 +16,28 @@ interface GridData {
 }
 
 interface PlanilhaGridProps {
+  tgId: string;
   loader: (tgId: string) => Promise<GridData>;
   saver: (p: { tgId: string; linha: number; coluna: string; valor: any }) => Promise<any>;
 }
 
-export function PlanilhaGrid({ loader, saver }: PlanilhaGridProps) {
-  const { user } = useTelegramUser();
+export function PlanilhaGrid({ tgId, loader, saver }: PlanilhaGridProps) {
   const [data, setData] = useState<GridData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [tried, setTried] = useState(false);
-
-  // Resolve tgId: usa user.id OU lê direto do localStorage sem esperar ready
-  function getTgId(): string | null {
-    if (user?.id && user.id !== "guest") return String(user.id);
-    try {
-      const cached = localStorage.getItem("tg_user_cache");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed?.id && parsed.id !== "guest") return String(parsed.id);
-      }
-    } catch {}
-    return null;
-  }
 
   useEffect(() => {
-    if (tried) return;
-
-    // Tenta imediatamente; se não tiver ID ainda, tenta de novo em 500ms
-    const attempt = () => {
-      const tgId = getTgId();
-      if (!tgId) return false;
-
-      setTried(true);
-      setLoading(true);
-      setErro(null);
-
-      loader(tgId)
-        .then((r) => {
-          if (r?.erro) setErro(r.erro);
-          else setData(r);
-        })
-        .catch((e) => setErro("Erro ao carregar: " + String(e.message || e)))
-        .finally(() => setLoading(false));
-
-      return true;
-    };
-
-    if (!attempt()) {
-      const t = setTimeout(() => {
-        if (!attempt()) {
-          setErro("Não foi possível identificar seu usuário. Abra pelo Telegram.");
-          setLoading(false);
-        }
-      }, 1500);
-      return () => clearTimeout(t);
-    }
-  }, [user?.id]);
+    if (!tgId) return;
+    setLoading(true);
+    loader(tgId)
+      .then((r) => {
+        if (r?.erro) setErro(r.erro);
+        else setData(r);
+      })
+      .catch((e) => setErro("Erro: " + String(e.message || e)))
+      .finally(() => setLoading(false));
+  }, [tgId]);
 
   if (loading)
     return (
@@ -86,33 +49,23 @@ export function PlanilhaGrid({ loader, saver }: PlanilhaGridProps) {
 
   if (erro)
     return (
-      <div className="p-6 text-center text-red-400 text-sm rounded-2xl bg-red-900/20 border border-red-500/20">
+      <div className="p-4 text-center text-red-400 text-sm rounded-2xl bg-red-900/20 border border-red-500/20">
         {erro}
       </div>
     );
 
-  if (!data)
+  if (!data?.linhas || data.linhas.length === 0)
     return (
-      <div className="flex items-center justify-center h-40 gap-2 text-muted-foreground">
-        <Loader2 className="animate-spin w-5 h-5" />
-        <span className="text-sm">Aguardando identificação...</span>
-      </div>
-    );
-
-  if (!data.linhas || data.linhas.length === 0)
-    return (
-      <div className="p-6 text-center text-muted-foreground text-sm rounded-2xl bg-white/5 border border-white/10">
+      <div className="p-4 text-center text-muted-foreground text-sm rounded-2xl bg-white/5 border border-white/10">
         Nenhuma linha encontrada para o seu usuário.
       </div>
     );
 
-  const colunas: string[] = data.colunas || [];
+  const colunas = data.colunas || [];
   const editaveis = new Set<string>(data.editaveis || []);
 
   async function handleEdit(linha: number, coluna: string, valor: any, original: any) {
     if (String(valor) === String(original ?? "")) return;
-    const tgId = getTgId();
-    if (!tgId) return;
     const cellKey = `${linha}-${coluna}`;
     setSaving(cellKey);
     const r = await saver({ tgId, linha, coluna, valor });

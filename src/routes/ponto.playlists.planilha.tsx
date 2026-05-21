@@ -13,14 +13,17 @@ function PlaylistsPlanilha() {
 
   if (!ready)
     return (
-      <div className="flex items-center justify-center h-40">
-        <Loader2 className="animate-spin text-primary w-8 h-8" />
+      <div className="flex items-center justify-center h-40 gap-2 text-muted-foreground">
+        <Loader2 className="animate-spin w-5 h-5" />
+        <span className="text-sm">Identificando usuário...</span>
       </div>
     );
 
   if (!user?.id)
     return (
-      <div className="p-6 text-center text-muted-foreground">Abra o app pelo Telegram para acessar esta tela.</div>
+      <div className="p-6 text-center text-muted-foreground text-sm">
+        Abra o app pelo Telegram para acessar esta tela.
+      </div>
     );
 
   return (
@@ -33,7 +36,11 @@ function PlaylistsPlanilha() {
         Apenas as colunas marcadas como editáveis aceitam mudanças. Linhas já preenchidas por outros jogadores ficam
         travadas.
       </p>
-      <PlanilhaGrid loader={(tgId) => api.listarPlaylistsJogador(tgId)} saver={(p) => api.salvarCelulaPlaylist(p)} />
+      <PlanilhaGrid
+        tgId={String(user.id)}
+        loader={(tgId) => api.listarPlaylistsJogador(tgId)}
+        saver={(p) => api.salvarCelulaPlaylist(p)}
+      />
     </div>
   );
 }
