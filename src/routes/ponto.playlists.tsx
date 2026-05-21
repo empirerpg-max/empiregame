@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { useTelegramUser } from "@/lib/telegram";
 import { notify } from "@/lib/notify";
 
-export const Route = createFileRoute("/ponto/playlists/planilha")({
+export const Route = createFileRoute("/ponto/playlists")({
   component: PontoPlaylistsManual,
 });
 
