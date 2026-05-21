@@ -34,6 +34,7 @@ import {
   HelpCircle,
   Share2,
   Send,
+  Target,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
@@ -341,6 +342,7 @@ function BottomNav() {
     { to: "/", label: "Hub", icon: Home },
     { to: "/artistas", search: { filter: "mine" }, label: "Artistas", icon: Library },
     { to: "/charts", label: "Charts", icon: TrendingUp },
+    { to: "/ponto", label: "Ponto", icon: Target },
     { to: "/social", label: "Social", icon: Share2 },
     { to: "/ranking", label: "Rank", icon: Star },
   ];
