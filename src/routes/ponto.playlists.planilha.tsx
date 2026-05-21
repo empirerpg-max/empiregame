@@ -40,7 +40,7 @@ const PLAYLISTS: Record<Plat, string[]> = {
     "RANDOM SONGS",
     "JUST... (ARTIST)",
   ],
-  YOUTUBE: ["Ad 5 segundos (Comercial/Vídeo)", "Ad 30 segundos (Comercial/Vídeo)", "Ad (Vídeo Completo)"],
+  YOUTUBE: ["Ad 5 segundos (Comercial/Video)", "Ad 30 segundos (Comercial/Video)", "Ad (Video Completo)"],
 };
 
 const PLAT_STYLE: Record<Plat, { color: string; bg: string }> = {
@@ -50,25 +50,20 @@ const PLAT_STYLE: Record<Plat, { color: string; bg: string }> = {
 };
 
 const COL_PLAT: Record<Plat, string> = {
-  SPOTIFY: "SPOTIFY",
-  "APPLE MUSIC": "APPLE MUSIC",
-  YOUTUBE: "YOUTUBE",
+  SPOTIFY: "INVESTIMENTO PLAYLIST SPOTIFY",
+  "APPLE MUSIC": "INVESTIMENTO PLAYLIST APPLE MUSIC",
+  YOUTUBE: "INVESTIMENTO PLAYLIST YOUTUBE",
 };
 
-type LinhaItem = {
-  linha: number;
-  artista: string;
-  musica: string;
-  valores: Record<string, unknown>;
-};
+type MusicaItem = { linha: number; musica: string };
 
 function PontoPlaylistsManual() {
   const { user } = useTelegramUser();
   const tgId = user?.id ? String(user.id) : "";
 
-  const [linhas, setLinhas] = useState<LinhaItem[]>([]);
+  const [musicas, setMusicas] = useState<MusicaItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sel, setSel] = useState<LinhaItem | null>(null);
+  const [sel, setSel] = useState<MusicaItem | null>(null);
   const [selecoes, setSelecoes] = useState<Partial<Record<Plat, string>>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -76,24 +71,8 @@ function PontoPlaylistsManual() {
   useEffect(() => {
     if (!tgId) return;
     setLoading(true);
-    api.listarPlaylistsJogador(tgId).then((r) => {
-      const cols = r?.colunas ?? [];
-      const linhasRaw = r?.linhas ?? [];
-      const colMusica =
-        cols.find(
-          (c) =>
-            c.toUpperCase().includes("MÚSICA") ||
-            c.toUpperCase().includes("MUSICA") ||
-            c.toUpperCase().includes("NOME DA"),
-        ) ?? "";
-      setLinhas(
-        linhasRaw.map((l) => ({
-          linha: l.linha,
-          artista: l.artista,
-          musica: colMusica ? String(l.valores?.[colMusica] ?? "") : l.artista,
-          valores: l.valores ?? {},
-        })),
-      );
+    api.listarMusicasEdicao(tgId).then((r) => {
+      setMusicas(Array.isArray(r?.musicas) ? r.musicas : []);
       setLoading(false);
     });
   }, [tgId]);
@@ -108,11 +87,12 @@ function PontoPlaylistsManual() {
     setSaving(true);
     let ok = true;
     for (const [plat, playlist] of entradas) {
-      const r = await api.salvarCelulaPlaylist({
+      const r = await api.salvarPlaylistEcoin({
         tgId,
-        linha: sel.linha,
-        coluna: COL_PLAT[plat],
-        valor: playlist,
+        musica: sel.musica,
+        artista: "",
+        plataforma: COL_PLAT[plat],
+        playlist,
       });
       if (r?.erro) {
         notify(r);
@@ -123,18 +103,6 @@ function PontoPlaylistsManual() {
     if (ok) {
       setSaved(true);
       setSelecoes({});
-      setLinhas((prev) =>
-        prev.map((l) => {
-          if (l.linha !== sel.linha) return l;
-          const nov = { ...l.valores };
-          (Object.entries(selecoes) as [Plat, string][])
-            .filter(([, v]) => !!v)
-            .forEach(([p, playlist]) => {
-              nov[COL_PLAT[p]] = playlist;
-            });
-          return { ...l, valores: nov };
-        }),
-      );
       setTimeout(() => setSaved(false), 2500);
     }
   }
@@ -160,35 +128,32 @@ function PontoPlaylistsManual() {
           <ChevronLeft size={20} />
         </Link>
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Playlists · Manual</h1>
-          <p className="text-xs text-muted-foreground">Escolha uma música e distribua.</p>
+          <h1 className="text-xl font-bold tracking-tight">Playlists - Manual</h1>
+          <p className="text-xs text-muted-foreground">Escolha uma musica e distribua.</p>
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-1">Música</p>
-        {linhas.length === 0 && <p className="text-sm text-muted-foreground px-1">Nenhuma música encontrada.</p>}
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-1">Musica</p>
+        {musicas.length === 0 && <p className="text-sm text-muted-foreground px-1">Nenhuma musica encontrada.</p>}
         <div className="flex flex-col gap-2 max-h-52 overflow-y-auto pr-1">
-          {linhas.map((l) => (
+          {musicas.map((m) => (
             <button
-              key={l.linha}
+              key={m.linha}
               onClick={() => {
-                setSel(l);
+                setSel(m);
                 setSelecoes({});
                 setSaved(false);
               }}
               className={
                 "w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center gap-3 " +
-                (sel?.linha === l.linha
+                (sel?.linha === m.linha
                   ? "border-primary bg-primary/10 text-white"
                   : "border-white/8 bg-card hover:border-white/20")
               }
             >
-              <Music2 size={15} className={sel?.linha === l.linha ? "text-primary" : "text-muted-foreground"} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{l.musica || l.artista}</p>
-                <p className="text-xs text-muted-foreground truncate">{l.artista}</p>
-              </div>
+              <Music2 size={15} className={sel?.linha === m.linha ? "text-primary" : "text-muted-foreground"} />
+              <p className="text-sm font-medium truncate">{m.musica}</p>
             </button>
           ))}
         </div>
@@ -201,14 +166,10 @@ function PontoPlaylistsManual() {
             const style = PLAT_STYLE[plat];
             const opcoes = PLAYLISTS[plat];
             const atual = selecoes[plat] ?? "";
-            const jaPreenchido = sel.valores[COL_PLAT[plat]];
             return (
               <div key={plat} className="rounded-2xl border border-white/8 bg-card overflow-hidden">
-                <div className={"flex items-center justify-between px-4 py-2.5 " + style.bg}>
+                <div className={"flex items-center px-4 py-2.5 " + style.bg}>
                   <span className={"text-xs font-bold uppercase tracking-wider " + style.color}>{plat}</span>
-                  {jaPreenchido && (
-                    <span className="text-xs text-muted-foreground truncate max-w-[140px]">{String(jaPreenchido)}</span>
-                  )}
                 </div>
                 <div className="px-3 py-2.5">
                   <select
@@ -216,7 +177,7 @@ function PontoPlaylistsManual() {
                     onChange={(e) => setSelecoes((prev) => ({ ...prev, [plat]: e.target.value }))}
                     className="w-full rounded-xl px-3 py-2.5 text-sm outline-none bg-zinc-800 text-white border border-white/10 focus:border-primary transition-colors"
                   >
-                    <option value="">— selecionar —</option>
+                    <option value="">- selecionar -</option>
                     {opcoes.map((o) => (
                       <option key={o} value={o}>
                         {o}
