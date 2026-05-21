@@ -53,23 +53,26 @@ const PLAT_STYLE: Record<Plat, { color: string; bg: string }> = {
   YOUTUBE: { color: "text-red-400", bg: "bg-red-500/15" },
 };
 
-// Colunas da aba ECOIN + INVESTIMENTO que correspondem às plataformas
 const COL_PLAT: Record<Plat, string> = {
   SPOTIFY: "SPOTIFY",
   "APPLE MUSIC": "APPLE MUSIC",
   YOUTUBE: "YOUTUBE",
 };
 
-type Linha = { linha: number; artista: string; musica: string; valores: Record<string, any> };
+type LinhaItem = {
+  linha: number;
+  artista: string;
+  musica: string;
+  valores: Record<string, unknown>;
+};
 
 function PontoPlaylistsManual() {
   const { user } = useTelegramUser();
   const tgId = user?.id ? String(user.id) : "";
 
-  const [linhas, setLinhas] = useState<Linha[]>([]);
-  const [colunas, setColunas] = useState<string[]>([]);
+  const [linhas, setLinhas] = useState<LinhaItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sel, setSel] = useState<Linha | null>(null);
+  const [sel, setSel] = useState<LinhaItem | null>(null);
   const [selecoes, setSelecoes] = useState<Partial<Record<Plat, string>>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -77,21 +80,18 @@ function PontoPlaylistsManual() {
   useEffect(() => {
     if (!tgId) return;
     setLoading(true);
-    api.listarPlaylistsJogador(tgId).then((r: any) => {
-      setColunas(r?.colunas ?? []);
-      // Cada linha tem: { linha, artista, valores }
-      // A coluna de música pode ser "NOME DA MÚSICA" ou "MÚSICA"
-      const linhasRaw: any[] = r?.linhas ?? [];
-      const cols: string[] = r?.colunas ?? [];
+    api.listarPlaylistsJogador(tgId).then((r) => {
+      const cols = r?.colunas ?? [];
+      const linhasRaw = r?.linhas ?? [];
       const colMusica =
         cols.find(
-          (c: string) =>
+          (c) =>
             c.toUpperCase().includes("MÚSICA") ||
             c.toUpperCase().includes("MUSICA") ||
             c.toUpperCase().includes("NOME DA"),
         ) ?? "";
       setLinhas(
-        linhasRaw.map((l: any) => ({
+        linhasRaw.map((l) => ({
           linha: l.linha,
           artista: l.artista,
           musica: colMusica ? String(l.valores?.[colMusica] ?? "") : l.artista,
@@ -104,20 +104,22 @@ function PontoPlaylistsManual() {
 
   async function salvar() {
     if (!sel || !tgId) return;
-    const entradas = (Object.entries(selecoes) as [Plat, string][]).filter(([, v]) => v);
-    if (!entradas.length) return notify({ erro: "Selecione ao menos uma playlist." });
+    const entradas = (Object.entries(selecoes) as [Plat, string][]).filter(([, v]) => !!v);
+    if (!entradas.length) {
+      notify({ erro: "Selecione ao menos uma playlist." });
+      return;
+    }
     setSaving(true);
     let ok = true;
     for (const [plat, playlist] of entradas) {
-      const coluna = COL_PLAT[plat];
       const r = await api.salvarCelulaPlaylist({
         tgId,
         linha: sel.linha,
-        coluna,
+        coluna: COL_PLAT[plat],
         valor: playlist,
       });
-      if ((r as any)?.erro) {
-        notify(r as any);
+      if (r?.erro) {
+        notify(r);
         ok = false;
       }
     }
@@ -125,13 +127,12 @@ function PontoPlaylistsManual() {
     if (ok) {
       setSaved(true);
       setSelecoes({});
-      // Atualiza localmente os valores da linha selecionada
       setLinhas((prev) =>
         prev.map((l) => {
           if (l.linha !== sel.linha) return l;
           const novosValores = { ...l.valores };
           (Object.entries(selecoes) as [Plat, string][])
-            .filter(([, v]) => v)
+            .filter(([, v]) => !!v)
             .forEach(([plat, playlist]) => {
               novosValores[COL_PLAT[plat]] = playlist;
             });
@@ -182,12 +183,12 @@ function PontoPlaylistsManual() {
                 setSelecoes({});
                 setSaved(false);
               }}
-              className={`w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center gap-3
-                ${
-                  sel?.linha === l.linha
-                    ? "border-primary bg-primary/10 text-white"
-                    : "border-white/8 bg-card hover:border-white/20"
-                }`}
+              className={[
+                "w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center gap-3",
+                sel?.linha === l.linha
+                  ? "border-primary bg-primary/10 text-white"
+                  : "border-white/8 bg-card hover:border-white/20",
+              ].join(" ")}
             >
               <Music2 size={15} className={sel?.linha === l.linha ? "text-primary" : "text-muted-foreground"} />
               <div className="flex-1 min-w-0">
@@ -207,23 +208,20 @@ function PontoPlaylistsManual() {
             const style = PLAT_STYLE[plat];
             const opcoes = PLAYLISTS[plat];
             const atual = selecoes[plat] ?? "";
-            const jaPreenchido = sel.valores?.[COL_PLAT[plat]];
+            const jaPreenchido = sel.valores[COL_PLAT[plat]];
             return (
               <div key={plat} className="rounded-2xl border border-white/8 bg-card overflow-hidden">
                 <div className={`flex items-center justify-between px-4 py-2.5 ${style.bg}`}>
                   <span className={`text-xs font-bold uppercase tracking-wider ${style.color}`}>{plat}</span>
                   {jaPreenchido && (
-                    <span className="text-xs text-muted-foreground truncate max-w-[140px]">{jaPreenchido}</span>
+                    <span className="text-xs text-muted-foreground truncate max-w-[140px]">{String(jaPreenchido)}</span>
                   )}
                 </div>
                 <div className="px-3 py-2.5">
                   <select
                     value={atual}
                     onChange={(e) => setSelecoes((prev) => ({ ...prev, [plat]: e.target.value }))}
-                    className="w-full rounded-xl px-3 py-2.5 text-sm outline-none
-                               bg-zinc-800 text-white border border-white/10
-                               focus:border-primary transition-colors
-                               [&>option]:bg-zinc-800 [&>option]:text-white"
+                    className="w-full rounded-xl px-3 py-2.5 text-sm outline-none bg-zinc-800 text-white border border-white/10 focus:border-primary transition-colors [&>option]:bg-zinc-800 [&>option]:text-white"
                   >
                     <option value="">— selecionar —</option>
                     {opcoes.map((o) => (
@@ -244,12 +242,12 @@ function PontoPlaylistsManual() {
         <button
           onClick={salvar}
           disabled={saving || saved || !Object.values(selecoes).some(Boolean)}
-          className={`w-full py-4 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2
-            ${
-              saved
-                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                : "bg-primary text-black hover:bg-primary/90 disabled:opacity-40"
-            }`}
+          className={[
+            "w-full py-4 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2",
+            saved
+              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+              : "bg-primary text-black hover:bg-primary/90 disabled:opacity-40",
+          ].join(" ")}
         >
           {saving ? (
             <Loader2 size={18} className="animate-spin" />
