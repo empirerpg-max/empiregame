@@ -99,6 +99,9 @@ function TourForm() {
             />
           </Field>
         </div>
+        <p className="text-[11px] text-muted-foreground -mt-2 px-1">
+          As datas dos shows são geradas automaticamente, espaçadas ao longo dos próximos meses conforme o porte da turnê.
+        </p>
         <Field label="Continente">
           <select
             value={continente}
