@@ -10,7 +10,6 @@ export const Route = createFileRoute("/ponto/distribuir/planilha")({
 
 function PontoPlanilha() {
   const { user, ready } = useTelegramUser();
-  const tgId = String(user?.id ?? "");
 
   if (!ready)
     return (
@@ -19,7 +18,7 @@ function PontoPlanilha() {
       </div>
     );
 
-  if (!tgId)
+  if (!user?.id)
     return (
       <div className="p-6 text-center text-muted-foreground">Abra o app pelo Telegram para acessar esta tela.</div>
     );
@@ -33,7 +32,7 @@ function PontoPlanilha() {
       <p className="text-sm text-muted-foreground">
         Edite somente as células permitidas. As alterações vão pra planilha automaticamente.
       </p>
-      <PlanilhaGrid loader={() => api.listarPontosJogador(tgId)} saver={(p) => api.salvarCelulaPontos(p)} />
+      <PlanilhaGrid loader={(tgId) => api.listarPontosJogador(tgId)} saver={(p) => api.salvarCelulaPontos(p)} />
     </div>
   );
 }

@@ -10,7 +10,6 @@ export const Route = createFileRoute("/ponto/playlists/planilha")({
 
 function PlaylistsPlanilha() {
   const { user, ready } = useTelegramUser();
-  const tgId = String(user?.id ?? "");
 
   if (!ready)
     return (
@@ -19,7 +18,7 @@ function PlaylistsPlanilha() {
       </div>
     );
 
-  if (!tgId)
+  if (!user?.id)
     return (
       <div className="p-6 text-center text-muted-foreground">Abra o app pelo Telegram para acessar esta tela.</div>
     );
@@ -34,7 +33,7 @@ function PlaylistsPlanilha() {
         Apenas as colunas marcadas como editáveis aceitam mudanças. Linhas já preenchidas por outros jogadores ficam
         travadas.
       </p>
-      <PlanilhaGrid loader={() => api.listarPlaylistsJogador(tgId)} saver={(p) => api.salvarCelulaPlaylist(p)} />
+      <PlanilhaGrid loader={(tgId) => api.listarPlaylistsJogador(tgId)} saver={(p) => api.salvarCelulaPlaylist(p)} />
     </div>
   );
 }
