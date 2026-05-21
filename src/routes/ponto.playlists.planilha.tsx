@@ -5,6 +5,10 @@ import { api } from "@/lib/api";
 import { useTelegramUser } from "@/lib/telegram";
 import { notify } from "@/lib/notify";
 
+export const Route = createFileRoute("/ponto/playlists/planilha")({
+  component: PontoPlaylistsManual,
+});
+
 type Plat = "SPOTIFY" | "APPLE MUSIC" | "YOUTUBE";
 
 const PLAYLISTS: Record<Plat, string[]> = {
@@ -126,13 +130,13 @@ function PontoPlaylistsManual() {
       setLinhas((prev) =>
         prev.map((l) => {
           if (l.linha !== sel.linha) return l;
-          const nov = { ...l.valores };
+          const novosValores = { ...l.valores };
           (Object.entries(selecoes) as [Plat, string][])
             .filter(([, v]) => !!v)
-            .forEach(([p, playlist]) => {
-              nov[COL_PLAT[p]] = playlist;
+            .forEach(([plat, playlist]) => {
+              novosValores[COL_PLAT[plat]] = playlist;
             });
-          return { ...l, valores: nov };
+          return { ...l, valores: novosValores };
         }),
       );
       setTimeout(() => setSaved(false), 2500);
@@ -155,6 +159,7 @@ function PontoPlaylistsManual() {
 
   return (
     <div className="min-h-screen bg-background px-4 pt-6 pb-28 flex flex-col gap-5">
+      {/* Header */}
       <div className="flex items-center gap-3">
         <Link to="/ponto/playlists" className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
           <ChevronLeft size={20} />
@@ -165,6 +170,7 @@ function PontoPlaylistsManual() {
         </div>
       </div>
 
+      {/* Lista de músicas */}
       <div className="flex flex-col gap-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-1">Música</p>
         {linhas.length === 0 && <p className="text-sm text-muted-foreground px-1">Nenhuma música encontrada.</p>}
@@ -177,12 +183,12 @@ function PontoPlaylistsManual() {
                 setSelecoes({});
                 setSaved(false);
               }}
-              className={
-                "w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center gap-3 " +
-                (sel?.linha === l.linha
+              className={[
+                "w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center gap-3",
+                sel?.linha === l.linha
                   ? "border-primary bg-primary/10 text-white"
-                  : "border-white/8 bg-card hover:border-white/20")
-              }
+                  : "border-white/8 bg-card hover:border-white/20",
+              ].join(" ")}
             >
               <Music2 size={15} className={sel?.linha === l.linha ? "text-primary" : "text-muted-foreground"} />
               <div className="flex-1 min-w-0">
@@ -194,6 +200,7 @@ function PontoPlaylistsManual() {
         </div>
       </div>
 
+      {/* Plataformas */}
       {sel && (
         <div className="flex flex-col gap-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-1">Plataformas</p>
@@ -204,8 +211,8 @@ function PontoPlaylistsManual() {
             const jaPreenchido = sel.valores[COL_PLAT[plat]];
             return (
               <div key={plat} className="rounded-2xl border border-white/8 bg-card overflow-hidden">
-                <div className={"flex items-center justify-between px-4 py-2.5 " + style.bg}>
-                  <span className={"text-xs font-bold uppercase tracking-wider " + style.color}>{plat}</span>
+                <div className={`flex items-center justify-between px-4 py-2.5 ${style.bg}`}>
+                  <span className={`text-xs font-bold uppercase tracking-wider ${style.color}`}>{plat}</span>
                   {jaPreenchido && (
                     <span className="text-xs text-muted-foreground truncate max-w-[140px]">{String(jaPreenchido)}</span>
                   )}
@@ -214,7 +221,7 @@ function PontoPlaylistsManual() {
                   <select
                     value={atual}
                     onChange={(e) => setSelecoes((prev) => ({ ...prev, [plat]: e.target.value }))}
-                    className="w-full rounded-xl px-3 py-2.5 text-sm outline-none bg-zinc-800 text-white border border-white/10 focus:border-primary transition-colors"
+                    className="w-full rounded-xl px-3 py-2.5 text-sm outline-none bg-zinc-800 text-white border border-white/10 focus:border-primary transition-colors [&>option]:bg-zinc-800 [&>option]:text-white"
                   >
                     <option value="">— selecionar —</option>
                     {opcoes.map((o) => (
@@ -230,16 +237,17 @@ function PontoPlaylistsManual() {
         </div>
       )}
 
+      {/* Botão salvar */}
       {sel && (
         <button
           onClick={salvar}
           disabled={saving || saved || !Object.values(selecoes).some(Boolean)}
-          className={
-            "w-full py-4 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2 " +
-            (saved
+          className={[
+            "w-full py-4 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2",
+            saved
               ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-              : "bg-primary text-black hover:bg-primary/90 disabled:opacity-40")
-          }
+              : "bg-primary text-black hover:bg-primary/90 disabled:opacity-40",
+          ].join(" ")}
         >
           {saving ? (
             <Loader2 size={18} className="animate-spin" />
@@ -255,7 +263,3 @@ function PontoPlaylistsManual() {
     </div>
   );
 }
-
-export const Route = createFileRoute("/ponto/playlists/planilha")({
-  component: PontoPlaylistsManual,
-});
