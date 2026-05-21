@@ -565,6 +565,43 @@ export const api = {
   async postQueridometroVoto(tgId: string, de: string, para: string, emoji: string): Promise<CommonResponse & { msg?: string }> {
     return call({ acao: "queridometro_votar", tgId, de, para, emoji });
   },
+
+  // ---- PONTO (pontos + playlists por planilha externa) ----
+  async getJogador(tgId: string): Promise<{ nomeOff?: string; artistas?: string[]; erro?: string }> {
+    return call({ acao: "ponto_get_jogador", tgId });
+  },
+  async listarPontosJogador(tgId: string): Promise<{
+    colunas?: string[];
+    editaveis?: string[];
+    linhas?: Array<{ linha: number; artista: string; valores: Record<string, any> }>;
+    erro?: string;
+  }> {
+    return call({ acao: "ponto_listar_pontos", tgId });
+  },
+  async salvarCelulaPontos(p: { tgId: string; linha: number; coluna: string; valor: any }): Promise<CommonResponse> {
+    invalidateCache();
+    return call({ acao: "ponto_salvar_celula", tgId: p.tgId, linha: p.linha, coluna: p.coluna, valor: p.valor });
+  },
+  async distribuirPontosAleatorio(tgId: string): Promise<CommonResponse> {
+    invalidateCache();
+    return call({ acao: "ponto_distribuir_aleatorio", tgId });
+  },
+  async listarPlaylistsJogador(tgId: string): Promise<{
+    colunas?: string[];
+    editaveis?: string[];
+    linhas?: Array<{ linha: number; artista: string; valores: Record<string, any> }>;
+    erro?: string;
+  }> {
+    return call({ acao: "ponto_listar_playlists", tgId });
+  },
+  async salvarCelulaPlaylist(p: { tgId: string; linha: number; coluna: string; valor: any }): Promise<CommonResponse> {
+    invalidateCache();
+    return call({ acao: "ponto_salvar_playlist_celula", tgId: p.tgId, linha: p.linha, coluna: p.coluna, valor: p.valor });
+  },
+  async distribuirPlaylistsAuto(tgId: string): Promise<CommonResponse & { resumo?: string }> {
+    invalidateCache();
+    return call({ acao: "ponto_distribuir_playlists_auto", tgId });
+  },
 };
 
 export interface ChartData {

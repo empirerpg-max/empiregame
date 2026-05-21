@@ -28,10 +28,13 @@ import { Route as AlbunsRouteImport } from './routes/albuns'
 import { Route as AcessoRapidoRouteImport } from './routes/acesso-rapido'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ToursIndexRouteImport } from './routes/tours.index'
+import { Route as PontoIndexRouteImport } from './routes/ponto.index'
 import { Route as PlaylistsIndexRouteImport } from './routes/playlists.index'
 import { Route as GamesIndexRouteImport } from './routes/games.index'
 import { Route as ArtistasIndexRouteImport } from './routes/artistas.index'
 import { Route as ToursNomeRouteImport } from './routes/tours.$nome'
+import { Route as PontoPlaylistsRouteImport } from './routes/ponto.playlists'
+import { Route as PontoDistribuirRouteImport } from './routes/ponto.distribuir'
 import { Route as PlaylistsNovaRouteImport } from './routes/playlists.nova'
 import { Route as PlaylistsIdRouteImport } from './routes/playlists.$id'
 import { Route as GamesQueridometroRouteImport } from './routes/games.queridometro'
@@ -43,6 +46,8 @@ import { Route as AcoesTourRouteImport } from './routes/acoes.tour'
 import { Route as AcoesCinemaRouteImport } from './routes/acoes.cinema'
 import { Route as AcoesAlbumRouteImport } from './routes/acoes.album'
 import { Route as ArtistasNomeIndexRouteImport } from './routes/artistas.$nome.index'
+import { Route as PontoPlaylistsPlanilhaRouteImport } from './routes/ponto.playlists.planilha'
+import { Route as PontoDistribuirPlanilhaRouteImport } from './routes/ponto.distribuir.planilha'
 import { Route as PlaylistsIdEditarRouteImport } from './routes/playlists.$id.editar'
 import { Route as ArtistasNomeProjetosRouteImport } from './routes/artistas.$nome.projetos'
 import { Route as ArtistasNomeBensRouteImport } from './routes/artistas.$nome.bens'
@@ -143,6 +148,11 @@ const ToursIndexRoute = ToursIndexRouteImport.update({
   path: '/tours/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PontoIndexRoute = PontoIndexRouteImport.update({
+  id: '/ponto/',
+  path: '/ponto/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlaylistsIndexRoute = PlaylistsIndexRouteImport.update({
   id: '/playlists/',
   path: '/playlists/',
@@ -161,6 +171,16 @@ const ArtistasIndexRoute = ArtistasIndexRouteImport.update({
 const ToursNomeRoute = ToursNomeRouteImport.update({
   id: '/tours/$nome',
   path: '/tours/$nome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PontoPlaylistsRoute = PontoPlaylistsRouteImport.update({
+  id: '/ponto/playlists',
+  path: '/ponto/playlists',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PontoDistribuirRoute = PontoDistribuirRouteImport.update({
+  id: '/ponto/distribuir',
+  path: '/ponto/distribuir',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlaylistsNovaRoute = PlaylistsNovaRouteImport.update({
@@ -218,6 +238,16 @@ const ArtistasNomeIndexRoute = ArtistasNomeIndexRouteImport.update({
   path: '/artistas/$nome/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PontoPlaylistsPlanilhaRoute = PontoPlaylistsPlanilhaRouteImport.update({
+  id: '/planilha',
+  path: '/planilha',
+  getParentRoute: () => PontoPlaylistsRoute,
+} as any)
+const PontoDistribuirPlanilhaRoute = PontoDistribuirPlanilhaRouteImport.update({
+  id: '/planilha',
+  path: '/planilha',
+  getParentRoute: () => PontoDistribuirRoute,
+} as any)
 const PlaylistsIdEditarRoute = PlaylistsIdEditarRouteImport.update({
   id: '/editar',
   path: '/editar',
@@ -268,15 +298,20 @@ export interface FileRoutesByFullPath {
   '/games/queridometro': typeof GamesQueridometroRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
+  '/ponto/distribuir': typeof PontoDistribuirRouteWithChildren
+  '/ponto/playlists': typeof PontoPlaylistsRouteWithChildren
   '/tours/$nome': typeof ToursNomeRoute
   '/artistas/': typeof ArtistasIndexRoute
   '/games/': typeof GamesIndexRoute
   '/playlists/': typeof PlaylistsIndexRoute
+  '/ponto/': typeof PontoIndexRoute
   '/tours/': typeof ToursIndexRoute
   '/album/$id/editar': typeof AlbumIdEditarRoute
   '/artistas/$nome/bens': typeof ArtistasNomeBensRoute
   '/artistas/$nome/projetos': typeof ArtistasNomeProjetosRoute
   '/playlists/$id/editar': typeof PlaylistsIdEditarRoute
+  '/ponto/distribuir/planilha': typeof PontoDistribuirPlanilhaRoute
+  '/ponto/playlists/planilha': typeof PontoPlaylistsPlanilhaRoute
   '/artistas/$nome/': typeof ArtistasNomeIndexRoute
 }
 export interface FileRoutesByTo {
@@ -308,15 +343,20 @@ export interface FileRoutesByTo {
   '/games/queridometro': typeof GamesQueridometroRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
+  '/ponto/distribuir': typeof PontoDistribuirRouteWithChildren
+  '/ponto/playlists': typeof PontoPlaylistsRouteWithChildren
   '/tours/$nome': typeof ToursNomeRoute
   '/artistas': typeof ArtistasIndexRoute
   '/games': typeof GamesIndexRoute
   '/playlists': typeof PlaylistsIndexRoute
+  '/ponto': typeof PontoIndexRoute
   '/tours': typeof ToursIndexRoute
   '/album/$id/editar': typeof AlbumIdEditarRoute
   '/artistas/$nome/bens': typeof ArtistasNomeBensRoute
   '/artistas/$nome/projetos': typeof ArtistasNomeProjetosRoute
   '/playlists/$id/editar': typeof PlaylistsIdEditarRoute
+  '/ponto/distribuir/planilha': typeof PontoDistribuirPlanilhaRoute
+  '/ponto/playlists/planilha': typeof PontoPlaylistsPlanilhaRoute
   '/artistas/$nome': typeof ArtistasNomeIndexRoute
 }
 export interface FileRoutesById {
@@ -349,15 +389,20 @@ export interface FileRoutesById {
   '/games/queridometro': typeof GamesQueridometroRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
+  '/ponto/distribuir': typeof PontoDistribuirRouteWithChildren
+  '/ponto/playlists': typeof PontoPlaylistsRouteWithChildren
   '/tours/$nome': typeof ToursNomeRoute
   '/artistas/': typeof ArtistasIndexRoute
   '/games/': typeof GamesIndexRoute
   '/playlists/': typeof PlaylistsIndexRoute
+  '/ponto/': typeof PontoIndexRoute
   '/tours/': typeof ToursIndexRoute
   '/album/$id/editar': typeof AlbumIdEditarRoute
   '/artistas/$nome/bens': typeof ArtistasNomeBensRoute
   '/artistas/$nome/projetos': typeof ArtistasNomeProjetosRoute
   '/playlists/$id/editar': typeof PlaylistsIdEditarRoute
+  '/ponto/distribuir/planilha': typeof PontoDistribuirPlanilhaRoute
+  '/ponto/playlists/planilha': typeof PontoPlaylistsPlanilhaRoute
   '/artistas/$nome/': typeof ArtistasNomeIndexRoute
 }
 export interface FileRouteTypes {
@@ -391,15 +436,20 @@ export interface FileRouteTypes {
     | '/games/queridometro'
     | '/playlists/$id'
     | '/playlists/nova'
+    | '/ponto/distribuir'
+    | '/ponto/playlists'
     | '/tours/$nome'
     | '/artistas/'
     | '/games/'
     | '/playlists/'
+    | '/ponto/'
     | '/tours/'
     | '/album/$id/editar'
     | '/artistas/$nome/bens'
     | '/artistas/$nome/projetos'
     | '/playlists/$id/editar'
+    | '/ponto/distribuir/planilha'
+    | '/ponto/playlists/planilha'
     | '/artistas/$nome/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -431,15 +481,20 @@ export interface FileRouteTypes {
     | '/games/queridometro'
     | '/playlists/$id'
     | '/playlists/nova'
+    | '/ponto/distribuir'
+    | '/ponto/playlists'
     | '/tours/$nome'
     | '/artistas'
     | '/games'
     | '/playlists'
+    | '/ponto'
     | '/tours'
     | '/album/$id/editar'
     | '/artistas/$nome/bens'
     | '/artistas/$nome/projetos'
     | '/playlists/$id/editar'
+    | '/ponto/distribuir/planilha'
+    | '/ponto/playlists/planilha'
     | '/artistas/$nome'
   id:
     | '__root__'
@@ -471,15 +526,20 @@ export interface FileRouteTypes {
     | '/games/queridometro'
     | '/playlists/$id'
     | '/playlists/nova'
+    | '/ponto/distribuir'
+    | '/ponto/playlists'
     | '/tours/$nome'
     | '/artistas/'
     | '/games/'
     | '/playlists/'
+    | '/ponto/'
     | '/tours/'
     | '/album/$id/editar'
     | '/artistas/$nome/bens'
     | '/artistas/$nome/projetos'
     | '/playlists/$id/editar'
+    | '/ponto/distribuir/planilha'
+    | '/ponto/playlists/planilha'
     | '/artistas/$nome/'
   fileRoutesById: FileRoutesById
 }
@@ -512,10 +572,13 @@ export interface RootRouteChildren {
   GamesQueridometroRoute: typeof GamesQueridometroRoute
   PlaylistsIdRoute: typeof PlaylistsIdRouteWithChildren
   PlaylistsNovaRoute: typeof PlaylistsNovaRoute
+  PontoDistribuirRoute: typeof PontoDistribuirRouteWithChildren
+  PontoPlaylistsRoute: typeof PontoPlaylistsRouteWithChildren
   ToursNomeRoute: typeof ToursNomeRoute
   ArtistasIndexRoute: typeof ArtistasIndexRoute
   GamesIndexRoute: typeof GamesIndexRoute
   PlaylistsIndexRoute: typeof PlaylistsIndexRoute
+  PontoIndexRoute: typeof PontoIndexRoute
   ToursIndexRoute: typeof ToursIndexRoute
   ArtistasNomeBensRoute: typeof ArtistasNomeBensRoute
   ArtistasNomeProjetosRoute: typeof ArtistasNomeProjetosRoute
@@ -657,6 +720,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ToursIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ponto/': {
+      id: '/ponto/'
+      path: '/ponto'
+      fullPath: '/ponto/'
+      preLoaderRoute: typeof PontoIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/playlists/': {
       id: '/playlists/'
       path: '/playlists'
@@ -683,6 +753,20 @@ declare module '@tanstack/react-router' {
       path: '/tours/$nome'
       fullPath: '/tours/$nome'
       preLoaderRoute: typeof ToursNomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ponto/playlists': {
+      id: '/ponto/playlists'
+      path: '/ponto/playlists'
+      fullPath: '/ponto/playlists'
+      preLoaderRoute: typeof PontoPlaylistsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ponto/distribuir': {
+      id: '/ponto/distribuir'
+      path: '/ponto/distribuir'
+      fullPath: '/ponto/distribuir'
+      preLoaderRoute: typeof PontoDistribuirRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/playlists/nova': {
@@ -762,6 +846,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ArtistasNomeIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ponto/playlists/planilha': {
+      id: '/ponto/playlists/planilha'
+      path: '/planilha'
+      fullPath: '/ponto/playlists/planilha'
+      preLoaderRoute: typeof PontoPlaylistsPlanilhaRouteImport
+      parentRoute: typeof PontoPlaylistsRoute
+    }
+    '/ponto/distribuir/planilha': {
+      id: '/ponto/distribuir/planilha'
+      path: '/planilha'
+      fullPath: '/ponto/distribuir/planilha'
+      preLoaderRoute: typeof PontoDistribuirPlanilhaRouteImport
+      parentRoute: typeof PontoDistribuirRoute
+    }
     '/playlists/$id/editar': {
       id: '/playlists/$id/editar'
       path: '/editar'
@@ -816,6 +914,30 @@ const PlaylistsIdRouteWithChildren = PlaylistsIdRoute._addFileChildren(
   PlaylistsIdRouteChildren,
 )
 
+interface PontoDistribuirRouteChildren {
+  PontoDistribuirPlanilhaRoute: typeof PontoDistribuirPlanilhaRoute
+}
+
+const PontoDistribuirRouteChildren: PontoDistribuirRouteChildren = {
+  PontoDistribuirPlanilhaRoute: PontoDistribuirPlanilhaRoute,
+}
+
+const PontoDistribuirRouteWithChildren = PontoDistribuirRoute._addFileChildren(
+  PontoDistribuirRouteChildren,
+)
+
+interface PontoPlaylistsRouteChildren {
+  PontoPlaylistsPlanilhaRoute: typeof PontoPlaylistsPlanilhaRoute
+}
+
+const PontoPlaylistsRouteChildren: PontoPlaylistsRouteChildren = {
+  PontoPlaylistsPlanilhaRoute: PontoPlaylistsPlanilhaRoute,
+}
+
+const PontoPlaylistsRouteWithChildren = PontoPlaylistsRoute._addFileChildren(
+  PontoPlaylistsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcessoRapidoRoute: AcessoRapidoRoute,
@@ -845,10 +967,13 @@ const rootRouteChildren: RootRouteChildren = {
   GamesQueridometroRoute: GamesQueridometroRoute,
   PlaylistsIdRoute: PlaylistsIdRouteWithChildren,
   PlaylistsNovaRoute: PlaylistsNovaRoute,
+  PontoDistribuirRoute: PontoDistribuirRouteWithChildren,
+  PontoPlaylistsRoute: PontoPlaylistsRouteWithChildren,
   ToursNomeRoute: ToursNomeRoute,
   ArtistasIndexRoute: ArtistasIndexRoute,
   GamesIndexRoute: GamesIndexRoute,
   PlaylistsIndexRoute: PlaylistsIndexRoute,
+  PontoIndexRoute: PontoIndexRoute,
   ToursIndexRoute: ToursIndexRoute,
   ArtistasNomeBensRoute: ArtistasNomeBensRoute,
   ArtistasNomeProjetosRoute: ArtistasNomeProjetosRoute,
@@ -857,13 +982,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

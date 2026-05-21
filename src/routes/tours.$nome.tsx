@@ -287,62 +287,107 @@ function TourDetails() {
 
           <div className="space-y-3">
             {Array.isArray(info.agenda) && info.agenda.length > 0 ? (
-              info.agenda.map((s: any, i: number) => {
-                const isPast = i < info.shows_realizados;
-                const isCurrent = i === info.shows_realizados;
-                return (
-                  <div
-                    key={i}
-                    className={`flex items-center gap-4 p-4 rounded-3xl border transition-all ${
-                      isCurrent
-                        ? "bg-primary/10 border-primary/30 ring-1 ring-primary/10"
-                        : isPast
-                          ? "bg-white/[0.01] border-white/5 opacity-50"
-                          : "bg-card border-white/5"
-                    }`}
-                  >
+              (() => {
+                const meses = ["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
+                let acumulado = 0;
+                return info.agenda.map((s: any, i: number) => {
+                  const isPast = i < info.shows_realizados;
+                  const isCurrent = i === info.shows_realizados;
+                  const vendidos = Number(s.vendidos) || 0;
+                  const capacidade = Number(s.capacidade) || 1;
+                  const pct = Math.min(100, Math.round((vendidos / capacidade) * 100));
+                  const fatur = Number(s.faturamento) || vendidos * 50;
+                  if (isPast || isCurrent) acumulado += fatur;
+                  const soldOut = pct >= 98;
+
+                  let dia = String(i + 1).padStart(2, "0");
+                  let mes = meses[new Date().getMonth()];
+                  if (s.data) {
+                    const d = new Date(s.data);
+                    if (!isNaN(d.getTime())) {
+                      dia = String(d.getDate()).padStart(2, "0");
+                      mes = meses[d.getMonth()];
+                    } else if (typeof s.data === "string" && s.data.includes("/")) {
+                      const [dStr, mStr] = s.data.split("/");
+                      dia = String(dStr).padStart(2, "0");
+                      const mIdx = Number(mStr) - 1;
+                      if (mIdx >= 0 && mIdx < 12) mes = meses[mIdx];
+                    }
+                  }
+
+                  return (
                     <div
-                      className={`size-14 rounded-2xl flex flex-col items-center justify-center shrink-0 border ${
+                      key={i}
+                      className={`p-4 rounded-3xl border transition-all ${
                         isCurrent
-                          ? "bg-primary border-primary text-primary-foreground"
-                          : "bg-white/5 border-white/5 text-muted-foreground"
+                          ? "bg-primary/10 border-primary/30 ring-1 ring-primary/10"
+                          : isPast
+                            ? "bg-white/[0.01] border-white/5 opacity-70"
+                            : "bg-card border-white/5"
                       }`}
                     >
-                      <span className="text-[11px] font-black uppercase -mb-0.5 opacity-60">MAI</span>
-                      <span className="text-xl font-black tracking-tighter leading-none">
-                        {s.data?.split("/")[0] || i + 1}
-                      </span>
-                    </div>
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`size-14 rounded-2xl flex flex-col items-center justify-center shrink-0 border ${
+                            isCurrent
+                              ? "bg-primary border-primary text-primary-foreground"
+                              : isPast
+                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
+                                : "bg-white/5 border-white/5 text-muted-foreground"
+                          }`}
+                        >
+                          <span className="text-[10px] font-black uppercase opacity-70">{mes}</span>
+                          <span className="text-lg font-black tracking-tighter leading-none">{dia}</span>
+                        </div>
 
-                    <div className="flex-1 min-w-0">
-                      <h5
-                        className={`font-black text-sm uppercase tracking-tight truncate ${isCurrent ? "text-white" : "text-foreground"}`}
-                      >
-                        {s.local || "Cidade do Império"}
-                      </h5>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1">
-                          <MapPin className="size-2.5 text-primary" /> The Empire {info.tipo}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <h5 className="font-black text-sm uppercase tracking-tight truncate">
+                            {s.local || "Cidade do Império"}
+                          </h5>
+                          <div className="flex items-center gap-2 mt-1 text-[10px] font-bold text-muted-foreground uppercase">
+                            <MapPin className="size-2.5 text-primary" /> The Empire {info.tipo}
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          {soldOut ? (
+                            <div className="px-2 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] font-black uppercase rounded-lg">
+                              SOLD OUT
+                            </div>
+                          ) : isPast ? (
+                            <CheckCircle2 className="size-5 text-emerald-500" />
+                          ) : (
+                            <span className="text-[10px] font-black text-muted-foreground/40 uppercase">
+                              Em vendas
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 space-y-1.5">
+                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          <span>{vendidos.toLocaleString("pt-BR")} / {capacidade.toLocaleString("pt-BR")} fãs</span>
+                          <span>{pct}%</span>
+                        </div>
+                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              soldOut ? "bg-amber-500" : "bg-gradient-to-r from-primary/60 to-primary"
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[10px] font-black uppercase tracking-wider pt-1">
+                          <span className="text-muted-foreground">Show: <span className="text-emerald-400">{fmtEC(fatur)}</span></span>
+                          {(isPast || isCurrent) && (
+                            <span className="text-muted-foreground">Acumulado: <span className="text-emerald-400">{fmtEC(acumulado)}</span></span>
+                          )}
+                        </div>
                       </div>
                     </div>
-
-                    <div className="text-right shrink-0">
-                      {isPast ? (
-                        <CheckCircle2 className="size-5 text-emerald-500" />
-                      ) : s.vendidos >= s.capacidade * 0.98 ? (
-                        <div className="px-2 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[11px] font-black uppercase rounded-lg">
-                          SOLD OUT
-                        </div>
-                      ) : (
-                        <div className="text-[11px] font-black text-muted-foreground/30 uppercase tracking-tighter">
-                          {Math.round((s.vendidos / s.capacidade) * 100)}% Vend.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
+                  );
+                });
+              })()
             ) : (
               <div className="py-20 text-center bg-card rounded-[2.5rem] border border-dashed border-white/5">
                 <Mic2 className="size-10 text-muted-foreground/10 mx-auto mb-3" />

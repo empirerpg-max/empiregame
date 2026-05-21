@@ -34,6 +34,7 @@ import {
   HelpCircle,
   Share2,
   Send,
+  Target,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
@@ -341,6 +342,7 @@ function BottomNav() {
     { to: "/", label: "Hub", icon: Home },
     { to: "/artistas", search: { filter: "mine" }, label: "Artistas", icon: Library },
     { to: "/charts", label: "Charts", icon: TrendingUp },
+    { to: "/ponto", label: "Ponto", icon: Target },
     { to: "/social", label: "Social", icon: Share2 },
     { to: "/ranking", label: "Rank", icon: Star },
   ];
@@ -370,8 +372,8 @@ function BottomNav() {
               {active && (
                 <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-primary" />
               )}
-              <Icon className="size-[20px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
-              <span className={`text-[9px] font-bold uppercase tracking-wider ${active ? "opacity-100" : "opacity-80"}`}>
+              <Icon className="size-[18px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+              <span className={`text-[9px] font-bold uppercase tracking-tight ${active ? "opacity-100" : "opacity-80"}`}>
                 {it.label}
               </span>
             </Link>
