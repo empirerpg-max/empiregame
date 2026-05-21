@@ -372,8 +372,8 @@ function BottomNav() {
               {active && (
                 <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-primary" />
               )}
-              <Icon className="size-[20px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
-              <span className={`text-[9px] font-bold uppercase tracking-wider ${active ? "opacity-100" : "opacity-80"}`}>
+              <Icon className="size-[18px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+              <span className={`text-[9px] font-bold uppercase tracking-tight ${active ? "opacity-100" : "opacity-80"}`}>
                 {it.label}
               </span>
             </Link>
