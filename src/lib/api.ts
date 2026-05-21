@@ -695,4 +695,4 @@ async salvarPlaylistEcoin(p: {
 }): Promise<CommonResponse & { saldo?: any; linha?: number }> {
   invalidateCache();
   return call({ acao: 'ponto_salvar_playlist_ecoin', ...p });
-}
+}}
