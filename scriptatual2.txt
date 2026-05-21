@@ -1,0 +1,1277 @@
+/**
+ * EMPIRE HUB - MOTOR BACKEND INTEGRAL (GOOGLE APPS SCRIPT)
+ * Versão: 12.9.0 "PONTO + ECOIN"
+ */
+
+const ID_PRINCIPAL = '1tKO6qZcR1dS3VdF3mLZoVCnenV6N54-gu8HI_ZJILas';
+const ID_CHARTS    = '1ThRhljmAS41JmVBPkPtYwe0JQHRx9Pih2PQAPT2ebyA';
+const ID_ALBUMS    = '1wUoCpi7_VSbXBhu7XGsqs2ZAJBwcPrx_TFmTS0OMyhY';
+
+function ss() { return SpreadsheetApp.openById(ID_PRINCIPAL); }
+function aba(nome) { return ss().getSheetByName(nome) || ss().insertSheet(nome); }
+function jsonOut(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function _mapActs(r) {
+  return {
+    nome: String(r[0]||'').trim(), foto: String(r[2]||r[1]||''),
+    status: String(r[2]||'Livre'), genero: String(r[10]||'').trim(),
+    pais: String(r[13]||'').trim(), fortuna: parseFloat(r[4])||0, prestigio: parseFloat(r[5])||0
+  };
+}
+
+function _mapArtistaJogador(r) {
+  return {
+    nome: String(r[0]||'').trim(), foto: driveUrl(String(r[1]||'').trim()),
+    status: String(r[2]||'Livre'), saldo: parseFloat(r[3])||0, descricao: '',
+    fortuna_real: parseFloat(r[5])||0, fortuna_bens: parseFloat(r[6])||0,
+    fortuna_total: parseFloat(r[7])||0, prestigio: parseFloat(r[8])||0,
+    fadiga: parseFloat(r[9])||0, telegram_id: String(r[10]||'').trim(),
+    genero: String(r[11]||'').trim(), gravadora: String(r[4]||'Independent').trim(),
+    tour_info: r[13] || null
+  };
+}
+
+function driveUrl(url) {
+  if (!url) return "";
+  const sUrl = String(url).trim();
+  if (sUrl.indexOf('drive.google.com') > -1) {
+    var id = "";
+    if (sUrl.indexOf('id=') > -1) { id = sUrl.split('id=')[1].split('&')[0]; }
+    else { var parts = sUrl.split('/'); for (var i=0;i<parts.length;i++){if(parts[i]==='d'){id=parts[i+1];break;}} }
+    if (id) return "https://lh3.googleusercontent.com/d/" + id;
+  }
+  return sUrl;
+}
+
+function doPost(e) {
+  try { return processAction(JSON.parse(e.postData.contents)); }
+  catch(err) { return jsonOut({ ok: false, erro: 'Erro no POST: ' + err.message }); }
+}
+
+function doGet(e) {
+  try { return processAction(e.parameter); }
+  catch(err) { return jsonOut({ ok: false, erro: 'Erro no GET: ' + err.message }); }
+}
+
+function processAction(p) {
+  const acao = p.acao || '';
+  const tgId = String(p.telegram_id || p.tgId || p.tgid || '').trim();
+  if (acao == "pontosalvarplaylistecoin") return jsonOut(acaopontosalvarplaylistecoinp(p));
+  if (acao == 'pontolistarmusicasecoin') return jsonOut(acaopontolistarmusicasecoinp(p));
+
+  if (acao === 'listar_acts')          return jsonOut(aba('ACTS').getDataRange().getValues().slice(1).map(_mapActs));
+  if (acao === 'listar_todos')         return jsonOut(aba('DB_ARTISTAS').getDataRange().getValues().slice(1).map(_mapArtistaJogador));
+  if (acao === 'artistas_sem_id')      return jsonOut(aba('DB_ARTISTAS').getDataRange().getValues().slice(1).filter(r => !String(r[10]).trim()).map(_mapArtistaJogador));
+  if (acao === 'meus_artistas')        return meusArtistas(tgId);
+  if (acao === 'radar')                return jsonOut(aba('RADAR_FEED').getDataRange().getValues().slice(1).slice(0,30).map(r=>({timestamp:r[0],nome:r[1],acao:r[2],foto:r[3]})));
+  if (acao === 'top_charts')           return jsonOut(getTopChartsAll());
+  if (acao === 'vincular_artista')     return jsonOut(vincularArtista(p.nome, tgId));
+  if (acao === 'criar_artista')        return jsonOut(criarArtista(p));
+  if (acao === 'ranking')              return jsonOut(aba('DB_ARTISTAS').getDataRange().getValues().slice(1).map(_mapArtistaJogador).sort((a,b)=>b.fortuna_total-a.fortuna_total).slice(0,50));
+  if (acao === 'charts')               return jsonOut(aba('DB_ARTISTAS').getDataRange().getValues().slice(1).map(_mapArtistaJogador).sort((a,b)=>b.prestigio-a.prestigio).slice(0,50));
+
+  if (acao === 'salvarPostSocial')       return jsonOut(salvarPostSocial(p.payload, tgId));
+  if (acao === 'listarPostsSocial')      return jsonOut(listarPostsSocial());
+  if (acao === 'listarPerfisSocial')     return jsonOut(listarPerfisSocial(tgId));
+  if (acao === 'salvarPerfilSocial')     return jsonOut(salvarPerfilSocial(p.payload, tgId));
+  if (acao === 'curtirPostSocial')       return jsonOut(curtirPostSocial(p.postId, tgId));
+  if (acao === 'comentarPostSocial')     return jsonOut(comentarPostSocial(p.payload, tgId));
+  if (acao === 'listarComentariosSocial') return jsonOut(listarComentariosSocial(p.postId));
+  if (acao === 'salvarNewsSocial')       return jsonOut(salvarNewsSocial(p.payload, tgId));
+  if (acao === 'listarNewsSocial')       return jsonOut(listarNewsSocial());
+
+  if (acao === 'listar_tours' || acao === 'tours') {
+    const ws = aba('CONTROLE_TOURS');
+    const data = ws.getDataRange().getValues().slice(1);
+    return jsonOut(data.map((r,i) => {
+      const agendaJson = String(r[8]||'[]');
+      const totalShows = parseFloat(r[3])||0;
+      const tick = _tour_tick_status_(agendaJson, totalShows);
+      if (tick) {
+        ws.getRange(i+2,5).setValue(tick.realizados);
+        ws.getRange(i+2,7).setValue(tick.acumulado);
+        ws.getRange(i+2,6).setValue(tick.proximoLocal);
+        ws.getRange(i+2,8).setValue(tick.status);
+      }
+      return {
+        artista: String(r[0]||'').trim(), titulo: String(r[1]||'').trim(), porte: String(r[2]||'').trim(),
+        total_shows: totalShows, show_atual: tick?tick.realizados:(parseFloat(r[4])||0),
+        local_atual: tick?tick.proximoLocal:String(r[5]||'').trim(),
+        arrecadacao_total: tick?tick.acumulado:(parseFloat(r[6])||0),
+        status: tick?tick.status:String(r[7]||'').trim(),
+        agenda: agendaJson, foto: String(r[9]||'').trim()
+      };
+    }));
+  }
+  if (acao === 'vincular_imagem_tour')   return jsonOut(handleVincularImagemTour(p));
+  if (acao === 'compra_unificada_tour')  return jsonOut(handleCompraTour(p));
+  if (acao === 'agenda_tour')            return jsonOut(getAgendaTour(p.nome));
+  if (acao === 'projetos')               return jsonOut(getProjetosArtista(p.nome));
+
+  if (acao === 'listar_market')              return jsonOut(listarMarket());
+  if (acao === 'listar_categorias_market')   return jsonOut(listarCategoriasMarket());
+  if (acao === 'comprar_market')         return jsonOut(comprarMarket(p));
+  if (acao === 'vender_bem')             return jsonOut(venderBem(p));
+  if (acao === 'meus_bens')             return jsonOut(aba('INVENTARIO').getDataRange().getValues().slice(1).filter(r=>String(r[1]).toLowerCase()===String(p.nome).toLowerCase()).map(r=>({id:r[0],categoria:r[2],item:r[3],valor:r[4],data:r[5]})));
+  if (acao === 'comprar_imovel')         return jsonOut(handleComprarImovel(p));
+
+  if (acao === 'lancar_album')           return jsonOut(handleLancarAlbum(p.payload));
+  if (acao === 'listar_albuns')          return jsonOut(listarAlbuns(p.nome));
+  if (acao === 'get_album')              return jsonOut(getAlbum(p.id));
+  if (acao === 'editar_album')           return jsonOut(handleEditarAlbum(p.payload));
+  if (acao === 'excluir_album')          return jsonOut(handleExcluirAlbum(p.id, tgId));
+  if (acao === 'listar_playlists')       return jsonOut(listarPlaylists(tgId));
+  if (acao === 'get_playlist')           return jsonOut(getPlaylist(p.id));
+  if (acao === 'salvar_playlist')        return jsonOut(handleSalvarPlaylist(p.payload, tgId));
+  if (acao === 'excluir_playlist')       return jsonOut(handleExcluirPlaylist(p.id, tgId));
+  if (acao === 'listar_faixas_catalogo') return jsonOut(listarFaixasCatalogo());
+  if (acao === 'buscar_musicas')         return jsonOut(buscarMusicas(p.q));
+
+  if (acao === 'compra_cinema')          return jsonOut(handleCompraCinema(p));
+  if (acao === 'viral')                  return jsonOut(handleViral(p.artista, p.musica));
+  if (acao === 'payola')                 return jsonOut(handlePayola(p));
+  if (acao === 'filantropia')            return jsonOut(handleFilantropia(p.artista, p.causa, p.valor));
+  if (acao === 'rescisao')               return jsonOut(handleRescisao(p));
+  if (acao === 'publicar_leilao')        return jsonOut(handlePublicarLeilao(p));
+  if (acao === 'lance_leilao')           return jsonOut(handleLanceLeilao(p));
+  if (acao === 'vender_composicao')      return jsonOut(handleVenderComposicao(p));
+  if (acao === 'comprar_item')           return jsonOut(handleComprarItemMural(p));
+  if (acao === 'mural')                  return jsonOut(aba('MURAL').getDataRange().getValues().slice(1).map(r=>({id:r[0],vendedor:r[1],titulo:r[2],teaser:r[3],preco:r[4]})));
+  if (acao === 'bet_apurar')             return jsonOut(bet_apurar());
+
+  if (acao === 'sync_game_coins')        return jsonOut(syncGameCoins(tgId, p.wager, p.won, p.gameContext||p.gameId, p.artistName));
+  if (acao === 'save_pet_state')         return jsonOut(handleSavePetState(tgId, p.payload));
+  if (acao === 'get_pet_state')          return jsonOut(handleGetPetState(tgId));
+
+  if (acao === 'queridometro_status')    return jsonOut(getQueridometroStatus(tgId));
+  if (acao === 'queridometro_votar')     return jsonOut(handleQueridometroVotar(tgId, p.de, p.para, p.emoji));
+
+  // PONTO
+  if (acao === 'ponto_get_jogador')               return jsonOut(acao_ponto_get_jogador_(p));
+  if (acao === 'ponto_listar_pontos')             return jsonOut(acao_ponto_listar_pontos_(p));
+  if (acao === 'ponto_salvar_celula')             return jsonOut(acao_ponto_salvar_celula_(p));
+  if (acao === 'ponto_distribuir_aleatorio')      return jsonOut(acao_ponto_distribuir_aleatorio_(p));
+  if (acao === 'ponto_listar_playlists')          return jsonOut(acao_ponto_listar_playlists_(p));
+  if (acao === 'ponto_salvar_playlist_celula')    return jsonOut(acao_ponto_salvar_playlist_celula_(p));
+  if (acao === 'ponto_distribuir_playlists_auto') return jsonOut(acao_ponto_distribuir_playlists_auto_(p));
+
+  // PONTO — ECOIN (novos)
+  if (acao === 'ponto_listar_musicas_edicao')     return jsonOut(acao_ponto_listar_musicas_edicao_(p));
+  if (acao === 'ponto_saldo_ecoin')               return jsonOut(acao_ponto_saldo_ecoin_(p));
+  if (acao === 'ponto_salvar_playlist_ecoin')     return jsonOut(acao_ponto_salvar_playlist_ecoin_(p));
+
+  return jsonOut({ erro: 'Ação Inexistente: ' + acao });
+}
+
+// ── EMPIRE MARKET ──
+function listarMarket() {
+  try {
+    const data = aba('CONFIG_SISTEMA').getDataRange().getValues().slice(1);
+    return data.filter(r=>String(r[0]||'').trim()&&String(r[1]||'').trim()).map(r=>({categoria:String(r[0]).trim().toUpperCase(),item:String(r[1]).trim(),preco:parseFloat(r[2])||0,efeito:String(r[3]||'').trim()}));
+  } catch(e) { return []; }
+}
+
+function listarCategoriasMarket() {
+  try {
+    const data = aba('CONFIG_SISTEMA').getDataRange().getValues().slice(1);
+    const seen = new Set(); const ordered = [];
+    data.forEach(r => { const cat=String(r[0]||'').trim().toUpperCase(); const item=String(r[1]||'').trim(); if(!cat||!item)return; if(!seen.has(cat)){seen.add(cat);ordered.push(cat);} });
+    return ordered;
+  } catch(e) { return []; }
+}
+
+// ── QUERIDÔMETRO ──
+function getQueridometroStatus(tgId) {
+  try {
+    if (!tgId || tgId === 'guest') return { ok: false, erro: 'Login necessário' };
+    const wsArt = aba('DB_ARTISTAS');
+    const todosArtistas = wsArt.getDataRange().getValues().slice(1).map(_mapArtistaJogador);
+    const meusArtistasLocal = todosArtistas.filter(a => a.telegram_id && a.telegram_id === String(tgId).trim());
+    if (meusArtistasLocal.length === 0) return { ok: false, erro: 'Você não possui artistas vinculados' };
+    const sem = getSemanaAno();
+    const wsLog = aba('QUERIDOMETRO_LOG');
+    const logs = wsLog.getDataRange().getValues().slice(1);
+    const votosSemana = logs.filter(l => l[6] === sem);
+    const rankingMap = {};
+    todosArtistas.forEach(a => { rankingMap[a.nome] = { nome: a.nome, img: a.foto, emojisRecebidos: [], totalVotos: 0 }; });
+    votosSemana.forEach(v => { const para=v[2]; const emoji=v[3]; if(rankingMap[para]){rankingMap[para].emojisRecebidos.push(emoji);rankingMap[para].totalVotos+=1;} });
+    const ranking = Object.values(rankingMap).sort((a,b)=>b.totalVotos-a.totalVotos);
+    const configEmojis = [
+      {emoji:'❤️',custo:30,label:'Amor'},{emoji:'🔥',custo:30,label:'Fogo'},{emoji:'⭐',custo:30,label:'Estrela'},
+      {emoji:'👑',custo:30,label:'Coroa'},{emoji:'💀',custo:30,label:'Caveira'},{emoji:'🤡',custo:30,label:'Palhaço'},
+      {emoji:'🐍',custo:30,label:'Cobra'},{emoji:'🥱',custo:30,label:'Tédio'}
+    ];
+    const reacoesPublicas = queridometro_mural_publico_(100);
+    return { ok: true, meusArtistas: meusArtistasLocal, artistasAlvos: todosArtistas, configEmojis, ranking, semana: sem, reacoesPublicas };
+  } catch(e) { return { ok: false, erro: e.message }; }
+}
+
+function queridometro_mural_publico_(limite) {
+  limite = limite || 100;
+  var ss = SpreadsheetApp.openById(ID_PRINCIPAL);
+  var log = ss.getSheetByName("QUERIDOMETRO_LOG");
+  if (!log || log.getLastRow() < 2) return [];
+  var artistasSh = ss.getSheetByName("DB_ARTISTAS");
+  var fotoPorNome = {};
+  if (artistasSh && artistasSh.getLastRow() > 1) {
+    var av = artistasSh.getRange(2,1,artistasSh.getLastRow()-1,3).getValues();
+    av.forEach(function(r){if(r[0])fotoPorNome[String(r[0]).trim()]=r[1]||r[2]||"";});
+  }
+  var semanaAtual = getSemanaAno();
+  var dados = log.getRange(2,1,log.getLastRow()-1,7).getValues();
+  var out = [];
+  for (var i=dados.length-1;i>=0&&out.length<limite;i--) {
+    var row=dados[i]; var data=row[0]; var semanaLog=row[6];
+    if(semanaLog!==semanaAtual)continue;
+    var para=row[2]; var emoji=row[3];
+    if(!para||!emoji)continue;
+    var dataFormatada=data;
+    if(data instanceof Date){dataFormatada=Utilities.formatDate(data,Session.getScriptTimeZone(),"dd/MM HH:mm");}
+    else if(typeof data==='string'&&data.length>0){try{dataFormatada=Utilities.formatDate(new Date(data),Session.getScriptTimeZone(),"dd/MM HH:mm");}catch(e){}}
+    out.push({para:String(para).trim(),fotoPara:fotoPorNome[String(para).trim()]||"",emoji:String(emoji),data:dataFormatada});
+  }
+  return out;
+}
+
+function handleQueridometroVotar(tgId, deNome, paraNome, emoji) {
+  try {
+    const sem = getSemanaAno();
+    const configEmojis = [
+      {emoji:'❤️',custo:30,pMin:5,pMax:10},{emoji:'🔥',custo:30,pMin:10,pMax:15},
+      {emoji:'⭐',custo:30,pMin:15,pMax:20},{emoji:'👑',custo:30,pMin:18,pMax:20},
+      {emoji:'💀',custo:30,pMin:-20,pMax:-15},{emoji:'🤡',custo:30,pMin:-15,pMax:-10},
+      {emoji:'🐍',custo:30,pMin:-10,pMax:-5},{emoji:'🥱',custo:30,pMin:-2,pMax:2}
+    ];
+    const config = configEmojis.find(e => e.emoji === emoji);
+    if (!config) return { ok: false, erro: 'Emoji inválido' };
+    const wsArt = aba('DB_ARTISTAS');
+    const data = wsArt.getDataRange().getValues();
+    let rowDe=-1, rowPara=-1;
+    for (let i=1;i<data.length;i++){if(data[i][0]===deNome)rowDe=i+1;if(data[i][0]===paraNome)rowPara=i+1;}
+    if(rowDe===-1||rowPara===-1)return{ok:false,erro:'Erro ao localizar artistas'};
+    const saldoDe=parseFloat(data[rowDe-1][3])||0;
+    if(saldoDe<config.custo)return{ok:false,erro:'O artista '+deNome+' não tem saldo suficiente'};
+    const prestigeGain=Math.floor(Math.random()*(config.pMax-config.pMin+1))+config.pMin;
+    const prestigioPara=parseFloat(data[rowPara-1][8])||0;
+    wsArt.getRange(rowDe,4).setValue(saldoDe-config.custo);
+    wsArt.getRange(rowPara,9).setValue(prestigioPara+prestigeGain);
+    const wsLog=aba('QUERIDOMETRO_LOG');
+    if(wsLog.getLastRow()===0)wsLog.appendRow(['DATA','DE','PARA','EMOJI','CUSTO_PAGO','PRESTIGIO_GERADO','SEMANA']);
+    wsLog.appendRow([new Date().toISOString(),deNome,paraNome,emoji,config.custo,prestigeGain,sem]);
+    syncGameCoins(tgId,config.custo,0,'Queridômetro (Enviou '+emoji+' para '+paraNome+')',deNome);
+    return { ok: true, msg: 'Ação enviada!' };
+  } catch(e) { return { ok: false, erro: e.message }; }
+}
+
+// ── TOURS ──
+function _lerVenuesDoSistema() {
+  try {
+    const wsVenues = aba('SISTEMA_TOURS');
+    const data = wsVenues.getDataRange().getValues();
+    if (data.length <= 1) return [];
+    const venues = [];
+    for (let i=1;i<data.length;i++){
+      const row=data[i];
+      if(!row[0]||!row[2])continue;
+      venues.push({continente:String(row[0]||'').trim(),cidade:String(row[1]||'').trim(),local:String(row[2]||'').trim(),categoria:String(row[3]||'').trim(),capacidade:Number(row[4])||0,precoIngresso:Number(row[5])||0,repasseIngresso:Number(row[6])||0,lucroMaximo:Number(row[7])||0});
+    }
+    return venues;
+  } catch(e) { Logger.log('Erro ao ler SISTEMA_TOURS: '+e.message); return []; }
+}
+
+function _obterVenuesPorContinente(continente) {
+  return _lerVenuesDoSistema().filter(v=>v.continente.toLowerCase()===String(continente).toLowerCase());
+}
+
+function gerarAgenda(dataInicio, qtdShows, continente, tipoTourne) {
+  const agenda = [];
+  const startDate = new Date(dataInicio);
+  const gapCfg = {'Indie':{gapMin:7,gapMax:12},'Arena':{gapMin:10,gapMax:18},'Estádio':{gapMin:14,gapMax:25}};
+  const gc = gapCfg[tipoTourne] || gapCfg['Arena'];
+  let venues = _obterVenuesPorContinente(continente);
+  if (venues.length === 0) venues = _lerVenuesDoSistema();
+  if (venues.length === 0) { Logger.log('CRÍTICO: Nenhum venue encontrado em SISTEMA_TOURS'); return []; }
+  let dAtual = new Date(startDate);
+  for (let i=0;i<Math.min(qtdShows,venues.length*2);i++){
+    if(i>0){const gap=gc.gapMin+Math.floor(Math.random()*(gc.gapMax-gc.gapMin));dAtual=new Date(dAtual.getTime()+gap*86400000);}
+    const dia=String(dAtual.getDate()).padStart(2,'0');
+    const mes=String(dAtual.getMonth()+1).padStart(2,'0');
+    const ano=dAtual.getFullYear();
+    const venueIdx=i%venues.length;
+    const venue=venues[venueIdx];
+    const percentualOcupacao=60+Math.floor(Math.random()*38);
+    const vendidos=Math.floor((venue.capacidade*percentualOcupacao)/100);
+    agenda.push({numero:i+1,data:`${dia}/${mes}/${ano}`,local:venue.local,cidade:venue.cidade,categoria:venue.categoria,capacidade:venue.capacidade,vendidos,precoIngresso:venue.precoIngresso,repasseIngresso:venue.repasseIngresso,lucroMaximo:venue.lucroMaximo,receita:vendidos*venue.repasseIngresso,status:'Agendado'});
+  }
+  return agenda;
+}
+
+function handleCompraTour(p) {
+  const precos = {'Indie':1000000,'Arena':5000000,'Estádio':15000000};
+  const custo = precos[p.tipo] || 1000000;
+  const ws = aba('DB_ARTISTAS');
+  const data = ws.getDataRange().getValues();
+  let artIdx = -1;
+  for(let i=1;i<data.length;i++){if(String(data[i][0]).toLowerCase()===p.nome.toLowerCase()){artIdx=i+1;break;}}
+  if(artIdx===-1)return{ok:false,erro:'Artista não encontrado'};
+  const saldo=parseFloat(data[artIdx-1][3])||0;
+  if(saldo<custo)return{ok:false,erro:'Saldo insuficiente'};
+  ws.getRange(artIdx,4).setValue(saldo-custo);
+  ws.getRange(artIdx,3).setValue('Turnê: '+p.titulo);
+  const agenda=gerarAgenda(p.dataInicio,p.qtd,p.continente,p.tipo);
+  if(agenda.length===0)return{ok:false,erro:'Nenhum venue encontrado. Adicione venues em SISTEMA_TOURS para o continente: '+p.continente};
+  const totalEsperado=agenda.reduce((sum,s)=>sum+s.lucroMaximo,0);
+  const tourInfo={titulo:p.titulo,tipo:p.tipo,qtd:p.qtd,continente:p.continente,shows_realizados:0,status:"Em andamento",totalEsperado,agenda};
+  ws.getRange(artIdx,14).setValue(JSON.stringify(tourInfo));
+  aba('CONTROLE_TOURS').appendRow([p.nome,p.titulo,p.tipo,p.qtd,0,p.continente||'Mundial',0,'Em andamento',JSON.stringify(agenda),'']);
+  aba('RADAR_FEED').insertRowBefore(2).getRange(2,1,1,4).setValues([[new Date().toISOString(),p.nome,'Iniciou a turnê '+p.titulo,data[artIdx-1][1]]]);
+  return{ok:true,message:'Turnê criada com '+agenda.length+' shows! Receita esperada: '+totalEsperado};
+}
+
+function meusArtistas(tgId) {
+  if(!tgId||tgId==='guest')return jsonOut([]);
+  const ws=aba('DB_ARTISTAS');
+  const data=ws.getDataRange().getValues().slice(1);
+  const cleanId=String(tgId).trim();
+  return jsonOut(data.filter(r=>r[10]&&String(r[10]).trim()===cleanId).map(_mapArtistaJogador));
+}
+
+function syncGameCoins(tgId, wager, won, context, artistName) {
+  try {
+    const ws=aba('DB_ARTISTAS');
+    const data=ws.getDataRange().getValues();
+    const cleanId=String(tgId).trim();
+    let userRow=-1;
+    for(let i=1;i<data.length;i++){
+      const rowId=String(data[i][10]).trim();
+      if(rowId===cleanId){if(!artistName||data[i][0]===artistName){userRow=i+1;break;}}
+    }
+    if(userRow===-1)return{ok:false,erro:'Artista não encontrado'};
+    const saldoAnterior=parseFloat(data[userRow-1][3])||0;
+    const vWager=parseFloat(wager||0);
+    const vWon=parseFloat(won||0);
+    if(vWager>saldoAnterior)return{ok:false,erro:'Saldo insuficiente'};
+    const novoSaldo=saldoAnterior-vWager+vWon;
+    ws.getRange(userRow,4).setValue(novoSaldo);
+    const wsLog=aba('LOG_ECONOMIA');
+    if(wsLog.getLastRow()===0)wsLog.appendRow(['DATA','TELEGRAM_ID','ARTISTA','TIPO','VALOR','CONTEXTO','SALDO_RESULTANTE']);
+    if(vWager>0)wsLog.appendRow([new Date().toISOString(),cleanId,data[userRow-1][0],'DÉBITO',vWager,context||'Jogo',novoSaldo+vWon]);
+    if(vWon>0)wsLog.appendRow([new Date().toISOString(),cleanId,data[userRow-1][0],'CRÉDITO',vWon,context||'Jogo',novoSaldo]);
+    return{ok:true,novoSaldo};
+  } catch(e){return{ok:false,erro:e.message};}
+}
+
+function handleSavePetState(tgId, payload) {
+  try {
+    if(!tgId||tgId==='guest')return{ok:false};
+    const ws=aba('PET_STATE');
+    if(ws.getLastRow()===0)ws.appendRow(['telegram_id','payload','last_update']);
+    const data=ws.getDataRange().getValues();
+    let rowIdx=-1;
+    for(let i=1;i<data.length;i++){if(String(data[i][0]).trim()===String(tgId).trim()){rowIdx=i+1;break;}}
+    const row=[tgId,payload,Date.now()];
+    if(rowIdx!==-1)ws.getRange(rowIdx,1,1,3).setValues([row]);
+    else ws.appendRow(row);
+    return{ok:true};
+  } catch(e){return{ok:false,erro:e.message};}
+}
+
+function handleGetPetState(tgId) {
+  try {
+    if(!tgId||tgId==='guest')return{ok:false};
+    const ws=aba('PET_STATE');
+    const data=ws.getDataRange().getValues();
+    for(let i=1;i<data.length;i++){if(String(data[i][0]).trim()===String(tgId).trim())return{ok:true,payload:data[i][1],lastUpdate:data[i][2]};}
+    return{ok:true,payload:null};
+  } catch(e){return{ok:false,erro:e.message};}
+}
+
+function getSemanaAno() {
+  const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+4-(d.getDay()||7));
+  const yearStart=new Date(d.getFullYear(),0,1);
+  const weekNo=Math.ceil((((d-yearStart)/86400000)+1)/7);
+  return d.getFullYear()+'-W'+weekNo;
+}
+
+function getProjetosArtista(nome) {
+  const projects=[];
+  try {
+    const data=aba('CINEMA').getDataRange().getValues().slice(1);
+    data.filter(r=>String(r[1]).toLowerCase()===nome.toLowerCase()).forEach(r=>{projects.push({tipo:'Cinema',titulo:r[2],status:r[3]||'Lançado',data:r[4],detalhe:r[5]});});
+  } catch(e) {}
+  return projects;
+}
+
+function getAgendaTour(nome) {
+  const ws=aba('CONTROLE_TOURS'); const data=ws.getDataRange().getValues();
+  for(let i=1;i<data.length;i++){
+    if(String(data[i][0]).toLowerCase()===nome.toLowerCase()){
+      const agendaJson=String(data[i][8]||'[]');
+      const totalShows=Number(data[i][3])||0;
+      const tick=_tour_tick_status_(agendaJson,totalShows);
+      if(tick){ws.getRange(i+1,5).setValue(tick.realizados);ws.getRange(i+1,7).setValue(tick.acumulado);ws.getRange(i+1,6).setValue(tick.proximoLocal);ws.getRange(i+1,8).setValue(tick.status);}
+      let agenda; try{agenda=JSON.parse(agendaJson);}catch(e){agenda=[];}
+      return{agenda:Array.isArray(agenda)?agenda:[],tick:tick||{}};
+    }
+  }
+  return{agenda:[],tick:{}};
+}
+
+function _tour_tick_status_(agendaJson, totalShows) {
+  let agenda; try{agenda=JSON.parse(agendaJson);}catch(e){return null;}
+  if(!Array.isArray(agenda))return null;
+  const hoje=new Date(); hoje.setHours(0,0,0,0);
+  let realizados=0,acumulado=0,proximoLocal='';
+  for(const s of agenda){
+    let d;
+    if(s.data){if(s.data.indexOf('/')>-1){const pts=s.data.split('/');d=new Date(Number(pts[2]),Number(pts[1])-1,Number(pts[0]));}else{d=new Date(s.data);}}
+    if(d&&!isNaN(d.getTime())&&d<=hoje){realizados++;acumulado+=Number(s.receita||s.faturamento)||0;}
+    else if(d&&!isNaN(d.getTime())&&d>hoje&&!proximoLocal){proximoLocal=(s.cidade||s.local||'');}
+  }
+  const status=realizados>=totalShows?'Concluída':(realizados>0?'Em andamento':'Agendada');
+  return{realizados,acumulado,proximoLocal,status};
+}
+
+function handleComprarImovel(p) {
+  const custos={'Casa':500000,'Apartamento':1000000,'Mansao':5000000,'Penthouse':10000000};
+  const custo=custos[p.tipo]||500000;
+  const ws=aba('DB_ARTISTAS'); const data=ws.getDataRange().getValues(); let artIdx=-1;
+  for(let i=1;i<data.length;i++){if(String(data[i][0]).toLowerCase()===p.nome.toLowerCase()){artIdx=i+1;break;}}
+  if(artIdx===-1)return{ok:false,erro:'Não encontrado'};
+  const saldo=parseFloat(data[artIdx-1][3])||0;
+  if(saldo<custo)return{ok:false,erro:'Saldo insuficiente'};
+  ws.getRange(artIdx,4).setValue(saldo-custo);
+  aba('INVENTARIO').appendRow([Utilities.getUuid().slice(0,5),p.nome,'IMOVEL',p.tipo+' em '+p.cidade,custo,new Date().toISOString()]);
+  return{ok:true};
+}
+
+function handleViral(artista, musica) {
+  aba('RADAR_FEED').insertRowBefore(2).getRange(2,1,1,4).setValues([[new Date().toISOString(),artista,'A música "'+musica+'" está viralizando no TikTok!','']]);
+  return{ok:true};
+}
+
+function handleFilantropia(artista, causa, valor) {
+  const v=parseFloat(valor);
+  const ws=aba('DB_ARTISTAS'); const data=ws.getDataRange().getValues(); let artIdx=-1;
+  for(let i=1;i<data.length;i++){if(String(data[i][0]).toLowerCase()===artista.toLowerCase()){artIdx=i+1;break;}}
+  if(artIdx===-1)return{ok:false};
+  const saldo=parseFloat(data[artIdx-1][3])||0;
+  if(saldo<v)return{ok:false,erro:'Saldo insuficiente'};
+  ws.getRange(artIdx,4).setValue(saldo-v);
+  aba('RADAR_FEED').insertRowBefore(2).getRange(2,1,1,4).setValues([[new Date().toISOString(),artista,'Doou $'+v+' para a causa: '+causa,'']]);
+  return{ok:true};
+}
+
+function buscarMusicas(q) {
+  try {
+    const wsA=aba('Albuns'); const albunsData=wsA.getDataRange().getValues().slice(1); const capas={};
+    albunsData.forEach(r=>{capas[String(r[0])]=String(r[6]||'');});
+    const ws=aba('AlbumFaixas'); const data=ws.getDataRange().getValues();
+    if(data.length<=1)return[];
+    return data.slice(1).filter(r=>String(r[2]).toLowerCase().includes(String(q||'').toLowerCase())||String(r[3]).toLowerCase().includes(String(q||'').toLowerCase())).map(r=>{const albumId=String(r[0]);return{album_id:albumId,numero:r[1],titulo:r[2],artistas:r[3],drive_url:r[5],capa_url:capas[albumId]||""};});
+  } catch(e){return[];}
+}
+
+function getTopChartsAll() {
+  const configs=[
+    {id:ID_CHARTS,sheet:'BILLBOARD HOT 100',key:'billboard_hot_100',map:{m:3,a:7,f:15,url:'https://empirerpg-max.github.io/central/charts.html?tab=BILLBOARD%20HOT%20100'}},
+    {id:ID_CHARTS,sheet:'SPOTIFY',key:'spotify',map:{m:3,a:7,f:15,url:'https://empirerpg-max.github.io/central/charts.html?tab=SPOTIFY'}},
+    {id:ID_CHARTS,sheet:'APPLE MUSIC',key:'apple_music',map:{m:3,a:7,f:15,url:'https://empirerpg-max.github.io/central/charts.html?tab=APPLE%20MUSIC'}},
+    {id:ID_CHARTS,sheet:'YOUTUBE',key:'youtube',map:{m:3,a:7,f:15,url:'https://empirerpg-max.github.io/central/charts.html?tab=YOUTUBE'}},
+    {id:ID_CHARTS,sheet:'DIGITAL SALES',key:'digital_sales',map:{m:3,a:7,f:15,url:'https://empirerpg-max.github.io/central/charts.html?tab=DIGITAL%20SALES'}},
+    {id:ID_ALBUMS,sheet:'DADOS ÁLBUNS',key:'billboard_200',map:{m:3,a:12,f:9,url:'https://empirerpg-max.github.io/central/charts.html?tab=DADOS%20%C3%81LBUNS'}}
+  ];
+  const r={};
+  configs.forEach(c=>{
+    try{
+      const sh=SpreadsheetApp.openById(c.id).getSheetByName(c.sheet);
+      const data=sh.getDataRange().getValues();
+      let topRow=null;
+      for(let i=data.length-1;i>=1;i--){if(parseInt(data[i][2])===1){topRow=data[i];break;}}
+      if(topRow)r[c.key]={musica:String(topRow[c.map.m]||'').trim(),artista:String(topRow[c.map.a]||'').trim(),foto:String(topRow[c.map.f]||'').trim(),data:String(topRow[1]),url:c.url};
+      else r[c.key]={musica:"",artista:"",foto:"",data:"",url:c.url};
+    }catch(e){}
+  });
+  return r;
+}
+
+// ── PLAYLISTS & ÁLBUNS ──
+function handleSalvarPlaylist(payload, tgId) {
+  try {
+    const p=JSON.parse(payload); const ws=aba('Playlists');
+    const id=p.id||('PL-'+Utilities.getUuid().slice(0,5));
+    const tracksJson=JSON.stringify(p.tracks||[]);
+    let rowIdx=-1; const currentData=ws.getDataRange().getValues();
+    if(p.id){for(let i=1;i<currentData.length;i++){if(String(currentData[i][0])===String(p.id)){rowIdx=i+1;break;}}}
+    const rowData=[id,p.titulo,p.descricao||"",p.capa_url||"",p.owner,tgId||p.telegram_id||"",tracksJson,p.data||new Date().toISOString()];
+    if(rowIdx!==-1){if(tgId&&tgId!=="810141686"&&String(currentData[rowIdx-1][5])!==String(tgId))return{ok:false,erro:'Não autorizado'};ws.getRange(rowIdx,1,1,8).setValues([rowData]);}
+    else ws.appendRow(rowData);
+    return{ok:true,id};
+  }catch(e){return{ok:false,erro:e.message};}
+}
+
+function listarPlaylists(tgId) {
+  const data=aba('Playlists').getDataRange().getValues().slice(1);
+  return data.filter(r=>!tgId||tgId==="810141686"||String(r[5])===String(tgId)).map(r=>({id:r[0],titulo:r[1],descricao:r[2],capa_url:r[3],owner:r[4],telegram_id:r[5],tracks:JSON.parse(r[6]||'[]'),data:r[7]}));
+}
+
+function getPlaylist(id) {
+  const data=aba('Playlists').getDataRange().getValues();
+  const row=data.find(r=>String(r[0])===String(id));
+  if(!row)return null;
+  return{id:row[0],titulo:row[1],descricao:row[2],capa_url:row[3],owner:row[4],telegram_id:row[5],tracks:JSON.parse(row[6]||'[]'),data:row[7]};
+}
+
+function handleExcluirPlaylist(id, tgId) {
+  const ws=aba('Playlists'); const data=ws.getDataRange().getValues();
+  for(let i=1;i<data.length;i++){if(String(data[i][0])===String(id)){if(tgId&&tgId!=="810141686"&&String(data[i][5])!==String(tgId))return{ok:false,erro:'Não autorizado'};ws.deleteRow(i+1);return{ok:true};}}
+  return{ok:false,erro:'Não encontrada'};
+}
+
+function listarFaixasCatalogo() {
+  try {
+    const wsA=aba('Albuns'); const albunsData=wsA.getDataRange().getValues().slice(1); const capas={};
+    albunsData.forEach(r=>{capas[String(r[0])]=String(r[6]||'');});
+    const ws=aba('AlbumFaixas'); const data=ws.getDataRange().getValues();
+    if(data.length<=1)return[];
+    return data.slice(1).map(r=>{const albumId=String(r[0]||'');return{album_id:albumId,numero:parseFloat(r[1])||0,titulo:String(r[2]||'').trim(),artistas:String(r[3]||'').trim(),duracao:String(r[4]||'').trim(),drive_url:String(r[5]||'').trim(),letra:String(r[6]||'').trim(),capa_url:capas[albumId]||""};}).filter(f=>f.titulo);
+  }catch(e){return[];}
+}
+
+function handleLancarAlbum(payload) {
+  try {
+    const p=JSON.parse(payload);
+    const id=p.id||('ALB-'+Utilities.getUuid().slice(0,5));
+    aba("Albuns").appendRow([id,p.artista,p.titulo,p.genero,p.data,p.descricao,p.capa_url,p.telegram_id||'',p.contracapa_url||'']);
+    if(p.faixas&&Array.isArray(p.faixas)){const wsF=aba("AlbumFaixas");p.faixas.forEach(f=>wsF.appendRow([id,f.numero,f.titulo,f.artistas,f.duracao||'',f.drive_url,f.letra||'']));}
+    return{ok:true,id};
+  }catch(e){return{ok:false,erro:e.message};}
+}
+
+function listarAlbuns(nome) {
+  return aba('Albuns').getDataRange().getValues().slice(1).filter(r=>!nome||String(r[1]).toLowerCase()===nome.toLowerCase()).map(r=>({id:r[0],artista:r[1],titulo:r[2],genero:r[3],data:r[4],descricao:r[5],capa_url:r[6],telegram_id:r[7]}));
+}
+
+function getAlbum(id) {
+  const albuns=aba('Albuns').getDataRange().getValues();
+  const row=albuns.find(r=>String(r[0])===String(id));
+  if(!row)return null;
+  const faixas=aba('AlbumFaixas').getDataRange().getValues().slice(1).filter(f=>String(f[0])===String(id)).map(f=>({numero:f[1],titulo:f[2],artistas:f[3],duracao:f[4],drive_url:f[5],letra:f[6]}));
+  return{id:row[0],artista:row[1],titulo:row[2],genero:row[3],data:row[4],descricao:row[5],capa_url:row[6],telegram_id:row[7],faixas};
+}
+
+function handleEditarAlbum(payload) {
+  try {
+    const p=JSON.parse(payload); const ws=aba('Albuns'); const data=ws.getDataRange().getValues(); let rowIdx=-1;
+    for(let i=1;i<data.length;i++){if(String(data[i][0])===String(p.id)){rowIdx=i+1;break;}}
+    if(rowIdx===-1)return{ok:false,erro:'Álbum não encontrado'};
+    ws.getRange(rowIdx,1,1,9).setValues([[p.id,p.artista,p.titulo,p.genero,p.data,p.descricao,p.capa_url,p.telegram_id,p.contracapa_url||'']]);
+    const wsF=aba('AlbumFaixas'); const dataF=wsF.getDataRange().getValues();
+    for(let i=dataF.length-1;i>=1;i--){if(String(dataF[i][0])===String(p.id))wsF.deleteRow(i+1);}
+    if(p.faixas&&Array.isArray(p.faixas)){p.faixas.forEach(f=>wsF.appendRow([p.id,f.numero,f.titulo,f.artistas,f.duracao||'',f.drive_url,f.letra||'']));}
+    return{ok:true};
+  }catch(e){return{ok:false,erro:e.message};}
+}
+
+function handleExcluirAlbum(id, tgId) {
+  const ws=aba('Albuns'); const data=ws.getDataRange().getValues();
+  for(let i=1;i<data.length;i++){
+    if(String(data[i][0])===String(id)){
+      if(tgId&&tgId!=="810141686"&&String(data[i][7])!==String(tgId))return{ok:false,erro:'Não autorizado'};
+      ws.deleteRow(i+1);
+      const wsF=aba('AlbumFaixas'); const dataF=wsF.getDataRange().getValues();
+      for(let j=dataF.length-1;j>=1;j--){if(String(dataF[j][0])===String(id))wsF.deleteRow(j+1);}
+      return{ok:true};
+    }
+  }
+  return{ok:false,erro:'Álbum não encontrado'};
+}
+
+function handleVincularImagemTour(p) {
+  const ws=aba('CONTROLE_TOURS'); const data=ws.getDataRange().getValues();
+  for(let i=1;i<data.length;i++){if(String(data[i][0]).toLowerCase()===p.nome.toLowerCase()){ws.getRange(i+1,10).setValue(p.url);return{ok:true};}}
+  return{ok:false};
+}
+
+function handleCompraCinema(p) {
+  const ws=aba('DB_ARTISTAS'); const data=ws.getDataRange().getValues(); let artIdx=-1;
+  for(let i=1;i<data.length;i++){if(String(data[i][0]).toLowerCase()===p.nome.toLowerCase()){artIdx=i+1;break;}}
+  if(artIdx===-1)return{ok:false};
+  const saldo=parseFloat(data[artIdx-1][3])||0;
+  if(saldo<2000000)return{ok:false,erro:'Saldo insuficiente'};
+  ws.getRange(artIdx,4).setValue(saldo-2000000);
+  aba('CINEMA').appendRow([Utilities.getUuid().slice(0,5),p.nome,p.titulo,'Em andamento',new Date().toISOString(),p.genero||'Filme']);
+  return{ok:true};
+}
+
+function handlePayola(p) {
+  const v=parseFloat(p.valor);
+  const ws=aba('DB_ARTISTAS'); const data=ws.getDataRange().getValues(); let artIdx=-1;
+  for(let i=1;i<data.length;i++){if(String(data[i][0]).toLowerCase()===p.nome.toLowerCase()){artIdx=i+1;break;}}
+  if(artIdx===-1)return{ok:false};
+  const saldo=parseFloat(data[artIdx-1][3])||0;
+  if(saldo<v)return{ok:false,erro:'Saldo insuficiente'};
+  ws.getRange(artIdx,4).setValue(saldo-v);
+  return{ok:true};
+}
+
+function handleRescisao(p) {
+  const ws=aba('DB_ARTISTAS'); const data=ws.getDataRange().getValues(); let artIdx=-1;
+  for(let i=1;i<data.length;i++){if(String(data[i][0]).toLowerCase()===p.nome.toLowerCase()){artIdx=i+1;break;}}
+  if(artIdx===-1)return{ok:false};
+  ws.getRange(artIdx,13).setValue(p.destino||'Independent');
+  return{ok:true};
+}
+
+function handlePublicarLeilao(p) {
+  aba('LEILAO').appendRow([Utilities.getUuid().slice(0,5),p.nome,p.descricao,p.lanceMini,new Date().toISOString(),'Ativo']);
+  return{ok:true};
+}
+
+function handleLanceLeilao(p) { return{ok:true}; }
+
+function handleVenderComposicao(p) {
+  aba('MURAL').appendRow([Utilities.getUuid().slice(0,5),p.nome,p.titulo,'Composição autorada',p.preco]);
+  return{ok:true};
+}
+
+function handleComprarItemMural(p) { return{ok:true}; }
+
+function comprarMarket(p) {
+  const v=parseFloat(p.preco||0);
+  const ws=aba('DB_ARTISTAS'); const data=ws.getDataRange().getValues(); let artIdx=-1;
+  for(let i=1;i<data.length;i++){if(String(data[i][0]).toLowerCase()===p.nome.toLowerCase()){artIdx=i+1;break;}}
+  if(artIdx===-1)return{ok:false};
+  const saldo=parseFloat(data[artIdx-1][3])||0;
+  if(saldo<v)return{ok:false,erro:'Saldo insuficiente'};
+  ws.getRange(artIdx,4).setValue(saldo-v);
+  aba('INVENTARIO').appendRow([Utilities.getUuid().slice(0,5),p.nome,p.categoria||'MARKET',p.item,v,new Date().toISOString()]);
+  return{ok:true};
+}
+
+function venderBem(p) {
+  const ws=aba('INVENTARIO'); const data=ws.getDataRange().getValues();
+  for(let i=1;i<data.length;i++){if(String(data[i][0])===String(p.id)){ws.deleteRow(i+1);return{ok:true};}}
+  return{ok:false};
+}
+
+function vincularArtista(nome, tgId) {
+  const ws=aba('DB_ARTISTAS'); const data=ws.getDataRange().getValues(); const cleanId=String(tgId||'').trim();
+  for(let i=1;i<data.length;i++){if(String(data[i][0]).toLowerCase()===nome.toLowerCase()){ws.getRange(i+1,11).setValue(cleanId);return{ok:true};}}
+  return{ok:false,erro:'Não encontrado'};
+}
+
+function criarArtista(p) {
+  try {
+    const nome=String(p.nome||'').trim(); const foto=String(p.foto||'').trim();
+    const gravadora=String(p.gravadora||'Independent').trim(); const tgId=String(p.telegram_id||'').trim();
+    if(!nome)return{ok:false,erro:'Nome obrigatório'}; if(!tgId)return{ok:false,erro:'Telegram ID obrigatório'};
+    const ws=aba('DB_ARTISTAS'); const data=ws.getDataRange().getValues();
+    for(let i=1;i<data.length;i++){if(String(data[i][0]).trim().toLowerCase()===nome.toLowerCase())return{ok:false,erro:'Já existe um artista com esse nome'};}
+    const novaLinha=new Array(14).fill('');
+    novaLinha[0]=nome; novaLinha[1]=foto; novaLinha[2]='Livre'; novaLinha[3]=0; novaLinha[4]=gravadora; novaLinha[10]=tgId;
+    ws.appendRow(novaLinha);
+    return{ok:true,msg:'Artista criado e vinculado!'};
+  }catch(e){return{ok:false,erro:e.message};}
+}
+
+// ── SOCIAIS ──
+function salvarPostSocial(payload, tgId) {
+  try {
+    const p=JSON.parse(payload); const ws=aba('SOCIAL_POSTS');
+    if(ws.getLastRow()===0){ws.appendRow(['id','tipo','subtipo','autor','texto','media_url','analytics','data','telegram_id']);}
+    const id='POST-'+Utilities.getUuid().slice(0,8);
+    ws.appendRow([id,p.tipo,p.subtipo||"",String(p.autor||"").trim(),p.texto||"",driveUrl(String(p.media_url||"").trim()),JSON.stringify(p.analytics||{likes:0,comments:0,shares:0}),new Date().toISOString(),String(tgId||p.telegram_id||"").trim()]);
+    return{ok:true,id};
+  }catch(e){return{ok:false,erro:e.message};}
+}
+
+function listarPostsSocial() {
+  try {
+    const ws=aba('SOCIAL_POSTS'); const data=ws.getDataRange().getValues();
+    if(data.length<=1)return[];
+    const perfis=listarPerfisSocial();
+    return data.slice(1).reverse().map(r=>{
+      const autor=String(r[3]||"").trim(); const rede=String(r[1]||"").trim();
+      const perfil=perfis.find(p=>String(p.artista).trim().toLowerCase()===autor.toLowerCase()&&String(p.rede).trim().toLowerCase()===rede.toLowerCase());
+      return{id:r[0],tipo:rede,subtipo:r[2],autor,handle:perfil?perfil.handle:`@${autor.replace(/\s+/g,'').toLowerCase()}`,avatar:perfil?perfil.avatar_url:"",texto:r[4],media_url:String(r[5]||"").trim(),analytics:JSON.parse(r[6]||'{}'),data:r[7],telegram_id:String(r[8]||'').trim()};
+    });
+  }catch(e){return[];}
+}
+
+function salvarPerfilSocial(payload, tgId) {
+  try {
+    const p=JSON.parse(payload); const ws=aba('SOCIAL_PERFIS');
+    if(ws.getLastRow()===0){ws.appendRow(['artista','rede','handle','bio','avatar_url','telegram_id','seguidores','seguindo']);}
+    const data=ws.getDataRange().getValues(); let rowIdx=-1;
+    const targetArt=String(p.artista||"").trim().toLowerCase();
+    const targetRede=String(p.rede||"").trim().toLowerCase();
+    for(let i=1;i<data.length;i++){if(String(data[i][0]).trim().toLowerCase()===targetArt&&String(data[i][1]).trim().toLowerCase()===targetRede){rowIdx=i+1;break;}}
+    const imgUrl=p.avatar_url||p.foto||p.avatar||"";
+    const rowData=[String(p.artista||"").trim(),String(p.rede||"").trim(),String(p.handle||"").trim(),p.bio||"",driveUrl(String(imgUrl).trim()),String(tgId||p.telegram_id||'').trim(),p.seguidores||0,p.seguindo||0];
+    if(rowIdx!==-1)ws.getRange(rowIdx,1,1,8).setValues([rowData]);
+    else ws.appendRow(rowData);
+    return{ok:true};
+  }catch(e){return{ok:false,erro:e.message};}
+}
+
+function listarPerfisSocial(tgId) {
+  const ws=aba('SOCIAL_PERFIS'); const data=ws.getDataRange().getValues();
+  if(data.length<=1)return[];
+  const searchId=tgId?String(tgId).trim():null;
+  return data.slice(1).filter(r=>!searchId||String(r[5]).trim()===searchId).map(r=>({artista:r[0],rede:r[1],handle:r[2],bio:r[3],avatar_url:r[4],telegram_id:String(r[5]||'').trim(),seguidores:parseFloat(r[6])||0,seguindo:parseFloat(r[7])||0}));
+}
+
+function curtirPostSocial(postId, tgId) {
+  try {
+    const ws=aba('SOCIAL_POSTS'); const data=ws.getDataRange().getValues();
+    for(let i=1;i<data.length;i++){if(data[i][0]===postId){const analytics=JSON.parse(data[i][6]||'{}');analytics.likes=(analytics.likes||0)+1;ws.getRange(i+1,7).setValue(JSON.stringify(analytics));return{ok:true,likes:analytics.likes};}}
+    return{ok:false};
+  }catch(e){return{ok:false,erro:e.message};}
+}
+
+function comentarPostSocial(payload, tgId) {
+  try {
+    const p=JSON.parse(payload);
+    aba('SOCIAL_COMMENTS').appendRow([p.postId,p.autor,p.texto,new Date().toISOString(),tgId]);
+    const wsPost=aba('SOCIAL_POSTS'); const postData=wsPost.getDataRange().getValues();
+    for(let i=1;i<postData.length;i++){if(postData[i][0]===p.postId){const analytics=JSON.parse(postData[i][6]||'{}');analytics.comments=(analytics.comments||0)+1;wsPost.getRange(i+1,7).setValue(JSON.stringify(analytics));break;}}
+    return{ok:true};
+  }catch(e){return{ok:false,erro:e.message};}
+}
+
+function listarComentariosSocial(postId) {
+  try {
+    const ws=aba('SOCIAL_COMMENTS'); const data=ws.getDataRange().getValues();
+    if(data.length<=1)return[];
+    const perfis=listarPerfisSocial();
+    return data.slice(1).filter(r=>r[0]===postId).map(r=>{const autor=String(r[1]||"").trim();const perfil=perfis.find(p=>String(p.artista).trim().toLowerCase()===autor.toLowerCase());return{autor,texto:r[2],data:r[3],avatar:perfil?perfil.avatar_url:""};});
+  }catch(e){return[];}
+}
+
+function salvarNewsSocial(payload, tgId) {
+  try {
+    const p=JSON.parse(payload); const id='NEWS-'+Utilities.getUuid().slice(0,8);
+    aba('SOCIAL_NEWS').appendRow([id,p.titulo,p.conteudo,driveUrl(p.imagem),p.autor,new Date().toISOString(),tgId]);
+    return{ok:true,id};
+  }catch(e){return{ok:false,erro:e.message};}
+}
+
+function listarNewsSocial() {
+  try {
+    return aba('SOCIAL_NEWS').getDataRange().getValues().slice(1).reverse().map(r=>({id:r[0],titulo:r[1],conteudo:r[2],imagem:r[3],autor:r[4],data:r[5],telegram_id:r[6]}));
+  }catch(e){return[];}
+}
+
+// ── BETS ──
+const ID_BET_CHARTS = '1ThRhljmAS41JmVBPkPtYwe0JQHRx9Pih2PQAPT2ebyA';
+
+function bet_apurar() {
+  const chart=SpreadsheetApp.openById(ID_BET_CHARTS).getSheetByName('BILLBOARD HOT 100');
+  const dados=chart.getRange(2,2,chart.getLastRow()-1,3).getValues();
+  const datas=dados.map(r=>r[0]).filter(Boolean);
+  const dataAlvo=datas[datas.length-1];
+  const dataAlvoStr=Utilities.formatDate(new Date(dataAlvo),'GMT-3','yyyy-MM-dd');
+  const ranking={};
+  dados.forEach(r=>{const dStr=Utilities.formatDate(new Date(r[0]),'GMT-3','yyyy-MM-dd');if(dStr===dataAlvoStr)ranking[String(r[2]).trim().toLowerCase()]=Number(r[1]);});
+  const bets=SpreadsheetApp.openById(ID_PRINCIPAL).getSheetByName('BETS');
+  const head=bets.getRange(1,1,1,bets.getLastColumn()).getValues()[0];
+  const cArtista=head.indexOf('artista'); const cValor=head.indexOf('valor'); const cPrev=head.indexOf('previsoes');
+  const cStatus=head.indexOf('status'); const cRetorno=head.indexOf('retorno');
+  const linhas=bets.getRange(2,1,bets.getLastRow()-1,bets.getLastColumn()).getValues();
+  linhas.forEach((row,i)=>{
+    if(String(row[cStatus]).toLowerCase()!=='pendente')return;
+    let prev; try{prev=JSON.parse(row[cPrev]);}catch(e){return;}
+    const valor=Number(row[cValor]);
+    let acertosExatos=0,acertosProximos=0,total=Object.keys(prev).length;
+    Object.keys(prev).forEach(m=>{const real=ranking[m.trim().toLowerCase()];if(!real)return;const dif=Math.abs(real-Number(prev[m]));if(dif===0)acertosExatos++;else if(dif<=3)acertosProximos++;});
+    const score=(acertosExatos+acertosProximos)/total;
+    let mult=0;
+    if(acertosExatos===total)mult=5;else if(score>=0.5)mult=2;
+    const retorno=Math.floor(valor*mult);
+    bets.getRange(i+2,cStatus+1).setValue(retorno>0?'GANHOU':'PERDEU');
+    bets.getRange(i+2,cRetorno+1).setValue(retorno);
+    if(retorno>0)_creditarSaldoArtista(row[cArtista],retorno);
+  });
+}
+
+function _creditarSaldoArtista(nome, valor) {
+  const sh=SpreadsheetApp.openById(ID_PRINCIPAL).getSheetByName('DB_ARTISTAS');
+  const data=sh.getRange(1,1,sh.getLastRow(),4).getValues();
+  for(let i=1;i<data.length;i++){if(String(data[i][0]).trim()===String(nome).trim()){const atual=Number(data[i][3]||0);sh.getRange(i+1,4).setValue(atual+valor);return;}}
+}
+
+function painel_processar() {
+  const sh=SpreadsheetApp.openById(ID_PRINCIPAL).getSheetByName('ACOES_PAINEL');
+  const data=sh.getRange(2,1,sh.getLastRow()-1,5).getValues();
+  data.forEach((row,i)=>{
+    const[executar,acao,paramsJson,resultado]=row;
+    if(executar!==true||resultado)return;
+    let p; try{p=JSON.parse(paramsJson||'{}');}catch(e){p={};}
+    let r;
+    try{switch(acao){case'viral':r=handleViral(p.artista,p.musica);break;case'filantropia':r=handleFilantropia(p.artista,p.causa,p.valor);break;case'creditar':_creditarSaldoArtista(p.nome,Number(p.valor));r={ok:true};break;default:r={erro:'acao desconhecida'};}}
+    catch(e){r={erro:String(e)};}
+    sh.getRange(i+2,4).setValue(JSON.stringify(r));
+    sh.getRange(i+2,5).setValue(new Date());
+    sh.getRange(i+2,1).setValue(false);
+  });
+}
+
+// ===============================================================
+// PONTO — Integração com planilha externa de jogadores
+// ===============================================================
+
+const PONTO_SS_ID = '1wNbtP78MrtrOc2Jb1ejXcHVjqndR2Vm4-3EIVqa8aOg';
+const HIST_SS_ID  = '1zMqnIntj5vAlU4_V_s0xf5suPTtFcl61W9DC9j8LFfM';
+function _ponto_ss_() { return SpreadsheetApp.openById(PONTO_SS_ID); }
+function _hist_ss_()  { return SpreadsheetApp.openById(HIST_SS_ID); }
+
+const TOP_PLAYLISTS_RESTRITAS = {
+  spotify: "TOPO TODAY'S TOP HITS",
+  apple:   "TOPO TODAY'S HITS"
+};
+
+function _garantir_aba_historico_() {
+  const ss=_hist_ss_(); let sh=ss.getSheetByName('HISTORICO_TOP_PLAYLISTS');
+  if(!sh){sh=ss.insertSheet('HISTORICO_TOP_PLAYLISTS');sh.getRange(1,1,1,5).setValues([['ARTISTA','MUSICA','PLATAFORMA','PLAYLIST','DATA']]);}
+  return sh;
+}
+
+function _playlist_top_ja_usada_(artista, musica, plataforma) {
+  const sh=_garantir_aba_historico_(); const vals=sh.getDataRange().getValues();
+  for(let i=1;i<vals.length;i++){
+    if(String(vals[i][0]).trim().toLowerCase()===String(artista).trim().toLowerCase()&&String(vals[i][1]).trim().toLowerCase()===String(musica).trim().toLowerCase()&&String(vals[i][2]).trim().toLowerCase()===String(plataforma).trim().toLowerCase())return true;
+  }
+  return false;
+}
+
+function _registrar_top_playlist_(artista, musica, plataforma, playlist) {
+  _garantir_aba_historico_().appendRow([artista,musica,plataforma,playlist,new Date().toISOString()]);
+}
+
+function _jogador_por_tg_(tgId) {
+  const ss=_hist_ss_(); const sh=ss.getSheetByName('Jogadores');
+  if(!sh){const abas=ss.getSheets().map(s=>s.getName()).join(', ');throw new Error('Aba "Jogadores" não encontrada em HIST_SS_ID. Abas disponíveis: '+abas);}
+  const vals=sh.getDataRange().getValues();
+  const artistas=[]; let nomeOff='';
+  for(let i=1;i<vals.length;i++){
+    if(String(vals[i][1]).trim()===String(tgId).trim()){artistas.push(String(vals[i][0]).trim());if(!nomeOff)nomeOff=String(vals[i][2]).trim();}
+  }
+  return{nomeOff,artistas};
+}
+
+function acao_ponto_get_jogador_(p) {
+  const tgId=String(p.tgId||p.telegram_id||p.tgid||'').trim();
+  const r=_jogador_por_tg_(tgId);
+  if(!r.nomeOff)return{erro:'Telegram ID não encontrado na aba Jogadores.'};
+  return r;
+}
+
+const PONTOS_EDITAVEIS = ['BILLBOARD HOT 100','SPOTIFY','APPLE MUSIC','YOUTUBE','DIGITAL SALES','BILLBOARD 200'];
+
+function acao_ponto_listar_pontos_(p) {
+  const tgId=String(p.tgId||p.telegram_id||p.tgid||'').trim();
+  const r=_jogador_por_tg_(tgId);
+  if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
+  const sh=_ponto_ss_().getSheetByName('PONTOS');
+  const vals=sh.getDataRange().getValues();
+  // Header fixo na linha 3 (índice 2)
+  const headerRowIdx=2;
+  const header=vals[headerRowIdx].map(String);
+  const linhas=[];
+  for(let i=headerRowIdx+1;i<vals.length;i++){
+    const artista=String(vals[i][2]).trim();
+    if(r.artistas.indexOf(artista)===-1)continue;
+    const valores={};
+    for(let c=0;c<header.length;c++)valores[header[c]]=vals[i][c];
+    linhas.push({linha:i+1,artista,valores});
+  }
+  return{colunas:header,editaveis:PONTOS_EDITAVEIS,linhas};
+}
+
+function acao_ponto_salvar_playlist_ecoin_(p) {
+  try {
+    const tgId = String(p.tgId || '').trim();
+    const r = _jogador_por_tg_(tgId);
+    if (!r || !r.artistas.length) return { erro: 'Sem artistas vinculados.' };
+
+    const sh = SpreadsheetApp.openById(PONTO_SS_ID)
+      .getSheetByName('ECOIN + INVESTIMENTO');
+    if (!sh) return { erro: 'Aba ECOIN + INVESTIMENTO nao encontrada.' };
+
+    const colMap = { 'SPOTIFY': 7, 'APPLE MUSIC': 9, 'YOUTUBE': 11 };
+    const colIdx = colMap[String(p.plataforma || '').trim().toUpperCase()];
+    if (!colIdx) return { erro: 'Plataforma invalida: ' + p.plataforma };
+
+    const vals = sh.getDataRange().getValues();
+    let linhaAlvo = -1;
+    for (let i = 2; i < vals.length; i++) {
+      if (String(vals[i][colIdx - 1] || '').trim() === '') {
+        linhaAlvo = i + 1;
+        break;
+      }
+    }
+    if (linhaAlvo < 0) linhaAlvo = vals.length + 1;
+
+    const musicaAtual = String(sh.getRange(linhaAlvo, 3).getValue() || '').trim();
+    if (musicaAtual === '') sh.getRange(linhaAlvo, 3).setValue(p.musica);
+
+    sh.getRange(linhaAlvo, colIdx).setValue(p.playlist);
+    const saldo = sh.getRange(linhaAlvo, 4).getValue();
+
+    return { ok: true, message: '✅ ' + p.plataforma + ' salva!', linha: linhaAlvo, saldo };
+  } catch(e) {
+    return { erro: e.message };
+  }
+}
+
+function acao_ponto_distribuir_aleatorio_(p) {
+  const tgId=String(p.tgId||p.telegram_id||p.tgid||'').trim();
+  const r=_jogador_por_tg_(tgId);
+  if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
+  const sh=_ponto_ss_().getSheetByName('PONTOS');
+  if(!sh)return{erro:'Aba PONTOS não encontrada.'};
+  const vals=sh.getDataRange().getValues();
+  const header=vals[2].map(String);
+
+  // Valores em decimal pois as células são formatadas como % na planilha
+  // (ex: 0.10 = 10,00%)
+  const OPCOES = {
+    'BILLBOARD HOT 100': [0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10],
+    'SPOTIFY':           [0.30,0.40,0.50,0.60,0.70],
+    'APPLE MUSIC':       [0.30,0.40,0.50,0.60,0.70],
+    'YOUTUBE':           [0.10,0.15,0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60,0.65,0.70],
+    'DIGITAL SALES':     [0.10,0.15,0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60,0.65,0.70],
+    'BILLBOARD 200':     [0.10,0.15,0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60,0.65,0.70]
+  };
+
+  const colMap = {};
+  Object.keys(OPCOES).forEach(nome => {
+    const idx = header.indexOf(nome);
+    if(idx >= 0) colMap[nome] = idx;
+  });
+
+  const MAX_TENTATIVAS = 200;
+
+  for(let i=3; i<vals.length; i++){
+    const artista = String(vals[i][2]).trim();
+    if(r.artistas.indexOf(artista) === -1) continue;
+
+    // Zerar colunas
+    Object.values(colMap).forEach(c => sh.getRange(i+1, c+1).setValue(''));
+
+    let distribuicao = null;
+
+    // Tenta até encontrar uma combinação que some exatamente 100
+    for(let t=0; t<MAX_TENTATIVAS; t++){
+      const resultado = {};
+      let restante = 1.0; // 1.0 = 100%
+      const colunas = Object.keys(colMap).sort(() => Math.random() - 0.5);
+
+      for(const nome of colunas){
+        if(restante <= 0) break;
+        const opcoes = OPCOES[nome].filter(v => v <= restante);
+        if(!opcoes.length) continue;
+        // Pular aleatoriamente, mas nunca se for a única forma de completar
+        const eUltima = colunas.slice(colunas.indexOf(nome)+1).every(n => !OPCOES[n].some(v => v <= restante));
+        if(!eUltima && Math.random() < 0.5) continue;
+        const valor = opcoes[Math.floor(Math.random() * opcoes.length)];
+        resultado[nome] = valor;
+        restante -= valor;
+      }
+
+      if(Math.round(restante * 10000) === 0){
+        distribuicao = resultado;
+        break;
+      }
+    }
+
+    if(!distribuicao){
+      // Fallback garantido: 0.10 + 0.30 + 0.60 = 1.0
+      distribuicao = {'BILLBOARD HOT 100':0.10,'SPOTIFY':0.30,'YOUTUBE':0.60};
+    }
+
+    // Gravar na planilha
+    Object.keys(distribuicao).forEach(nome => {
+      if(colMap[nome] !== undefined){
+        sh.getRange(i+1, colMap[nome]+1).setValue(distribuicao[nome]);
+      }
+    });
+  }
+  return{ok:true, message:'✅ Pontos distribuídos aleatoriamente.'};
+}
+
+const PLAYLISTS_EDITAVEIS_IDX = [2,4,6,8,10];
+
+const PLAYLISTS_SPOTIFY = [
+  "TOPO TODAY'S TOP HITS","TODAY'S TOP HITS","POP UP","ROCK SOLID","RAP CAVIAR",
+  "MINT","ARE & BE","VIVA LATINO","ALTERNATIVE PARTY","JUST HITS",
+  "NEW SONGS","WORKOUT TIME","RANDOM SONGS","THIS IS... (ARTIST)"
+];
+const PLAYLISTS_APPLE = [
+  "TOPO TODAY'S HITS","TODAY'S HITS","A-LIST POP","hyped<D>","RAPLIFE",
+  "danceXL","R&B NOW","!DalePlay!","ALT CTRL","JUST HITS",
+  "JUST NEW","GYM SONGS","RANDOM SONGS","JUST... (ARTIST)"
+];
+const PLAYLISTS_YOUTUBE = [
+  'Ad 5 segundos (Comercial/Vídeo)','Ad 30 segundos (Comercial/Vídeo)','Ad (Vídeo Completo)'
+];
+
+const PLAYLIST_MAX_SPOTIFY  = 370000;
+const PLAYLIST_MAX_APPLE    = 350000;
+const PLAYLIST_MAX_YOUTUBE  = 250000;
+
+function acao_ponto_listar_playlists_(p) {
+  const tgId=String(p.tgId||p.telegram_id||p.tgid||'').trim();
+  const r=_jogador_por_tg_(tgId);
+  if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
+  const sh=_ponto_ss_().getSheetByName('ECOIN + INVESTIMENTO');
+  const vals=sh.getDataRange().getValues();
+  const header=vals[0].map(String);
+  const editaveis=PLAYLISTS_EDITAVEIS_IDX.map(i=>header[i]).filter(Boolean);
+  const linhas=[];
+  for(let i=1;i<vals.length;i++){
+    const artista=String(vals[i][2]).trim();
+    if(!artista||r.artistas.indexOf(artista)===-1)continue;
+    const valores={};
+    for(let c=0;c<header.length;c++)valores[header[c]]=vals[i][c];
+    linhas.push({linha:i+1,artista,valores});
+  }
+  return{colunas:header,editaveis,linhas,listas:{spotify:PLAYLISTS_SPOTIFY,apple:PLAYLISTS_APPLE,youtube:PLAYLISTS_YOUTUBE}};
+}
+
+function acao_ponto_salvar_playlist_celula_(p) {
+  const tgId=String(p.tgId||p.telegram_id||p.tgid||'').trim();
+  const r=_jogador_por_tg_(tgId);
+  if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
+  const sh=_ponto_ss_().getSheetByName('ECOIN + INVESTIMENTO');
+  if(!sh)return{erro:'Aba ECOIN + INVESTIMENTO não encontrada.'};
+  // Header na linha 2 (índice 1)
+  const header=sh.getRange(2,1,1,sh.getLastColumn()).getValues()[0].map(String);
+  const colIdx=header.indexOf(p.coluna);
+  if(colIdx<0)return{erro:'Coluna inválida: '+p.coluna};
+  // Coluna do artista pelo nome
+  const colArtista=header.indexOf('NOME DO ARTISTA');
+  const colArtIdx=colArtista>=0?colArtista:0;
+  // Linha real dos dados começa na linha 3 (índice 2 na planilha = linha 3)
+  const rowArtist=String(sh.getRange(p.linha,colArtIdx+1).getValue()).trim();
+  if(r.artistas.indexOf(rowArtist)===-1)return{erro:'Linha não pertence a você.'};
+  // Validar se já está preenchido por outro jogador
+  const cellAtual=sh.getRange(p.linha,colIdx+1).getValue();
+  if(cellAtual!==''&&cellAtual!==null&&cellAtual!==0){
+    // Verifica se o artista da linha é do jogador atual — se sim, pode sobrescrever
+    if(r.artistas.indexOf(rowArtist)===-1)return{erro:'Já preenchido por outro jogador.'};
+  }
+  // Validar playlist restrita de topo
+  const valorNormalizado=String(p.valor).trim();
+  let plataformaRestrita=null;
+  if(valorNormalizado===TOP_PLAYLISTS_RESTRITAS.spotify)plataformaRestrita='SPOTIFY';
+  if(valorNormalizado===TOP_PLAYLISTS_RESTRITAS.apple)plataformaRestrita='APPLE';
+  if(plataformaRestrita){
+    const colMusica=header.indexOf('NOME DA MÚSICA');
+    const musica=colMusica>=0?String(sh.getRange(p.linha,colMusica+1).getValue()).trim():'';
+    const artista=rowArtist;
+    if(!musica)return{erro:'Música não identificada na linha para validar restrição.'};
+    if(_playlist_top_ja_usada_(artista,musica,plataformaRestrita))return{ok:false,erro:'A música "'+musica+'" já utilizou a playlist topo de '+plataformaRestrita+'.'};
+    _registrar_top_playlist_(artista,musica,plataformaRestrita,valorNormalizado);
+  }
+  sh.getRange(p.linha,colIdx+1).setValue(p.valor);
+  return{ok:true,message:'✅ Salvo.'};
+}
+
+function acao_ponto_distribuir_playlists_auto_(p) {
+  const tgId=String(p.tgId||p.telegram_id||p.tgid||'').trim();
+  const r=_jogador_por_tg_(tgId);
+  if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
+  const sh=_ponto_ss_().getSheetByName('ECOIN + INVESTIMENTO');
+  const vals=sh.getDataRange().getValues();
+  const header=vals[0].map(String);
+  const buckets={};
+  for(let i=1;i<vals.length;i++){
+    const artista=String(vals[i][2]).trim();
+    if(!artista||r.artistas.indexOf(artista)===-1)continue;
+    if(!buckets[artista])buckets[artista]=[];
+    buckets[artista].push({linha:i+1,row:vals[i]});
+  }
+  let totalAplicadas=0;
+  const maxPorCol={6:PLAYLIST_MAX_SPOTIFY,8:PLAYLIST_MAX_APPLE,10:PLAYLIST_MAX_YOUTUBE};
+  const topPorCol={6:PLAYLISTS_SPOTIFY[0],8:PLAYLISTS_APPLE[0],10:PLAYLISTS_YOUTUBE[PLAYLISTS_YOUTUBE.length-1]};
+  Object.keys(buckets).forEach(artista=>{
+    const linhas=buckets[artista];
+    const saldoRow=linhas[linhas.length-1];
+    let saldo=Number(saldoRow.row[3])||0;
+    const maisRecente=linhas[linhas.length-1];
+    const musicaMaisRecente=String(maisRecente.row[4]||'').trim();
+    [6,8,10].forEach(colIdx=>{
+      const custo=maxPorCol[colIdx]; const playlistNome=topPorCol[colIdx];
+      const plataformaMap={6:'SPOTIFY',8:'APPLE',10:null}; const plat=plataformaMap[colIdx];
+      if(plat&&musicaMaisRecente){if(_playlist_top_ja_usada_(artista,musicaMaisRecente,plat))return;}
+      if(saldo>=custo){sh.getRange(maisRecente.linha,colIdx+1).setValue(playlistNome);saldo-=custo;totalAplicadas++;if(plat)_registrar_top_playlist_(artista,musicaMaisRecente,plat,playlistNome);}
+    });
+    for(let j=linhas.length-2;j>=0;j--){
+      const item=linhas[j];
+      [6,8,10].forEach(colIdx=>{
+        const atual=item.row[colIdx];
+        if(atual!==''&&atual!==null)return;
+        const custo=maxPorCol[colIdx];
+        if(saldo>=custo){sh.getRange(item.linha,colIdx+1).setValue(topPorCol[colIdx]);saldo-=custo;totalAplicadas++;}
+      });
+    }
+  });
+  return{ok:true,message:`✅ ${totalAplicadas} playlists distribuídas.`};
+}
+
+// ── PONTO — ECOIN (novos endpoints) ──
+
+// ID da planilha EDIÇÃO CHARTS / ECOIN + INVESTIMENTO
+const EDICAO_SS_ID = '1GPajSCp1TkJDEDOGZIrXxgZuNuRs7545buFntyDlpL8';
+
+function acao_ponto_listar_musicas_edicao_(p) {
+  const tgId=String(p.tgId||'').trim();
+  const r=_jogador_por_tg_(tgId);
+  if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
+  const ss=SpreadsheetApp.openById(EDICAO_SS_ID);
+  const sh=ss.getSheetByName('EDIÇÃO CHARTS');
+  if(!sh)return{erro:'Aba EDIÇÃO CHARTS não encontrada.'};
+  const vals=sh.getDataRange().getValues();
+  const musicas=[];
+  for(let i=1;i<vals.length;i++){
+    const musica=String(vals[i][1]||'').trim();
+    const actPrincipal=String(vals[i][7]||'').trim();
+    if(!musica)continue;
+    const pertence=r.artistas.some(a=>actPrincipal.toLowerCase().includes(a.toLowerCase())||musica.toLowerCase().includes(a.toLowerCase()));
+    if(pertence)musicas.push({linha:i+1,musica,artista:actPrincipal});
+  }
+  const unicas=[]; const vistas=new Set();
+  for(const m of musicas){if(!vistas.has(m.musica)){vistas.add(m.musica);unicas.push(m);}}
+  return{musicas:unicas};
+}
+
+function acao_ponto_saldo_ecoin_(p) {
+  const tgId=String(p.tgId||'').trim();
+  const r=_jogador_por_tg_(tgId);
+  if(!r.artistas.length)return{erro:'Sem artistas vinculados.'};
+  const ss=SpreadsheetApp.openById(PONTO_SS_ID);
+  const sh=ss.getSheetByName('ECOIN + INVESTIMENTO');
+  if(!sh)return{erro:'Aba ECOIN + INVESTIMENTO não encontrada.'};
+  const vals=sh.getDataRange().getValues();
+  // Header na linha 2 (índice 1); dados a partir do índice 2
+  const header=vals[1].map(String);
+  const colArtista=header.indexOf('NOME DO ARTISTA');
+  const colBanco=header.findIndex(h=>h.includes('BANK'));
+  const saldos={};
+  for(let i=2;i<vals.length;i++){
+    const artista=String(vals[i][colArtista>=0?colArtista:0]||'').trim();
+    const saldo=colBanco>=0?vals[i][colBanco]:vals[i][2];
+    if(artista&&r.artistas.some(a=>a.toLowerCase()===artista.toLowerCase())&&saldo!=='')saldos[artista]=saldo;
+  }
+  return{saldos};
+}
+
+function acao_ponto_salvar_playlist_ecoin_(p) {
+  try {
+    const tgId = String(p.tgId || p.telegramid || '').trim();
+    const r = _jogador_por_tg_(tgId);
+    if (!r || !r.artistas.length) return { erro: 'Sem artistas vinculados.' };
+
+    const sh = SpreadsheetApp.openById(PONTO_SS_ID)
+      .getSheetByName('ECOIN + INVESTIMENTO');
+    if (!sh) return { erro: 'Aba ECOIN + INVESTIMENTO nao encontrada.' };
+
+    // Col G=7 SPOTIFY | Col I=9 APPLE MUSIC | Col K=11 YOUTUBE
+    const colMap = { 'SPOTIFY': 7, 'APPLE MUSIC': 9, 'YOUTUBE': 11 };
+    const colIdx = colMap[String(p.plataforma || '').trim().toUpperCase()];
+    if (!colIdx) return { erro: 'Plataforma invalida: ' + p.plataforma };
+
+    const vals = sh.getDataRange().getValues();
+
+    // Busca próxima linha vazia na coluna alvo (a partir da linha 3 = índice 2)
+    let linhaAlvo = -1;
+    for (let i = 2; i < vals.length; i++) {
+      const celula = String(vals[i][colIdx - 1] || '').trim();
+      if (celula === '') {
+        linhaAlvo = i + 1; // +1 porque getRange usa base 1
+        break;
+      }
+    }
+
+    // Se não encontrou linha vazia, adiciona após a última
+    if (linhaAlvo < 0) linhaAlvo = vals.length + 1;
+
+    // Preenche o nome da música na coluna C (3) se ainda vazia
+    const colMusica = 3;
+    const musicaAtual = String(sh.getRange(linhaAlvo, colMusica).getValue() || '').trim();
+    if (musicaAtual === '') {
+      sh.getRange(linhaAlvo, colMusica).setValue(p.musica);
+    }
+
+    // Grava a playlist na coluna da plataforma
+    sh.getRange(linhaAlvo, colIdx).setValue(p.playlist);
+
+    // Lê o saldo da coluna D (4) para retornar ao app
+    const saldo = sh.getRange(linhaAlvo, 4).getValue();
+
+    return {
+      ok: true,
+      message: '✅ ' + p.plataforma + ' salva para "' + p.musica + '"',
+      linha: linhaAlvo,
+      saldo: saldo
+    };
+  } catch(e) {
+    return { erro: e.message };
+  }
+}
+function acaopontolistarmusicasecoinp(p) {
+  try {
+    const tgId = String(p.tgId || p.telegramid || p.tgid || '').trim();
+    const r = jogadorportg(tgId);
+    if (!r || !r.artistas.length) return { erro: 'Sem artistas vinculados.' };
+
+    const sh = pontoss().getSheetByName('PONTOS');
+    if (!sh) return { erro: 'Aba PONTOS nao encontrada.' };
+
+    const vals = sh.getDataRange().getValues();
+    const musicas = [];
+
+    for (let i = 3; i < vals.length; i++) { // começa na linha 4 (índice 3), após cabeçalho
+      const artista = String(vals[i][2]).trim(); // col C = índice 2
+      const musica  = String(vals[i][3]).trim(); // col D = índice 3
+      if (!artista || !musica) continue;
+      if (r.artistas.indexOf(artista) === -1) continue;
+      musicas.push({ linha: i + 1, artista, musica });
+    }
+
+    return { ok: true, musicas };
+  } catch(e) {
+    return { erro: e.message };
+  }
+}
+function acaopontosalvarplaylistecoinp(p) {
+  try {
+    const tgId = String(p.tgId || p.telegramid || p.tgid || '').trim();
+    const r = jogadorportg(tgId);
+    if (!r || !r.artistas.length) return { erro: 'Sem artistas vinculados.' };
+
+    const ss = SpreadsheetApp.openById(PONTOSSID);
+    const sh = ss.getSheetByName('ECOIN + INVESTIMENTO');
+    if (!sh) return { erro: 'Aba ECOIN + INVESTIMENTO nao encontrada.' };
+
+    const colMap = { 'SPOTIFY': 7, 'APPLE MUSIC': 9, 'YOUTUBE': 11 };
+    const colIdx = colMap[String(p.plataforma || '').trim().toUpperCase()];
+    if (!colIdx) return { erro: 'Plataforma invalida: ' + p.plataforma };
+
+    const linha = Number(p.linha);
+
+    sh.getRange(linha, 3).setValue(p.artista); // col C = artista
+    sh.getRange(linha, 5).setValue(p.musica);  // col E = música
+    sh.getRange(linha, colIdx).setValue(p.playlist);
+
+    const saldo = sh.getRange(linha, 4).getValue();
+
+    return { ok: true, message: p.plataforma + ' salva!', saldo, linha };
+  } catch(e) {
+    return { erro: e.message };
+  }
+}
