@@ -8,6 +8,57 @@ export const Route = createFileRoute("/ponto/distribuir/planilha")({
   component: PontoPlanilha,
 });
 
+const OPCOES_PONTOS: Record<string, string[]> = {
+  "BILLBOARD HOT 100": ["1,00%", "2,00%", "3,00%", "4,00%", "5,00%", "6,00%", "7,00%", "8,00%", "9,00%", "10,00%"],
+  SPOTIFY: ["30,00%", "40,00%", "50,00%", "60,00%", "70,00%"],
+  "APPLE MUSIC": ["30,00%", "40,00%", "50,00%", "60,00%", "70,00%"],
+  YOUTUBE: [
+    "10,00%",
+    "15,00%",
+    "20,00%",
+    "25,00%",
+    "30,00%",
+    "35,00%",
+    "40,00%",
+    "45,00%",
+    "50,00%",
+    "55,00%",
+    "60,00%",
+    "65,00%",
+    "70,00%",
+  ],
+  "DIGITAL SALES": [
+    "10,00%",
+    "15,00%",
+    "20,00%",
+    "25,00%",
+    "30,00%",
+    "35,00%",
+    "40,00%",
+    "45,00%",
+    "50,00%",
+    "55,00%",
+    "60,00%",
+    "65,00%",
+    "70,00%",
+  ],
+  "BILLBOARD 200": [
+    "10,00%",
+    "15,00%",
+    "20,00%",
+    "25,00%",
+    "30,00%",
+    "35,00%",
+    "40,00%",
+    "45,00%",
+    "50,00%",
+    "55,00%",
+    "60,00%",
+    "65,00%",
+    "70,00%",
+  ],
+};
+
 function PontoPlanilha() {
   const { user, ready } = useTelegramUser();
 
@@ -32,12 +83,13 @@ function PontoPlanilha() {
       </Link>
       <div>
         <h2 className="text-xl font-black italic tracking-tighter">Pontos · Manual</h2>
-        <p className="text-xs text-muted-foreground mt-1">Toque em uma música para editar os pontos.</p>
+        <p className="text-xs text-muted-foreground mt-1">Toque em uma música para distribuir os pontos.</p>
       </div>
       <PlanilhaGrid
         tgId={String(user.id)}
         loader={(tgId) => api.listarPontosJogador(tgId)}
         saver={(p) => api.salvarCelulaPontos(p)}
+        opcoesColunas={OPCOES_PONTOS}
       />
     </div>
   );

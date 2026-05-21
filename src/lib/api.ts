@@ -99,24 +99,15 @@ function qs(params: Record<string, string | number | undefined>) {
 }
 
 // --- Cache em memória SWR (stale-while-revalidate) ---
-// Devolve dado em cache imediatamente quando ainda for "stale-aceitável"
-// e dispara fetch em background pra atualizar. Reduz latência percebida.
 const cache = new Map<string, { data: unknown; ts: number }>();
-const CACHE_FRESH = 60_000;   // 60s: considerado fresco, devolve direto
-const CACHE_STALE = 5 * 60_000; // 5min: ainda devolve, mas refaz em background
+const CACHE_FRESH = 60_000;
+const CACHE_STALE = 5 * 60_000;
 const inflight = new Map<string, Promise<unknown>>();
 
 async function rawCall<T = unknown>(params: Record<string, unknown>): Promise<T> {
   const isPost = params.payload || JSON.stringify(params).length > 1000;
-  
-  const options: RequestInit = {
-    method: isPost ? "POST" : "GET",
-  };
-
-  if (isPost) {
-    options.body = JSON.stringify(params);
-  }
-
+  const options: RequestInit = { method: isPost ? "POST" : "GET" };
+  if (isPost) options.body = JSON.stringify(params);
   const url = isPost ? SCRIPT_URL : `${SCRIPT_URL}?${qs(params as Record<string, string | number | undefined>)}`;
   const res = await fetch(url, options);
   const text = await res.text();
@@ -142,25 +133,16 @@ function fetchAndStore<T>(key: string, params: Record<string, unknown>): Promise
   return p;
 }
 
-async function call<T = unknown>(
-  params: Record<string, unknown>,
-  opts: { cache?: boolean } = {},
-): Promise<T> {
+async function call<T = unknown>(params: Record<string, unknown>, opts: { cache?: boolean } = {}): Promise<T> {
   if (!opts.cache) return rawCall<T>(params);
   const key = JSON.stringify(params);
   const hit = cache.get(key);
   const age = hit ? Date.now() - hit.ts : Infinity;
-
-  // Fresco — devolve sem rebuscar
   if (hit && age < CACHE_FRESH) return hit.data as T;
-
-  // Stale aceitável — devolve cache + revalida em background (SWR)
   if (hit && age < CACHE_STALE) {
     if (!inflight.has(key)) fetchAndStore<T>(key, params).catch(() => {});
     return hit.data as T;
   }
-
-  // Sem cache utilizável — espera o fetch
   if (inflight.has(key)) return inflight.get(key)! as Promise<T>;
   return fetchAndStore<T>(key, params);
 }
@@ -219,7 +201,6 @@ export const api = {
     return Array.isArray(data) ? data : [];
   },
 
-  // Ações
   async comprarTour(p: {
     nome: string;
     tipo: string;
@@ -255,21 +236,11 @@ export const api = {
   async filantropia(nome: string, causa: string, valor: string): Promise<CommonResponse> {
     return call<CommonResponse>({ acao: "filantropia", artista: nome, causa, valor });
   },
-
-  // ---- Mais ações ----
-  async publicarLeilao(p: {
-    nome: string;
-    descricao: string;
-    lanceMini: number;
-  }): Promise<CommonResponse> {
+  async publicarLeilao(p: { nome: string; descricao: string; lanceMini: number }): Promise<CommonResponse> {
     invalidateCache();
     return call<CommonResponse>({ acao: "publicar_leilao", ...p });
   },
-  async darLance(p: {
-    nome: string;
-    itemId: string | number;
-    valor: number;
-  }): Promise<CommonResponse> {
+  async darLance(p: { nome: string; itemId: string | number; valor: number }): Promise<CommonResponse> {
     invalidateCache();
     return call<CommonResponse>({ acao: "lance_leilao", ...p });
   },
@@ -285,11 +256,7 @@ export const api = {
     invalidateCache();
     return call<CommonResponse>({ acao: "rescisao", ...p });
   },
-  async venderComposicao(p: {
-    nome: string;
-    titulo: string;
-    preco: number;
-  }): Promise<CommonResponse> {
+  async venderComposicao(p: { nome: string; titulo: string; preco: number }): Promise<CommonResponse> {
     invalidateCache();
     return call<CommonResponse>({ acao: "vender_composicao", ...p });
   },
@@ -301,9 +268,7 @@ export const api = {
   // ---- Empire Market ----
   async listarCategoriasMarket(): Promise<string[]> {
     const r = await call<unknown>({ acao: "listar_categorias_market" }, { cache: true });
-    if (Array.isArray(r)) {
-      return r.map((x) => String(x || "").trim()).filter(Boolean);
-    }
+    if (Array.isArray(r)) return r.map((x) => String(x || "").trim()).filter(Boolean);
     return [];
   },
   async listarMarket(): Promise<MarketItem[]> {
@@ -321,18 +286,9 @@ export const api = {
     const r = await call<MuralItem[]>({ acao: "mural" }, { cache: true });
     return Array.isArray(r) ? r : [];
   },
-  async comprarMarket(p: {
-    nome: string;
-    categoria: string;
-    item: string;
-  }): Promise<CommonResponse> {
+  async comprarMarket(p: { nome: string; categoria: string; item: string }): Promise<CommonResponse> {
     invalidateCache();
-    return call<CommonResponse>({
-      acao: "comprar_market",
-      nome: p.nome,
-      categoria: p.categoria,
-      item: p.item,
-    });
+    return call<CommonResponse>({ acao: "comprar_market", nome: p.nome, categoria: p.categoria, item: p.item });
   },
   async comprarMural(p: { nome: string; id: string }): Promise<CommonResponse> {
     invalidateCache();
@@ -347,24 +303,18 @@ export const api = {
     return call<CommonResponse>({ acao: "vender_bem", nome: p.nome, id: p.id });
   },
 
-  // ---- Álbuns (novos endpoints — código pra colar no Apps Script) ----
+  // ---- Álbuns ----
   async lancarAlbum(payload: AlbumPayload): Promise<CommonResponse> {
     invalidateCache();
     return call<CommonResponse>({ acao: "lancar_album", payload: JSON.stringify(payload) });
   },
   async getAlbum(id: string): Promise<AlbumPayload | null> {
-    const r = await call<AlbumPayload & { error?: string }>(
-      { acao: "get_album", id },
-      { cache: true },
-    );
+    const r = await call<AlbumPayload & { error?: string }>({ acao: "get_album", id }, { cache: true });
     if (!r || r.error) return null;
     return r;
   },
   async listarAlbuns(nome?: string): Promise<AlbumPayload[]> {
-    const r = await call<AlbumPayload[]>(
-      { acao: "listar_albuns", nome: nome || "" },
-      { cache: true },
-    );
+    const r = await call<AlbumPayload[]>({ acao: "listar_albuns", nome: nome || "" }, { cache: true });
     return Array.isArray(r) ? r : [];
   },
   async editarAlbum(payload: AlbumPayload): Promise<CommonResponse> {
@@ -389,19 +339,16 @@ export const api = {
     return Array.isArray(r) ? r : [];
   },
   async getPlaylist(id: string): Promise<PlaylistPayload | null> {
-    const r = await call<PlaylistPayload & { error?: string }>(
-      { acao: "get_playlist", id },
-      { cache: true },
-    );
+    const r = await call<PlaylistPayload & { error?: string }>({ acao: "get_playlist", id }, { cache: true });
     if (!r || r.error) return null;
     return r;
   },
   async salvarPlaylist(payload: PlaylistPayload, telegramId?: string): Promise<CommonResponse> {
     invalidateCache();
-    return call<CommonResponse>({ 
-      acao: "salvar_playlist", 
+    return call<CommonResponse>({
+      acao: "salvar_playlist",
       payload: JSON.stringify(payload),
-      telegram_id: telegramId || payload.telegram_id || "" 
+      telegram_id: telegramId || payload.telegram_id || "",
     });
   },
   async listarFaixasCatalogo(): Promise<any[]> {
@@ -413,26 +360,16 @@ export const api = {
     return call<CommonResponse>({ acao: "excluir_playlist", id, telegram_id: telegramId || "" });
   },
 
-  // ---- Duelo & Bet (Simulação — requer endpoints backend) ----
+  // ---- Bet ----
   async getMusicasBet(): Promise<{ semana: string; musicas: unknown[] } | null> {
     const acoes = ["musicas_bet", "get_musicas_bet", "musicas_charts", "get_musicas_charts"];
     for (const acao of acoes) {
-      const r = await call<{ semana: string; musicas: unknown[]; erro?: string }>(
-        { acao },
-        { cache: true },
-      );
-      if (r && !r.erro && Array.isArray(r.musicas) && r.musicas.length > 0) {
-        return r;
-      }
+      const r = await call<{ semana: string; musicas: unknown[]; erro?: string }>({ acao }, { cache: true });
+      if (r && !r.erro && Array.isArray(r.musicas) && r.musicas.length > 0) return r;
     }
     return null;
   },
-  async bet(p: {
-    nome: string;
-    valor: number;
-    semana: string;
-    previsoes: string;
-  }): Promise<CommonResponse> {
+  async bet(p: { nome: string; valor: number; semana: string; previsoes: string }): Promise<CommonResponse> {
     invalidateCache();
     return call<CommonResponse>({ acao: "bet", ...p });
   },
@@ -471,7 +408,12 @@ export const api = {
     invalidateCache();
     return call<CommonResponse>({ acao: "vincular_artista", nome, telegram_id: telegramId });
   },
-  async criarArtista(payload: { nome: string; foto: string; gravadora: string; telegram_id: string }): Promise<CommonResponse> {
+  async criarArtista(payload: {
+    nome: string;
+    foto: string;
+    gravadora: string;
+    telegram_id: string;
+  }): Promise<CommonResponse> {
     invalidateCache();
     return call<CommonResponse>({
       acao: "criar_artista",
@@ -485,7 +427,7 @@ export const api = {
     const data = await call<Record<string, ChartData>>({ acao: "top_charts" }, { cache: true });
     return data || {};
   },
-  
+
   // ---- Social ----
   async listarPostsSocial(): Promise<any[]> {
     const r = await call<any[]>({ acao: "listarPostsSocial" }, { cache: false });
@@ -522,47 +464,56 @@ export const api = {
   },
 
   // ---- Games & Economy ----
-  async syncGameCoins(tgId: string, wager: number, won: number, gameContext?: string, artistName?: string): Promise<CommonResponse & { novoSaldo?: number }> {
+  async syncGameCoins(
+    tgId: string,
+    wager: number,
+    won: number,
+    gameContext?: string,
+    artistName?: string,
+  ): Promise<CommonResponse & { novoSaldo?: number }> {
     invalidateCache();
-    return call<CommonResponse & { novoSaldo?: number }>({ 
-      acao: "sync_game_coins", 
-      telegram_id: tgId, 
-      wager, 
+    return call<CommonResponse & { novoSaldo?: number }>({
+      acao: "sync_game_coins",
+      telegram_id: tgId,
+      wager,
       won,
       gameContext,
-      artistName
+      artistName,
     });
   },
   async savePetState(tgId: string, payload: string): Promise<CommonResponse> {
-    return call<CommonResponse>({ 
-      acao: "save_pet_state", 
-      telegram_id: tgId, 
-      payload 
-    });
+    return call<CommonResponse>({ acao: "save_pet_state", telegram_id: tgId, payload });
   },
   async getPetState(tgId: string): Promise<CommonResponse & { payload?: string; lastUpdate?: number }> {
-    return call<CommonResponse & { payload?: string; lastUpdate?: number }>({ 
-      acao: "get_pet_state", 
-      telegram_id: tgId 
+    return call<CommonResponse & { payload?: string; lastUpdate?: number }>({
+      acao: "get_pet_state",
+      telegram_id: tgId,
     });
   },
 
   // ---- Queridômetro ----
-  async getQueridometroStatus(tgId: string): Promise<CommonResponse & {
-    meuPerfil?: any,
-    artistas?: any[],
-    artistasAlvos?: any[],
-    meusArtistas?: any[],
-    ranking?: any[],
-    votosRestantes?: number,
-    reacoesRecebidas?: any[],
-    reacoesPublicas?: Array<{ para?: string; fotoPara?: string; emoji?: string; data?: string }>,
-    configEmojis?: any[],
-    semana?: string
-  }> {
+  async getQueridometroStatus(tgId: string): Promise<
+    CommonResponse & {
+      meuPerfil?: any;
+      artistas?: any[];
+      artistasAlvos?: any[];
+      meusArtistas?: any[];
+      ranking?: any[];
+      votosRestantes?: number;
+      reacoesRecebidas?: any[];
+      reacoesPublicas?: Array<{ para?: string; fotoPara?: string; emoji?: string; data?: string }>;
+      configEmojis?: any[];
+      semana?: string;
+    }
+  > {
     return call({ acao: "queridometro_status", tgId });
   },
-  async postQueridometroVoto(tgId: string, de: string, para: string, emoji: string): Promise<CommonResponse & { msg?: string }> {
+  async postQueridometroVoto(
+    tgId: string,
+    de: string,
+    para: string,
+    emoji: string,
+  ): Promise<CommonResponse & { msg?: string }> {
     return call({ acao: "queridometro_votar", tgId, de, para, emoji });
   },
 
@@ -596,11 +547,41 @@ export const api = {
   },
   async salvarCelulaPlaylist(p: { tgId: string; linha: number; coluna: string; valor: any }): Promise<CommonResponse> {
     invalidateCache();
-    return call({ acao: "ponto_salvar_playlist_celula", tgId: p.tgId, linha: p.linha, coluna: p.coluna, valor: p.valor });
+    return call({
+      acao: "ponto_salvar_playlist_celula",
+      tgId: p.tgId,
+      linha: p.linha,
+      coluna: p.coluna,
+      valor: p.valor,
+    });
   },
   async distribuirPlaylistsAuto(tgId: string): Promise<CommonResponse & { resumo?: string }> {
     invalidateCache();
     return call({ acao: "ponto_distribuir_playlists_auto", tgId });
+  },
+
+  // ---- PONTO Playlists ECOIN ----
+  async listarMusicasEdicao(tgId: string): Promise<{
+    musicas?: Array<{ linha: number; musica: string; artista: string }>;
+    erro?: string;
+  }> {
+    return call({ acao: "ponto_listar_musicas_edicao", tgId });
+  },
+  async saldoEcoin(tgId: string): Promise<{
+    saldos?: Record<string, any>;
+    erro?: string;
+  }> {
+    return call({ acao: "ponto_saldo_ecoin", tgId });
+  },
+  async salvarPlaylistEcoin(p: {
+    tgId: string;
+    musica: string;
+    artista: string;
+    plataforma: string;
+    playlist: string;
+  }): Promise<CommonResponse & { saldo?: any; linha?: number }> {
+    invalidateCache();
+    return call({ acao: "ponto_salvar_playlist_ecoin", ...p });
   },
 };
 
@@ -622,12 +603,13 @@ export interface PlaylistTrack {
   capa_url?: string;
   duracao?: string;
 }
+
 export interface PlaylistPayload {
   id?: string;
   titulo: string;
   descricao?: string;
   capa_url?: string;
-  owner: string; // nome do criador (artista ou user)
+  owner: string;
   telegram_id?: string;
   tracks: PlaylistTrack[];
   data?: string;
@@ -636,30 +618,22 @@ export interface PlaylistPayload {
 export function fmtEC(n: number) {
   return `E$C ${(n || 0).toLocaleString("pt-BR")}`;
 }
+
 export function fmtMoney(n: number) {
   return `$${(n || 0).toLocaleString("pt-BR")}`;
 }
 
-// Converte link do Drive em URL de imagem visualizável.
-// O endpoint `uc?export=view` não funciona mais (bloqueio CORS desde 2024).
-// Usamos o thumbnail endpoint, que serve direto e aceita parâmetro de tamanho.
 export function driveImg(url: string | undefined | null, size: number = 400): string | undefined {
   if (!url) return undefined;
-  
-  // Se for link do lh3 e não tiver parâmetro de redimensionamento, adiciona
   if (url.includes("lh3.googleusercontent.com")) {
-    if (!url.includes("=")) {
-      return `${url}=w${size}-h${size}-p`;
-    }
+    if (!url.includes("=")) return `${url}=w${size}-h${size}-p`;
     return url;
   }
-
   const m = String(url).match(/[-\w]{25,}/);
   if (!m) return url;
   return `https://lh3.googleusercontent.com/d/${m[0]}=w${size}-h${size}-p`;
 }
 
-// Para áudio: extrai ID e retorna URL do player do Drive (iframe-able).
 export function driveAudioSrc(url: string | undefined | null): string | undefined {
   if (!url) return undefined;
   const m = String(url).match(/[-\w]{25,}/);
@@ -667,32 +641,9 @@ export function driveAudioSrc(url: string | undefined | null): string | undefine
   return `https://drive.google.com/file/d/${m[0]}/preview`;
 }
 
-// Tenta gerar URL direto do mp3 (pode não funcionar para todos os arquivos).
 export function driveDirectAudio(url: string | undefined | null): string | undefined {
   if (!url) return undefined;
   const m = String(url).match(/[-\w]{25,}/);
   if (!m) return undefined;
   return `https://drive.google.com/uc?export=download&id=${m[0]}`;
-// ---- PONTO Playlists ECOIN ----
-async listarMusicasEdicao(tgId: string): Promise<{
-  musicas?: Array<{ linha: number; musica: string; artista: string }>;
-  erro?: string;
-}> {
-  return call({ acao: 'ponto_listar_musicas_edicao', tgId });
-},
-async saldoEcoin(tgId: string): Promise<{
-  saldos?: Record<string, any>;
-  erro?: string;
-}> {
-  return call({ acao: 'ponto_saldo_ecoin', tgId });
-},
-async salvarPlaylistEcoin(p: {
-  tgId: string;
-  musica: string;
-  artista: string;
-  plataforma: string;
-  playlist: string;
-}): Promise<CommonResponse & { saldo?: any; linha?: number }> {
-  invalidateCache();
-  return call({ acao: 'ponto_salvar_playlist_ecoin', ...p });
-}}
+}
