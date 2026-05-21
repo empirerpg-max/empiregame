@@ -3,41 +3,80 @@ import { useTelegramUser } from "@/lib/telegram";
 import { Loader2 } from "lucide-react";
 import { notify } from "@/lib/notify";
 
+interface LinhaData {
+  linha: number;
+  artista: string;
+  valores: Record<string, any>;
+}
+
+interface GridData {
+  colunas?: string[];
+  editaveis?: string[];
+  linhas?: LinhaData[];
+  erro?: string;
+}
+
 interface PlanilhaGridProps {
-  loader: (tgId: string) => Promise<{
-    colunas?: string[];
-    editaveis?: string[];
-    linhas?: Array<{ linha: number; artista: string; valores: Record<string, any> }>;
-    erro?: string;
-  }>;
+  loader: (tgId: string) => Promise<GridData>;
   saver: (p: { tgId: string; linha: number; coluna: string; valor: any }) => Promise<any>;
 }
 
 export function PlanilhaGrid({ loader, saver }: PlanilhaGridProps) {
-  const { user, ready } = useTelegramUser();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user } = useTelegramUser();
+  const [data, setData] = useState<GridData | null>(null);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [tried, setTried] = useState(false);
+
+  // Resolve tgId: usa user.id OU lê direto do localStorage sem esperar ready
+  function getTgId(): string | null {
+    if (user?.id && user.id !== "guest") return String(user.id);
+    try {
+      const cached = localStorage.getItem("tg_user_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.id && parsed.id !== "guest") return String(parsed.id);
+      }
+    } catch {}
+    return null;
+  }
 
   useEffect(() => {
-    if (!ready) return;
-    if (!user?.id) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setErro(null);
-    loader(String(user.id))
-      .then((r) => {
-        if (r?.erro) setErro(r.erro);
-        else setData(r);
-      })
-      .catch((e) => setErro("Erro ao carregar: " + e.message))
-      .finally(() => setLoading(false));
-  }, [ready, user?.id]);
+    if (tried) return;
 
-  if (!ready || loading)
+    // Tenta imediatamente; se não tiver ID ainda, tenta de novo em 500ms
+    const attempt = () => {
+      const tgId = getTgId();
+      if (!tgId) return false;
+
+      setTried(true);
+      setLoading(true);
+      setErro(null);
+
+      loader(tgId)
+        .then((r) => {
+          if (r?.erro) setErro(r.erro);
+          else setData(r);
+        })
+        .catch((e) => setErro("Erro ao carregar: " + String(e.message || e)))
+        .finally(() => setLoading(false));
+
+      return true;
+    };
+
+    if (!attempt()) {
+      const t = setTimeout(() => {
+        if (!attempt()) {
+          setErro("Não foi possível identificar seu usuário. Abra pelo Telegram.");
+          setLoading(false);
+        }
+      }, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [user?.id]);
+
+  if (loading)
     return (
       <div className="flex items-center justify-center h-40 gap-2 text-muted-foreground">
         <Loader2 className="animate-spin w-5 h-5" />
@@ -45,13 +84,26 @@ export function PlanilhaGrid({ loader, saver }: PlanilhaGridProps) {
       </div>
     );
 
-  if (!user?.id) return <div className="p-6 text-center text-muted-foreground text-sm">Abra o app pelo Telegram.</div>;
-
-  if (erro) return <div className="p-6 text-center text-red-400 text-sm">{erro}</div>;
-
-  if (!data?.linhas || data.linhas.length === 0)
+  if (erro)
     return (
-      <div className="p-6 text-center text-muted-foreground text-sm">Nenhuma linha encontrada para o seu usuário.</div>
+      <div className="p-6 text-center text-red-400 text-sm rounded-2xl bg-red-900/20 border border-red-500/20">
+        {erro}
+      </div>
+    );
+
+  if (!data)
+    return (
+      <div className="flex items-center justify-center h-40 gap-2 text-muted-foreground">
+        <Loader2 className="animate-spin w-5 h-5" />
+        <span className="text-sm">Aguardando identificação...</span>
+      </div>
+    );
+
+  if (!data.linhas || data.linhas.length === 0)
+    return (
+      <div className="p-6 text-center text-muted-foreground text-sm rounded-2xl bg-white/5 border border-white/10">
+        Nenhuma linha encontrada para o seu usuário.
+      </div>
     );
 
   const colunas: string[] = data.colunas || [];
@@ -59,19 +111,18 @@ export function PlanilhaGrid({ loader, saver }: PlanilhaGridProps) {
 
   async function handleEdit(linha: number, coluna: string, valor: any, original: any) {
     if (String(valor) === String(original ?? "")) return;
+    const tgId = getTgId();
+    if (!tgId) return;
     const cellKey = `${linha}-${coluna}`;
     setSaving(cellKey);
-    const r = await saver({ tgId: String(user!.id), linha, coluna, valor });
+    const r = await saver({ tgId, linha, coluna, valor });
     setSaving(null);
     if (r?.erro || r?.ok === false) {
       notify(r);
-      // Reverte recarregando
-      if (user?.id) {
-        setLoading(true);
-        const fresh = await loader(String(user.id));
-        setData(fresh);
-        setLoading(false);
-      }
+      setLoading(true);
+      const fresh = await loader(tgId);
+      setData(fresh);
+      setLoading(false);
     }
   }
 
@@ -88,8 +139,8 @@ export function PlanilhaGrid({ loader, saver }: PlanilhaGridProps) {
           </tr>
         </thead>
         <tbody>
-          {data.linhas.map((row: any) => (
-            <tr key={row.linha} className="border-t border-white/5 hover:bg-white/3">
+          {data.linhas.map((row) => (
+            <tr key={row.linha} className="border-t border-white/5 hover:bg-white/[0.03]">
               {colunas.map((c) => {
                 const cellKey = `${row.linha}-${c}`;
                 const isEdit = editaveis.has(c);
