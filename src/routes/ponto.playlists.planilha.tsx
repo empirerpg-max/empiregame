@@ -53,14 +53,23 @@ const PLAT_STYLE: Record<Plat, { color: string; bg: string }> = {
   YOUTUBE: { color: "text-red-400", bg: "bg-red-500/15" },
 };
 
+// Colunas da aba ECOIN + INVESTIMENTO que correspondem às plataformas
+const COL_PLAT: Record<Plat, string> = {
+  SPOTIFY: "SPOTIFY",
+  "APPLE MUSIC": "APPLE MUSIC",
+  YOUTUBE: "YOUTUBE",
+};
+
+type Linha = { linha: number; artista: string; musica: string; valores: Record<string, any> };
+
 function PontoPlaylistsManual() {
   const { user } = useTelegramUser();
   const tgId = user?.id ? String(user.id) : "";
 
-  const [musicas, setMusicas] = useState<{ linha: number; musica: string; artista: string }[]>([]);
-  const [saldos, setSaldos] = useState<Record<string, number>>({});
+  const [linhas, setLinhas] = useState<Linha[]>([]);
+  const [colunas, setColunas] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [musicaSel, setMusicaSel] = useState<{ linha: number; musica: string; artista: string } | null>(null);
+  const [sel, setSel] = useState<Linha | null>(null);
   const [selecoes, setSelecoes] = useState<Partial<Record<Plat, string>>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -68,29 +77,47 @@ function PontoPlaylistsManual() {
   useEffect(() => {
     if (!tgId) return;
     setLoading(true);
-    Promise.all([api.listarMusicasEdicao(tgId), api.saldoEcoin(tgId)]).then(([ms, sal]) => {
-      setMusicas(Array.isArray(ms?.musicas) ? ms.musicas : []);
-      setSaldos(sal?.saldos ?? {});
+    api.listarPlaylistsJogador(tgId).then((r: any) => {
+      setColunas(r?.colunas ?? []);
+      // Cada linha tem: { linha, artista, valores }
+      // A coluna de música pode ser "NOME DA MÚSICA" ou "MÚSICA"
+      const linhasRaw: any[] = r?.linhas ?? [];
+      const cols: string[] = r?.colunas ?? [];
+      const colMusica =
+        cols.find(
+          (c: string) =>
+            c.toUpperCase().includes("MÚSICA") ||
+            c.toUpperCase().includes("MUSICA") ||
+            c.toUpperCase().includes("NOME DA"),
+        ) ?? "";
+      setLinhas(
+        linhasRaw.map((l: any) => ({
+          linha: l.linha,
+          artista: l.artista,
+          musica: colMusica ? String(l.valores?.[colMusica] ?? "") : l.artista,
+          valores: l.valores ?? {},
+        })),
+      );
       setLoading(false);
     });
   }, [tgId]);
 
   async function salvar() {
-    if (!musicaSel || !tgId) return;
+    if (!sel || !tgId) return;
     const entradas = (Object.entries(selecoes) as [Plat, string][]).filter(([, v]) => v);
     if (!entradas.length) return notify({ erro: "Selecione ao menos uma playlist." });
     setSaving(true);
     let ok = true;
     for (const [plat, playlist] of entradas) {
-      const r = await api.salvarPlaylistEcoin({
+      const coluna = COL_PLAT[plat];
+      const r = await api.salvarCelulaPlaylist({
         tgId,
-        musica: musicaSel.musica,
-        artista: musicaSel.artista,
-        plataforma: plat,
-        playlist,
+        linha: sel.linha,
+        coluna,
+        valor: playlist,
       });
-      if (r?.erro) {
-        notify(r);
+      if ((r as any)?.erro) {
+        notify(r as any);
         ok = false;
       }
     }
@@ -98,6 +125,19 @@ function PontoPlaylistsManual() {
     if (ok) {
       setSaved(true);
       setSelecoes({});
+      // Atualiza localmente os valores da linha selecionada
+      setLinhas((prev) =>
+        prev.map((l) => {
+          if (l.linha !== sel.linha) return l;
+          const novosValores = { ...l.valores };
+          (Object.entries(selecoes) as [Plat, string][])
+            .filter(([, v]) => v)
+            .forEach(([plat, playlist]) => {
+              novosValores[COL_PLAT[plat]] = playlist;
+            });
+          return { ...l, valores: novosValores };
+        }),
+      );
       setTimeout(() => setSaved(false), 2500);
     }
   }
@@ -125,57 +165,56 @@ function PontoPlaylistsManual() {
         </Link>
         <div>
           <h1 className="text-xl font-bold tracking-tight">Playlists · Manual</h1>
-          <p className="text-xs text-muted-foreground">Escolha uma música e distribua as playlists.</p>
+          <p className="text-xs text-muted-foreground">Escolha uma música e distribua.</p>
         </div>
       </div>
 
       {/* Lista de músicas */}
       <div className="flex flex-col gap-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-1">Música</p>
+        {linhas.length === 0 && <p className="text-sm text-muted-foreground px-1">Nenhuma música encontrada.</p>}
         <div className="flex flex-col gap-2 max-h-52 overflow-y-auto pr-1">
-          {musicas.length === 0 && <p className="text-sm text-muted-foreground px-1">Nenhuma música encontrada.</p>}
-          {musicas.map((m) => (
+          {linhas.map((l) => (
             <button
-              key={m.linha}
+              key={l.linha}
               onClick={() => {
-                setMusicaSel(m);
+                setSel(l);
                 setSelecoes({});
                 setSaved(false);
               }}
               className={`w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center gap-3
                 ${
-                  musicaSel?.linha === m.linha
+                  sel?.linha === l.linha
                     ? "border-primary bg-primary/10 text-white"
                     : "border-white/8 bg-card hover:border-white/20"
                 }`}
             >
-              <Music2 size={15} className={musicaSel?.linha === m.linha ? "text-primary" : "text-muted-foreground"} />
+              <Music2 size={15} className={sel?.linha === l.linha ? "text-primary" : "text-muted-foreground"} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{m.musica}</p>
-                <p className="text-xs text-muted-foreground truncate">{m.artista}</p>
+                <p className="text-sm font-medium truncate">{l.musica || l.artista}</p>
+                <p className="text-xs text-muted-foreground truncate">{l.artista}</p>
               </div>
-              {saldos[m.artista] !== undefined && (
-                <span className="text-xs text-emerald-400 font-mono shrink-0">
-                  E${Number(saldos[m.artista]).toLocaleString("pt-BR")}
-                </span>
-              )}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Plataformas — só aparece após selecionar música */}
-      {musicaSel && (
+      {/* Plataformas */}
+      {sel && (
         <div className="flex flex-col gap-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-1">Plataformas</p>
           {(Object.keys(PLAYLISTS) as Plat[]).map((plat) => {
             const style = PLAT_STYLE[plat];
             const opcoes = PLAYLISTS[plat];
             const atual = selecoes[plat] ?? "";
+            const jaPreenchido = sel.valores?.[COL_PLAT[plat]];
             return (
               <div key={plat} className="rounded-2xl border border-white/8 bg-card overflow-hidden">
-                <div className={`flex items-center gap-2 px-4 py-2.5 ${style.bg}`}>
+                <div className={`flex items-center justify-between px-4 py-2.5 ${style.bg}`}>
                   <span className={`text-xs font-bold uppercase tracking-wider ${style.color}`}>{plat}</span>
+                  {jaPreenchido && (
+                    <span className="text-xs text-muted-foreground truncate max-w-[140px]">{jaPreenchido}</span>
+                  )}
                 </div>
                 <div className="px-3 py-2.5">
                   <select
@@ -201,7 +240,7 @@ function PontoPlaylistsManual() {
       )}
 
       {/* Botão salvar */}
-      {musicaSel && (
+      {sel && (
         <button
           onClick={salvar}
           disabled={saving || saved || !Object.values(selecoes).some(Boolean)}
