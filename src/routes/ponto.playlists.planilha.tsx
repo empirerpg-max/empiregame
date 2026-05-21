@@ -208,7 +208,10 @@ function PlaylistsPlanilha() {
                   {isSaving && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
                 </div>
                 <select
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none
+                  bg-zinc-800 text-white border border-white/10
+                  focus:border-primary transition-colors
+                  [&>option]:bg-zinc-800 [&>option]:text-white"
                   value={atual}
                   disabled={isSaving}
                   onChange={(e) => {
