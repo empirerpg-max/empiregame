@@ -13,9 +13,8 @@ function PontoPlanilha() {
 
   if (!ready)
     return (
-      <div className="flex items-center justify-center h-40 gap-2 text-muted-foreground">
-        <Loader2 className="animate-spin w-5 h-5" />
-        <span className="text-sm">Identificando usuário...</span>
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="animate-spin text-primary w-8 h-8" />
       </div>
     );
 
@@ -31,10 +30,10 @@ function PontoPlanilha() {
       <Link to="/ponto/distribuir" className="flex items-center gap-1 text-sm text-muted-foreground">
         <ChevronLeft className="w-4 h-4" /> Voltar
       </Link>
-      <h2 className="text-xl font-bold">Pontos · Manual</h2>
-      <p className="text-sm text-muted-foreground">
-        Edite somente as células permitidas. As alterações vão pra planilha automaticamente.
-      </p>
+      <div>
+        <h2 className="text-xl font-black italic tracking-tighter">Pontos · Manual</h2>
+        <p className="text-xs text-muted-foreground mt-1">Toque em uma música para editar os pontos.</p>
+      </div>
       <PlanilhaGrid
         tgId={String(user.id)}
         loader={(tgId) => api.listarPontosJogador(tgId)}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp, Check, X } from "lucide-react";
 import { notify } from "@/lib/notify";
 
 interface LinhaData {
@@ -19,13 +19,16 @@ interface PlanilhaGridProps {
   tgId: string;
   loader: (tgId: string) => Promise<GridData>;
   saver: (p: { tgId: string; linha: number; coluna: string; valor: any }) => Promise<any>;
+  opcoesColunas?: Record<string, string[]>;
 }
 
-export function PlanilhaGrid({ tgId, loader, saver }: PlanilhaGridProps) {
+export function PlanilhaGrid({ tgId, loader, saver, opcoesColunas = {} }: PlanilhaGridProps) {
   const [data, setData] = useState<GridData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [expandido, setExpandido] = useState<number | null>(null);
+  const [editando, setEditando] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (!tgId) return;
@@ -43,7 +46,7 @@ export function PlanilhaGrid({ tgId, loader, saver }: PlanilhaGridProps) {
     return (
       <div className="flex items-center justify-center h-40 gap-2 text-muted-foreground">
         <Loader2 className="animate-spin w-5 h-5" />
-        <span className="text-sm">Carregando planilha...</span>
+        <span className="text-sm">Carregando...</span>
       </div>
     );
 
@@ -61,10 +64,10 @@ export function PlanilhaGrid({ tgId, loader, saver }: PlanilhaGridProps) {
       </div>
     );
 
-  const colunas = data.colunas || [];
   const editaveis = new Set<string>(data.editaveis || []);
+  const colunasInfo = ["ACT", "MÚSICA", "WEEKS", "PONTOS DISPONÍVEIS", "PONTOS UTILIZADOS"];
 
-  async function handleEdit(linha: number, coluna: string, valor: any, original: any) {
+  async function salvar(linha: number, coluna: string, valor: any, original: any) {
     if (String(valor) === String(original ?? "")) return;
     const cellKey = `${linha}-${coluna}`;
     setSaving(cellKey);
@@ -76,49 +79,129 @@ export function PlanilhaGrid({ tgId, loader, saver }: PlanilhaGridProps) {
       const fresh = await loader(tgId);
       setData(fresh);
       setLoading(false);
+    } else {
+      // Atualiza localmente sem reload
+      setData((prev) => {
+        if (!prev?.linhas) return prev;
+        return {
+          ...prev,
+          linhas: prev.linhas.map((l) =>
+            l.linha === linha ? { ...l, valores: { ...l.valores, [coluna]: valor } } : l,
+          ),
+        };
+      });
     }
+    setEditando((prev) => {
+      const n = { ...prev };
+      delete n[cellKey];
+      return n;
+    });
   }
 
+  // Agrupa por artista
+  const porArtista = data.linhas.reduce(
+    (acc, row) => {
+      if (!acc[row.artista]) acc[row.artista] = [];
+      acc[row.artista].push(row);
+      return acc;
+    },
+    {} as Record<string, LinhaData[]>,
+  );
+
   return (
-    <div className="overflow-x-auto rounded-2xl border border-white/10">
-      <table className="text-xs w-full">
-        <thead>
-          <tr className="bg-white/5">
-            {colunas.map((c) => (
-              <th key={c} className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">
-                {c} {editaveis.has(c) && <span className="text-primary">•</span>}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.linhas.map((row) => (
-            <tr key={row.linha} className="border-t border-white/5 hover:bg-white/[0.03]">
-              {colunas.map((c) => {
-                const cellKey = `${row.linha}-${c}`;
-                const isEdit = editaveis.has(c);
-                return (
-                  <td key={c} className="px-3 py-2 whitespace-nowrap relative">
-                    {isEdit ? (
-                      <input
-                        className="bg-transparent border-b border-primary/30 focus:border-primary outline-none w-full min-w-[80px] text-xs"
-                        defaultValue={row.valores[c] ?? ""}
-                        disabled={saving === cellKey}
-                        onBlur={(e) => handleEdit(row.linha, c, e.target.value, row.valores[c])}
-                      />
+    <div className="flex flex-col gap-6 pb-6">
+      {Object.entries(porArtista).map(([artista, linhas]) => (
+        <div key={artista}>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-primary mb-2 px-1">{artista}</h3>
+          <div className="flex flex-col gap-2">
+            {linhas.map((row) => {
+              const musica = String(row.valores["MÚSICA"] || row.valores["MUSIC"] || "").replace(`${artista} - `, "");
+              const weeks = row.valores["WEEKS"] ?? "";
+              const pontosDisp = row.valores["PONTOS DISPONÍVEIS"] ?? "";
+              const isOpen = expandido === row.linha;
+
+              return (
+                <div key={row.linha} className="rounded-2xl bg-card border border-white/5 overflow-hidden">
+                  {/* Header do card */}
+                  <button
+                    className="w-full flex items-center justify-between p-4 text-left"
+                    onClick={() => setExpandido(isOpen ? null : row.linha)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate pr-2">{musica || `Linha ${row.linha}`}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        {weeks !== "" && <span className="text-xs text-muted-foreground">{weeks}w</span>}
+                        {pontosDisp !== "" && pontosDisp !== 0 && (
+                          <span className="text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full">
+                            {pontosDisp} pts
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isOpen ? (
+                      <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
                     ) : (
-                      <span className="text-muted-foreground">{String(row.valores[c] ?? "")}</span>
+                      <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
                     )}
-                    {saving === cellKey && (
-                      <Loader2 className="animate-spin w-3 h-3 absolute right-1 top-1/2 -translate-y-1/2 text-primary" />
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                  </button>
+
+                  {/* Campos editáveis expandidos */}
+                  {isOpen && (
+                    <div className="border-t border-white/5 divide-y divide-white/5">
+                      {Array.from(editaveis).map((coluna) => {
+                        const cellKey = `${row.linha}-${coluna}`;
+                        const valorAtual =
+                          editando[cellKey] !== undefined ? editando[cellKey] : (row.valores[coluna] ?? "");
+                        const isSaving = saving === cellKey;
+                        const opcoes = opcoesColunas[coluna];
+
+                        return (
+                          <div key={coluna} className="flex items-center gap-3 px-4 py-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-muted-foreground mb-1">{coluna}</p>
+                              {opcoes ? (
+                                <select
+                                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-primary transition-colors"
+                                  value={valorAtual}
+                                  disabled={isSaving}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditando((prev) => ({ ...prev, [cellKey]: val }));
+                                    salvar(row.linha, coluna, val, row.valores[coluna]);
+                                  }}
+                                >
+                                  <option value="">— selecionar —</option>
+                                  {opcoes.map((o) => (
+                                    <option key={o} value={o}>
+                                      {o}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  type="number"
+                                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-primary transition-colors"
+                                  value={valorAtual}
+                                  disabled={isSaving}
+                                  onChange={(e) => setEditando((prev) => ({ ...prev, [cellKey]: e.target.value }))}
+                                  onBlur={(e) => salvar(row.linha, coluna, e.target.value, row.valores[coluna])}
+                                />
+                              )}
+                            </div>
+                            <div className="w-5 shrink-0 flex items-center justify-center mt-4">
+                              {isSaving && <Loader2 className="animate-spin w-4 h-4 text-primary" />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

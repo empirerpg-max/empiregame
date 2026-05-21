@@ -8,14 +8,49 @@ export const Route = createFileRoute("/ponto/playlists/planilha")({
   component: PlaylistsPlanilha,
 });
 
+const OPCOES_PLAYLISTS = {
+  SPOTIFY: [
+    "TOPO TODAY'S TOP HITS",
+    "TODAY'S TOP HITS",
+    "POP UP",
+    "ROCK SOLID",
+    "RAP CAVIAR",
+    "MINT",
+    "ARE & BE",
+    "VIVA LATINO",
+    "ALTERNATIVE PARTY",
+    "JUST HITS",
+    "NEW SONGS",
+    "WORKOUT TIME",
+    "RANDOM SONGS",
+    "THIS IS... (ARTIST)",
+  ],
+  "APPLE MUSIC": [
+    "TOPO TODAY'S HITS",
+    "TODAY'S HITS",
+    "A-LIST POP",
+    "hyped<D>",
+    "RAPLIFE",
+    "danceXL",
+    "R&B NOW",
+    "!DalePlay!",
+    "ALT CTRL",
+    "JUST HITS",
+    "JUST NEW",
+    "GYM SONGS",
+    "RANDOM SONGS",
+    "JUST... (ARTIST)",
+  ],
+  YOUTUBE: ["Ad 5 segundos (Comercial/Vídeo)", "Ad 30 segundos (Comercial/Vídeo)", "Ad (Vídeo Completo)"],
+};
+
 function PlaylistsPlanilha() {
   const { user, ready } = useTelegramUser();
 
   if (!ready)
     return (
-      <div className="flex items-center justify-center h-40 gap-2 text-muted-foreground">
-        <Loader2 className="animate-spin w-5 h-5" />
-        <span className="text-sm">Identificando usuário...</span>
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="animate-spin text-primary w-8 h-8" />
       </div>
     );
 
@@ -31,15 +66,15 @@ function PlaylistsPlanilha() {
       <Link to="/ponto/playlists" className="flex items-center gap-1 text-sm text-muted-foreground">
         <ChevronLeft className="w-4 h-4" /> Voltar
       </Link>
-      <h2 className="text-xl font-bold">Playlists · Manual</h2>
-      <p className="text-sm text-muted-foreground">
-        Apenas as colunas marcadas como editáveis aceitam mudanças. Linhas já preenchidas por outros jogadores ficam
-        travadas.
-      </p>
+      <div>
+        <h2 className="text-xl font-black italic tracking-tighter">Playlists · Manual</h2>
+        <p className="text-xs text-muted-foreground mt-1">Toque em uma música para escolher as playlists.</p>
+      </div>
       <PlanilhaGrid
         tgId={String(user.id)}
         loader={(tgId) => api.listarPlaylistsJogador(tgId)}
         saver={(p) => api.salvarCelulaPlaylist(p)}
+        opcoesColunas={OPCOES_PLAYLISTS}
       />
     </div>
   );
