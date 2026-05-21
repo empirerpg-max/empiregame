@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { ChevronLeft, Loader2, CheckCircle2, Music2 } from "lucide-react";
+import { ChevronLeft, Loader2, CheckCircle2, Music2, Wallet } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTelegramUser } from "@/lib/telegram";
 import { notify } from "@/lib/notify";
@@ -49,12 +49,6 @@ const PLAT_STYLE: Record<Plat, { color: string; bg: string }> = {
   YOUTUBE: { color: "text-red-400", bg: "bg-red-500/15" },
 };
 
-const COL_PLAT: Record<Plat, string> = {
-  SPOTIFY: "INVESTIMENTO PLAYLIST SPOTIFY",
-  "APPLE MUSIC": "INVESTIMENTO PLAYLIST APPLE MUSIC",
-  YOUTUBE: "INVESTIMENTO PLAYLIST YOUTUBE",
-};
-
 type MusicaItem = { linha: number; musica: string };
 
 function PontoPlaylistsManual() {
@@ -67,6 +61,7 @@ function PontoPlaylistsManual() {
   const [selecoes, setSelecoes] = useState<Partial<Record<Plat, string>>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saldo, setSaldo] = useState<number | null>(null);
 
   useEffect(() => {
     if (!tgId) return;
@@ -86,22 +81,26 @@ function PontoPlaylistsManual() {
     }
     setSaving(true);
     let ok = true;
+    let ultimoSaldo: number | null = null;
     for (const [plat, playlist] of entradas) {
       const r = await api.salvarPlaylistEcoin({
         tgId,
         musica: sel.musica,
         artista: "",
-        plataforma: COL_PLAT[plat],
+        plataforma: plat,
         playlist,
       });
       if (r?.erro) {
         notify(r);
         ok = false;
+      } else if (r?.saldo !== undefined && r.saldo !== null) {
+        ultimoSaldo = Number(r.saldo);
       }
     }
     setSaving(false);
     if (ok) {
       setSaved(true);
+      if (ultimoSaldo !== null) setSaldo(ultimoSaldo);
       setSelecoes({});
       setTimeout(() => setSaved(false), 2500);
     }
@@ -127,10 +126,16 @@ function PontoPlaylistsManual() {
         <Link to="/ponto/playlists" className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
           <ChevronLeft size={20} />
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl font-bold tracking-tight">Playlists - Manual</h1>
           <p className="text-xs text-muted-foreground">Escolha uma musica e distribua.</p>
         </div>
+        {saldo !== null && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
+            <Wallet size={13} className="text-emerald-400" />
+            <span className="text-xs font-bold text-emerald-400">E${Number(saldo).toLocaleString("pt-BR")}</span>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">
