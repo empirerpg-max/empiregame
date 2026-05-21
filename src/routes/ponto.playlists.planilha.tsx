@@ -40,7 +40,7 @@ const PLAYLISTS: Record<Plat, string[]> = {
     "RANDOM SONGS",
     "JUST... (ARTIST)",
   ],
-  YOUTUBE: ["Ad 5 segundos (Comercial/Video)", "Ad 30 segundos (Comercial/Video)", "Ad (Video Completo)"],
+  YOUTUBE: ["Ad 5 segundos (Comercial/Video)", "Ad 30 segundos (Comercial/Video)", "Ad (Vídeo Completo)"],
 };
 
 const PLAT_STYLE: Record<Plat, { color: string; bg: string }> = {
