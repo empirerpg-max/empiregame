@@ -81,7 +81,7 @@ function PontoPlaylistsPlanilha() {
     setMusicaSel(null);
     setSalvo({});
     setMsg(null);
-    api.call("ponto_listar_musicas_edicao", { tgId }).then((d: any) => {
+    api.listarMusicasEdicao(tgId).then((d: any) => {
       const todas: Musica[] = d?.musicas || [];
       setMusicas(todas.filter((m) => m.artista?.toLowerCase() === artistaSel.toLowerCase()));
     });
