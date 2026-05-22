@@ -91,7 +91,7 @@ function PontoPlaylistsPlanilha() {
     if (!musicaSel) return;
     setSaving(plataforma);
     setMsg(null);
-    const d: any = await api.call("ponto_salvar_playlist_ecoin", {
+    const d: any = await api.salvarPlaylistEcoin({
       tgId,
       artista: artistaSel,
       musica: musicaSel.musica,
