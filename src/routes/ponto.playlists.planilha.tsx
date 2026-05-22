@@ -1,15 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
-import { ChevronLeft, Loader2, CheckCircle2, Music2, Wallet } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronLeft, Loader2, Coins, Music2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTelegramUser } from "@/lib/telegram";
-import { notify } from "@/lib/notify";
 
-type Plat = "SPOTIFY" | "APPLE MUSIC" | "YOUTUBE";
+export const Route = createFileRoute("/ponto/playlists/planilha")({
+  component: PontoPlaylistsPlanilha,
+});
 
-const PLAYLISTS: Record<Plat, string[]> = {
+const PLAYLISTS: Record<string, string[]> = {
   SPOTIFY: [
-    "TOPO TODAY'S TOP HITS",
     "TODAY'S TOP HITS",
     "POP UP",
     "ROCK SOLID",
@@ -25,7 +25,6 @@ const PLAYLISTS: Record<Plat, string[]> = {
     "THIS IS... (ARTIST)",
   ],
   "APPLE MUSIC": [
-    "TOPO TODAY'S HITS",
     "TODAY'S HITS",
     "A-LIST POP",
     "hyped<D>",
@@ -40,188 +39,196 @@ const PLAYLISTS: Record<Plat, string[]> = {
     "RANDOM SONGS",
     "JUST... (ARTIST)",
   ],
-  YOUTUBE: ["Ad 5 segundos (Comercial/Video)", "Ad 30 segundos (Comercial/Video)", "Ad (Vídeo Completo)"],
+  YOUTUBE: ["Ad 5 segundos (Comercial/Vídeo)", "Ad 30 segundos (Comercial/Vídeo)", "Ad (Vídeo Completo)"],
 };
 
-const PLAT_STYLE: Record<Plat, { color: string; bg: string }> = {
-  SPOTIFY: { color: "text-green-400", bg: "bg-green-500/15" },
-  "APPLE MUSIC": { color: "text-pink-400", bg: "bg-pink-500/15" },
-  YOUTUBE: { color: "text-red-400", bg: "bg-red-500/15" },
-};
+type Artista = { nome: string; saldo: number };
+type Musica = { linha: number; artista: string; musica: string };
 
-type MusicaItem = { linha: number; musica: string };
-
-function PontoPlaylistsManual() {
+function PontoPlaylistsPlanilha() {
   const { user } = useTelegramUser();
-  const tgId = user?.id ? String(user.id) : "";
+  const tgId = user?.id || localStorage.getItem("empire_tg_id") || "";
 
-  const [musicas, setMusicas] = useState<MusicaItem[]>([]);
+  const [artistas, setArtistas] = useState<Artista[]>([]);
+  const [musicas, setMusicas] = useState<Musica[]>([]);
+  const [artistaSel, setArtistaSel] = useState<string>("");
+  const [musicaSel, setMusicaSel] = useState<Musica | null>(null);
+  const [salvo, setSalvo] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [sel, setSel] = useState<MusicaItem | null>(null);
-  const [selecoes, setSelecoes] = useState<Partial<Record<Plat, string>>>({});
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [saldo, setSaldo] = useState<number | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
+  // ── Carrega saldos dos artistas
   useEffect(() => {
     if (!tgId) return;
     setLoading(true);
-    api.listarMusicasEdicao(tgId).then((r) => {
-      setMusicas(Array.isArray(r?.musicas) ? r.musicas : []);
-      setLoading(false);
-    });
+    api
+      .call("ponto_saldo_ecoin", { tgId })
+      .then((d: any) => {
+        if (d?.saldos) {
+          setArtistas(
+            Object.entries(d.saldos as Record<string, number>).map(([nome, saldo]) => ({ nome, saldo: Number(saldo) })),
+          );
+        }
+      })
+      .finally(() => setLoading(false));
   }, [tgId]);
 
-  async function salvar() {
-    if (!sel || !tgId) return;
-    const entradas = (Object.entries(selecoes) as [Plat, string][]).filter(([, v]) => !!v);
-    if (!entradas.length) {
-      notify({ erro: "Selecione ao menos uma playlist." });
-      return;
-    }
-    setSaving(true);
-    let ok = true;
-    let ultimoSaldo: number | null = null;
-    for (const [plat, playlist] of entradas) {
-      const r = await api.salvarPlaylistEcoin({
-        tgId,
-        musica: sel.musica,
-        artista: "",
-        plataforma: plat,
-        playlist,
-      });
-      if (r?.erro) {
-        notify(r);
-        ok = false;
-      } else if (r?.saldo !== undefined && r.saldo !== null) {
-        ultimoSaldo = Number(r.saldo);
-      }
-    }
-    setSaving(false);
-    if (ok) {
-      setSaved(true);
-      if (ultimoSaldo !== null) setSaldo(ultimoSaldo);
-      setSelecoes({});
-      setTimeout(() => setSaved(false), 2500);
+  // ── Carrega músicas ao selecionar artista
+  useEffect(() => {
+    if (!artistaSel || !tgId) return;
+    setMusicas([]);
+    setMusicaSel(null);
+    setSalvo({});
+    setMsg(null);
+    api.call("ponto_listar_musicas_edicao", { tgId }).then((d: any) => {
+      const todas: Musica[] = d?.musicas || [];
+      setMusicas(todas.filter((m) => m.artista?.toLowerCase() === artistaSel.toLowerCase()));
+    });
+  }, [artistaSel, tgId]);
+
+  async function salvarPlaylist(plataforma: string, playlist: string) {
+    if (!musicaSel) return;
+    setSaving(plataforma);
+    setMsg(null);
+    const d: any = await api.call("ponto_salvar_playlist_ecoin", {
+      tgId,
+      artista: artistaSel,
+      musica: musicaSel.musica,
+      plataforma,
+      playlist,
+    });
+    setSaving(null);
+    if (d?.ok) {
+      setSalvo((prev) => ({ ...prev, [plataforma]: playlist }));
+      setMsg({ text: `✅ ${plataforma} salva!`, ok: true });
+    } else {
+      setMsg({ text: `❌ ${d?.erro || "Erro desconhecido"}`, ok: false });
     }
   }
 
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 size={28} className="animate-spin text-primary" />
-      </div>
-    );
-
-  if (!tgId)
-    return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">
-        Abra pelo Telegram.
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-purple-400 w-8 h-8" />
       </div>
     );
 
   return (
-    <div className="min-h-screen bg-background px-4 pt-6 pb-28 flex flex-col gap-5">
-      <div className="flex items-center gap-3">
-        <Link to="/ponto/playlists" className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
-          <ChevronLeft size={20} />
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold tracking-tight">Playlists - Manual</h1>
-          <p className="text-xs text-muted-foreground">Escolha uma musica e distribua.</p>
-        </div>
-        {saldo !== null && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
-            <Wallet size={13} className="text-emerald-400" />
-            <span className="text-xs font-bold text-emerald-400">E${Number(saldo).toLocaleString("pt-BR")}</span>
-          </div>
-        )}
-      </div>
+    <main className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950 to-gray-900 text-white p-4 pb-32">
+      {/* Header */}
+      <Link to="/ponto/playlists" className="inline-flex items-center gap-1 text-purple-300 mb-5 text-sm">
+        <ChevronLeft className="w-4 h-4" /> Voltar
+      </Link>
+      <h1 className="text-2xl font-extrabold text-center mb-6 text-purple-300">💿 Investimento de Playlist</h1>
 
-      <div className="flex flex-col gap-2">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-1">Musica</p>
-        {musicas.length === 0 && <p className="text-sm text-muted-foreground px-1">Nenhuma musica encontrada.</p>}
-        <div className="flex flex-col gap-2 max-h-52 overflow-y-auto pr-1">
-          {musicas.map((m) => (
+      {/* ── Saldos / Seleção de artista ── */}
+      <p className="text-xs text-gray-400 uppercase tracking-widest mb-2 font-semibold">Selecione seu artista</p>
+      {artistas.length === 0 ? (
+        <p className="text-sm text-gray-500">Nenhum artista vinculado.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          {artistas.map((a) => (
             <button
-              key={m.linha}
-              onClick={() => {
-                setSel(m);
-                setSelecoes({});
-                setSaved(false);
-              }}
-              className={
-                "w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center gap-3 " +
-                (sel?.linha === m.linha
-                  ? "border-primary bg-primary/10 text-white"
-                  : "border-white/8 bg-card hover:border-white/20")
-              }
+              key={a.nome}
+              onClick={() => setArtistaSel(a.nome)}
+              className={`rounded-2xl p-4 flex flex-col items-center gap-1 border-2 transition-all active:scale-95 ${
+                artistaSel === a.nome
+                  ? "border-purple-400 bg-purple-900/60 scale-105"
+                  : "border-white/10 bg-white/5 hover:bg-white/10"
+              }`}
             >
-              <Music2 size={15} className={sel?.linha === m.linha ? "text-primary" : "text-muted-foreground"} />
-              <p className="text-sm font-medium truncate">{m.musica}</p>
+              <span className="text-2xl">🎤</span>
+              <span className="font-semibold text-sm text-center leading-tight">{a.nome}</span>
+              <span className="flex items-center gap-1 text-yellow-300 text-xs font-bold">
+                <Coins className="w-3 h-3" />
+                {a.saldo.toLocaleString("pt-BR")}
+              </span>
             </button>
           ))}
         </div>
-      </div>
+      )}
 
-      {sel && (
-        <div className="flex flex-col gap-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-1">Plataformas</p>
-          {(Object.keys(PLAYLISTS) as Plat[]).map((plat) => {
-            const style = PLAT_STYLE[plat];
-            const opcoes = PLAYLISTS[plat];
-            const atual = selecoes[plat] ?? "";
-            return (
-              <div key={plat} className="rounded-2xl border border-white/8 bg-card overflow-hidden">
-                <div className={"flex items-center px-4 py-2.5 " + style.bg}>
-                  <span className={"text-xs font-bold uppercase tracking-wider " + style.color}>{plat}</span>
-                </div>
-                <div className="px-3 py-2.5">
-                  <select
-                    value={atual}
-                    onChange={(e) => setSelecoes((prev) => ({ ...prev, [plat]: e.target.value }))}
-                    className="w-full rounded-xl px-3 py-2.5 text-sm outline-none bg-zinc-800 text-white border border-white/10 focus:border-primary transition-colors"
-                  >
-                    <option value="">- selecionar -</option>
-                    {opcoes.map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            );
-          })}
+      {/* ── Músicas do artista ── */}
+      {artistaSel && (
+        <div className="mb-6">
+          <p className="text-xs text-purple-300 uppercase tracking-widest mb-2 font-semibold flex items-center gap-2">
+            <Music2 className="w-4 h-4" /> Músicas de {artistaSel}
+          </p>
+          {musicas.length === 0 ? (
+            <p className="text-sm text-gray-500">Nenhuma música encontrada.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {musicas.map((m) => (
+                <button
+                  key={m.linha}
+                  onClick={() => {
+                    setMusicaSel(m);
+                    setSalvo({});
+                    setMsg(null);
+                  }}
+                  className={`rounded-xl px-4 py-3 text-left text-sm border transition-all active:scale-95 ${
+                    musicaSel?.linha === m.linha
+                      ? "border-purple-400 bg-purple-800/50 font-semibold"
+                      : "border-white/10 bg-white/5 hover:bg-white/10"
+                  }`}
+                >
+                  🎵 {m.musica}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {sel && (
-        <button
-          onClick={salvar}
-          disabled={saving || saved || !Object.values(selecoes).some(Boolean)}
-          className={
-            "w-full py-4 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2 " +
-            (saved
-              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-              : "bg-primary text-black hover:bg-primary/90 disabled:opacity-40")
-          }
-        >
-          {saving ? (
-            <Loader2 size={18} className="animate-spin" />
-          ) : saved ? (
-            <>
-              <CheckCircle2 size={18} /> Salvo!
-            </>
-          ) : (
-            "Salvar playlists"
+      {/* ── Playlists por plataforma ── */}
+      {musicaSel && (
+        <div className="flex flex-col gap-4">
+          <p className="text-xs text-purple-300 uppercase tracking-widest font-semibold">
+            🎯 Playlists para: <span className="text-white normal-case">{musicaSel.musica}</span>
+          </p>
+
+          {(["SPOTIFY", "APPLE MUSIC", "YOUTUBE"] as const).map((plat) => (
+            <div key={plat} className="bg-white/5 rounded-2xl p-4 border border-white/10">
+              <p className="text-xs text-gray-400 mb-2 font-semibold">{plat}</p>
+
+              {/* Caixinhas de opção */}
+              <div className="flex flex-col gap-2">
+                {PLAYLISTS[plat].map((pl) => {
+                  const selecionada = salvo[plat] === pl;
+                  return (
+                    <button
+                      key={pl}
+                      disabled={saving === plat}
+                      onClick={() => salvarPlaylist(plat, pl)}
+                      className={`w-full text-left px-4 py-2.5 rounded-xl text-sm border transition-all active:scale-95 ${
+                        selecionada
+                          ? "border-green-400 bg-green-900/40 text-green-300 font-semibold"
+                          : "border-white/10 bg-white/5 hover:bg-purple-800/40 hover:border-purple-400"
+                      }`}
+                    >
+                      {selecionada ? "✓ " : ""}
+                      {pl}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {saving === plat && (
+                <div className="flex items-center gap-2 mt-2 text-xs text-purple-300">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Salvando...
+                </div>
+              )}
+            </div>
+          ))}
+
+          {msg && (
+            <p className={`text-center text-sm font-semibold mt-2 ${msg.ok ? "text-green-400" : "text-red-400"}`}>
+              {msg.text}
+            </p>
           )}
-        </button>
+        </div>
       )}
-    </div>
+    </main>
   );
 }
-
-export const Route = createFileRoute("/ponto/playlists/planilha")({
-  component: PontoPlaylistsManual,
-});
