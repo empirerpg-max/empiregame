@@ -1,12 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { ChevronLeft, ChevronDown, ChevronUp, Loader2, Coins, RefreshCw, Send, AlertTriangle, AlertCircle } from "lucide-react";
-import { api } from "@/lib/api";
 import { useTelegramUser } from "@/lib/telegram";
 
 export const Route = createFileRoute("/ponto/playlists/planilha")({
   component: PontoPlaylistsPlanilha,
 });
+
+// Comunicação direta para burlar o cache do Lovable
+const GAS_URL = import.meta.env.VITE_GAS_URL || import.meta.env.VITE_APJ_URL || "";
+async function fetchData(params: Record<string, any>) {
+  const url = new URL(GAS_URL);
+  Object.entries(params).forEach(([key, val]) => {
+    if (val !== undefined && val !== null) url.searchParams.append(key, String(val));
+  });
+  const res = await fetch(url.toString());
+  return res.json();
+}
 
 const PLAYLISTS: Record<string, string[]> = {
   SPOTIFY: ["TOPO TODAY'S TOP HITS", "TODAY'S TOP HITS", "POP UP", "ROCK SOLID", "RAP CAVIAR", "MINT", "ARE & BE", "VIVA LATINO", "ALTERNATIVE PARTY", "JUST HITS", "NEW SONGS", "WORKOUT TIME", "RANDOM SONGS", "THIS IS... (ARTIST)"],
@@ -40,8 +50,8 @@ function PontoPlaylistsPlanilha() {
     setLoading(true);
     try {
       const [pts, sal]: [any, any] = await Promise.all([
-        api.call({ acao: "ponto_listar_pontos", tgId }).catch(() => ({})),
-        api.call({ acao: "ponto_saldo_ecoin_dados", tgId }).catch(() => ({}))
+        fetchData({ acao: "ponto_listar_pontos", tgId }).catch(() => ({})),
+        fetchData({ acao: "ponto_saldo_ecoin_dados", tgId }).catch(() => ({}))
       ]);
 
       if (pts?.erro) setMsg({ key: "global", text: pts.erro, ok: false });
@@ -68,7 +78,7 @@ function PontoPlaylistsPlanilha() {
     if (!tgId || !artistaNome) return;
     setRefreshing(true);
     try {
-      const sal: any = await api.call({ acao: "ponto_saldo_ecoin_dados", tgId });
+      const sal: any = await fetchData({ acao: "ponto_saldo_ecoin_dados", tgId });
       if (sal?.saldos) {
         setSaldosMap(sal.saldos);
       }
@@ -104,7 +114,7 @@ function PontoPlaylistsPlanilha() {
     let sucessos = 0;
 
     for (const [plataforma, playlist] of Object.entries(selecoes)) {
-      const d: any = await api.call({
+      const d: any = await fetchData({
         acao: "ponto_salvar_playlist_ecoin",
         tgId,
         artista: musica.artista,
