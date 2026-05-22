@@ -7,27 +7,15 @@ export const Route = createFileRoute("/ponto/distribuir/planilha")({
   component: PontoPlanilha,
 });
 
-// Comunicação direta com tratamento real de erros
+// Comunicação direta para burlar o cache do Lovable
+const GAS_URL = import.meta.env.VITE_GAS_URL || import.meta.env.VITE_APJ_URL || "";
 async function fetchData(params: Record<string, any>) {
-  const gasUrl = import.meta.env.VITE_GAS_URL || import.meta.env.VITE_APJ_URL || "";
-  if (!gasUrl) {
-    throw new Error("A variável de ambiente VITE_GAS_URL sumiu do Lovable.");
-  }
-  
-  const url = new URL(gasUrl);
+  const url = new URL(GAS_URL);
   Object.entries(params).forEach(([key, val]) => {
     if (val !== undefined && val !== null) url.searchParams.append(key, String(val));
   });
-  
   const res = await fetch(url.toString());
-  const text = await res.text();
-  
-  try {
-    return JSON.parse(text);
-  } catch(e) {
-    console.error("Erro do Google:", text);
-    throw new Error("O Google retornou um erro de código HTML. Tem algum erro de sintaxe no Apps Script.");
-  }
+  return res.json();
 }
 
 const OPCOES_PONTOS: Record<string, string[]> = {
@@ -65,7 +53,7 @@ function PontoPlanilha() {
     setLoading(true);
     fetchData({ acao: "ponto_listar_pontos", tgId }).then((d: any) => {
       if (d?.erro) {
-        setMsg({ key: "global", text: `Backend retornou: ${d.erro}`, ok: false });
+        setMsg({ key: "global", text: d.erro, ok: false });
         return;
       }
       const linhas = d?.linhas || d?.rows || [];
@@ -78,8 +66,8 @@ function PontoPlanilha() {
         pontosUtilizados: r.valores?.["PONTOS UTILIZADOS"] || "0%",
       }));
       setRows(lista);
-    }).catch((err) => {
-      setMsg({ key: "global", text: err.message, ok: false });
+    }).catch(() => {
+      setMsg({ key: "global", text: "Erro ao se conectar com a planilha PONTOS.", ok: false });
     }).finally(() => setLoading(false));
   }, [tgId]);
 
@@ -87,18 +75,13 @@ function PontoPlanilha() {
     const key = `${row.linha}-${coluna}`;
     setSaving(key);
     setMsg(null);
-    try {
-      const d: any = await fetchData({ acao: "ponto_salvar_celula", tgId, linha: row.linha, coluna, valor });
-      if (d?.ok || d?.message) {
-        setSalvo((prev) => ({ ...prev, [key]: valor }));
-        setMsg({ key, text: `✅ Salvo com sucesso!`, ok: true });
-      } else {
-        setMsg({ key, text: `❌ ${d?.erro || "Erro desconhecido"}`, ok: false });
-      }
-    } catch(err: any) {
-       setMsg({ key, text: `❌ ${err.message}`, ok: false });
-    } finally {
-      setSaving(null);
+    const d: any = await fetchData({ acao: "ponto_salvar_celula", tgId, linha: row.linha, coluna, valor });
+    setSaving(null);
+    if (d?.ok || d?.message) {
+      setSalvo((prev) => ({ ...prev, [key]: valor }));
+      setMsg({ key, text: `✅ Salvo com sucesso!`, ok: true });
+    } else {
+      setMsg({ key, text: `❌ ${d?.erro || "Erro"}`, ok: false });
     }
   }
 
@@ -118,8 +101,8 @@ function PontoPlanilha() {
       </div>
 
       {msg?.key === "global" && (
-        <div className="p-4 bg-red-950/40 border border-red-500/50 rounded-2xl text-red-400 text-sm font-semibold leading-relaxed">
-          🚨 Atenção: <br/>{msg.text}
+        <div className="p-4 bg-red-950/40 border border-red-500/50 rounded-2xl text-red-400 text-sm font-semibold">
+          {msg.text}
         </div>
       )}
 
