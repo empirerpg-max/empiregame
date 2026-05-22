@@ -215,6 +215,7 @@ export function PlanilhaGrid({ tgId, loader, saver, opcoesColunas = {} }: Planil
                   )}
                 </div>
               );
+            })}
               </div>
             )}
           </div>
@@ -223,5 +224,4 @@ export function PlanilhaGrid({ tgId, loader, saver, opcoesColunas = {} }: Planil
     </div>
   );
 }
-  );
-}
+
