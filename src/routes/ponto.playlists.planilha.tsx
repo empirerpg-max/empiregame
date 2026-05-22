@@ -95,6 +95,15 @@ function PontoPlaylistsPlanilha() {
     });
   }, [artistaSel, tgId]);
 
+  async function refreshSaldos() {
+    const sal: any = await api.saldoEcoin(tgId).catch(() => null);
+    if (sal?.saldos) {
+      setArtistas((prev) =>
+        prev.map((a) => ({ ...a, saldo: Number(sal.saldos[a.nome] ?? a.saldo) || a.saldo })),
+      );
+    }
+  }
+
   async function salvarPlaylist(plataforma: string, playlist: string) {
     if (!musicaSel) return;
     setSaving(plataforma);
@@ -108,12 +117,14 @@ function PontoPlaylistsPlanilha() {
     });
     setSaving(null);
     if (d?.ok) {
-      setSalvo((prev) => ({ ...prev, [plataforma]: playlist }));
+      setSalvo((prev) => ({ ...prev, [`${musicaSel.linha}-${plataforma}`]: playlist }));
       setMsg({ text: `✅ ${plataforma} salva!`, ok: true });
+      refreshSaldos();
     } else {
       setMsg({ text: `❌ ${d?.erro || "Erro desconhecido"}`, ok: false });
     }
   }
+
 
   if (loading)
     return (
