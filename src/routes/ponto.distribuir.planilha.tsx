@@ -12,51 +12,9 @@ const OPCOES_PONTOS: Record<string, string[]> = {
   "BILLBOARD HOT 100": ["1,00%", "2,00%", "3,00%", "4,00%", "5,00%", "6,00%", "7,00%", "8,00%", "9,00%", "10,00%"],
   SPOTIFY: ["30,00%", "40,00%", "50,00%", "60,00%", "70,00%"],
   "APPLE MUSIC": ["30,00%", "40,00%", "50,00%", "60,00%", "70,00%"],
-  YOUTUBE: [
-    "10,00%",
-    "15,00%",
-    "20,00%",
-    "25,00%",
-    "30,00%",
-    "35,00%",
-    "40,00%",
-    "45,00%",
-    "50,00%",
-    "55,00%",
-    "60,00%",
-    "65,00%",
-    "70,00%",
-  ],
-  "DIGITAL SALES": [
-    "10,00%",
-    "15,00%",
-    "20,00%",
-    "25,00%",
-    "30,00%",
-    "35,00%",
-    "40,00%",
-    "45,00%",
-    "50,00%",
-    "55,00%",
-    "60,00%",
-    "65,00%",
-    "70,00%",
-  ],
-  "BILLBOARD 200": [
-    "10,00%",
-    "15,00%",
-    "20,00%",
-    "25,00%",
-    "30,00%",
-    "35,00%",
-    "40,00%",
-    "45,00%",
-    "50,00%",
-    "55,00%",
-    "60,00%",
-    "65,00%",
-    "70,00%",
-  ],
+  YOUTUBE: ["10,00%", "15,00%", "20,00%", "25,00%", "30,00%", "35,00%", "40,00%", "45,00%", "50,00%", "55,00%", "60,00%", "65,00%", "70,00%"],
+  "DIGITAL SALES": ["10,00%", "15,00%", "20,00%", "25,00%", "30,00%", "35,00%", "40,00%", "45,00%", "50,00%", "55,00%", "60,00%", "65,00%", "70,00%"],
+  "BILLBOARD 200": ["10,00%", "15,00%", "20,00%", "25,00%", "30,00%", "35,00%", "40,00%", "45,00%", "50,00%", "55,00%", "60,00%", "65,00%", "70,00%"],
 };
 
 type PontoRow = {
@@ -83,28 +41,24 @@ function PontoPlanilha() {
   useEffect(() => {
     if (!tgId) return;
     setLoading(true);
-    api
-      .call({ acao: "ponto_listar_pontos", tgId })
-      .then((d: any) => {
-        if (d?.erro) {
-          setMsg({ key: "global", text: d.erro, ok: false });
-          return;
-        }
-        const linhas = d?.linhas || d?.rows || [];
-        const lista: PontoRow[] = linhas.map((r: any) => ({
-          linha: r.linha ?? r.row ?? 0,
-          artista: r.artista || r.ARTISTA || "",
-          musica: r.valores?.["MÚSICA"] || r.valores?.["NOME DA MÚSICA"] || r.valores?.["MUSICA"] || "(Sem título)",
-          valores: r.valores || {},
-          pontosDisponiveis: r.valores?.["PONTOS DISPONÍVEIS"] || "0%",
-          pontosUtilizados: r.valores?.["PONTOS UTILIZADOS"] || "0%",
-        }));
-        setRows(lista);
-      })
-      .catch(() => {
-        setMsg({ key: "global", text: "Erro ao se conectar com a planilha PONTOS.", ok: false });
-      })
-      .finally(() => setLoading(false));
+    api.call({ acao: "ponto_listar_pontos", tgId }).then((d: any) => {
+      if (d?.erro) {
+        setMsg({ key: "global", text: d.erro, ok: false });
+        return;
+      }
+      const linhas = d?.linhas || d?.rows || [];
+      const lista: PontoRow[] = linhas.map((r: any) => ({
+        linha: r.linha ?? r.row ?? 0,
+        artista: r.artista || r.ARTISTA || "",
+        musica: r.valores?.["MÚSICA"] || r.valores?.["NOME DA MÚSICA"] || r.valores?.["MUSICA"] || "(Sem título)",
+        valores: r.valores || {},
+        pontosDisponiveis: r.valores?.["PONTOS DISPONÍVEIS"] || "0%",
+        pontosUtilizados: r.valores?.["PONTOS UTILIZADOS"] || "0%",
+      }));
+      setRows(lista);
+    }).catch(() => {
+      setMsg({ key: "global", text: "Erro ao se conectar com a planilha PONTOS.", ok: false });
+    }).finally(() => setLoading(false));
   }, [tgId]);
 
   async function salvarPonto(row: PontoRow, coluna: string, valor: string) {
@@ -121,12 +75,9 @@ function PontoPlanilha() {
     }
   }
 
-  if (!ready || loading)
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="animate-spin text-primary w-8 h-8" />
-      </div>
-    );
+  if (!ready || loading) return (
+    <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-primary w-8 h-8" /></div>
+  );
 
   return (
     <main className="flex-1 mx-auto w-full max-w-md px-6 pt-6 pb-24 flex flex-col gap-4">
@@ -148,37 +99,28 @@ function PontoPlanilha() {
       {rows.length === 0 && !msg ? (
         <div className="p-8 text-center bg-white/5 rounded-2xl border border-white/10">
           <AlertCircle className="w-8 h-8 mx-auto text-muted-foreground mb-3 opacity-50" />
-          <p className="text-sm text-muted-foreground">
-            Nenhuma música encontrada na aba PONTOS para os seus artistas.
-          </p>
+          <p className="text-sm text-muted-foreground">Nenhuma música encontrada na aba PONTOS para os seus artistas.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
           {rows.map((row) => {
             const musicaOpen = musicaAberta === row.linha;
             return (
-              <div
-                key={row.linha}
-                className="rounded-2xl border border-white/10 bg-card overflow-hidden shadow-lg transition-all"
-              >
+              <div key={row.linha} className="rounded-2xl border border-white/10 bg-card overflow-hidden shadow-lg transition-all">
                 <button
                   onClick={() => {
                     setMusicaAberta(musicaOpen ? null : row.linha);
                     setColunaAberta(null);
                     setMsg(null);
                   }}
-                  className={`w-full px-4 py-4 text-left transition-colors ${musicaOpen ? "bg-primary/5" : "hover:bg-white/5"}`}
+                  className={`w-full px-4 py-4 text-left transition-colors ${musicaOpen ? 'bg-primary/5' : 'hover:bg-white/5'}`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1 pr-4">
                       <p className="text-xs text-primary font-bold uppercase tracking-wider mb-1">{row.artista}</p>
                       <h3 className="font-bold text-lg leading-tight">{row.musica}</h3>
                     </div>
-                    {musicaOpen ? (
-                      <ChevronUp className="w-5 h-5 text-primary shrink-0" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-muted-foreground shrink-0" />
-                    )}
+                    {musicaOpen ? <ChevronUp className="w-5 h-5 text-primary shrink-0" /> : <ChevronDown className="w-5 h-5 text-muted-foreground shrink-0" />}
                   </div>
 
                   <div className="flex gap-4 mt-3 pt-3 border-t border-white/5">
@@ -215,11 +157,7 @@ function PontoPlanilha() {
                                 </p>
                               )}
                             </div>
-                            {colOpen ? (
-                              <ChevronUp className="w-4 h-4 text-primary" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                            )}
+                            {colOpen ? <ChevronUp className="w-4 h-4 text-primary" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                           </button>
 
                           {colOpen && (
@@ -233,9 +171,7 @@ function PontoPlanilha() {
                                       disabled={isSaving}
                                       onClick={() => salvarPonto(row, coluna, op)}
                                       className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all active:scale-95 ${
-                                        sel
-                                          ? "border-primary bg-primary/20 text-primary"
-                                          : "border-white/10 bg-black/40 hover:border-primary/50 text-gray-300"
+                                        sel ? "border-primary bg-primary/20 text-primary" : "border-white/10 bg-black/40 hover:border-primary/50 text-gray-300"
                                       }`}
                                     >
                                       {op}
@@ -243,17 +179,9 @@ function PontoPlanilha() {
                                   );
                                 })}
                               </div>
-                              {isSaving && (
-                                <div className="mt-3 flex items-center gap-2 text-xs text-primary">
-                                  <Loader2 className="w-3 h-3 animate-spin" /> Salvando...
-                                </div>
-                              )}
+                              {isSaving && <div className="mt-3 flex items-center gap-2 text-xs text-primary"><Loader2 className="w-3 h-3 animate-spin" /> Salvando...</div>}
                               {msg?.key === colKey && (
-                                <p
-                                  className={`mt-3 text-xs font-semibold ${msg.ok ? "text-green-400" : "text-red-400"}`}
-                                >
-                                  {msg.text}
-                                </p>
+                                <p className={`mt-3 text-xs font-semibold ${msg.ok ? "text-green-400" : "text-red-400"}`}>{msg.text}</p>
                               )}
                             </div>
                           )}
