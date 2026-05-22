@@ -58,21 +58,28 @@ function PontoPlaylistsPlanilha() {
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  // ── Carrega saldos dos artistas
+  // ── Carrega artistas do jogador + saldos
   useEffect(() => {
     if (!tgId) return;
     setLoading(true);
-    api
-      .saldoEcoin(tgId)
-      .then((d: any) => {
-        if (d?.saldos) {
+    Promise.all([api.getJogador(tgId), api.saldoEcoin(tgId).catch(() => ({ saldos: {} as Record<string, number> }))])
+      .then(([jog, sal]) => {
+        const nomes: string[] = jog?.artistas || [];
+        const saldos = (sal as any)?.saldos || {};
+        if (nomes.length === 0 && saldos && Object.keys(saldos).length > 0) {
           setArtistas(
-            Object.entries(d.saldos as Record<string, number>).map(([nome, saldo]) => ({ nome, saldo: Number(saldo) })),
+            Object.entries(saldos as Record<string, number>).map(([nome, saldo]) => ({
+              nome,
+              saldo: Number(saldo) || 0,
+            })),
           );
+        } else {
+          setArtistas(nomes.map((nome) => ({ nome, saldo: Number(saldos[nome] ?? 0) })));
         }
       })
       .finally(() => setLoading(false));
   }, [tgId]);
+
 
   // ── Carrega músicas ao selecionar artista
   useEffect(() => {
