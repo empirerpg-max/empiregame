@@ -82,19 +82,27 @@ function PontoPlanilha() {
 
   useEffect(() => {
     if (!tgId) return;
+    setLoading(true);
     api
       .pontoListarPontos(tgId)
       .then((d: any) => {
+        if (d?.erro) {
+          setMsg({ key: "global", text: d.erro, ok: false });
+          return;
+        }
         const linhas = d?.linhas || d?.rows || [];
         const lista: PontoRow[] = linhas.map((r: any) => ({
           linha: r.linha ?? r.row ?? 0,
           artista: r.artista || r.ARTISTA || "",
-          musica: r.valores?.["MÚSICA"] || r.valores?.["MUSICA"] || "(Sem título)",
+          musica: r.valores?.["MÚSICA"] || r.valores?.["NOME DA MÚSICA"] || r.valores?.["MUSICA"] || "(Sem título)",
           valores: r.valores || {},
           pontosDisponiveis: r.valores?.["PONTOS DISPONÍVEIS"] || "0%",
           pontosUtilizados: r.valores?.["PONTOS UTILIZADOS"] || "0%",
         }));
         setRows(lista);
+      })
+      .catch(() => {
+        setMsg({ key: "global", text: "Erro ao se conectar com a planilha PONTOS.", ok: false });
       })
       .finally(() => setLoading(false));
   }, [tgId]);
@@ -121,7 +129,7 @@ function PontoPlanilha() {
     );
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24 w-full max-w-md mx-auto relative z-10">
+    <main className="flex-1 w-full max-w-md mx-auto flex flex-col gap-4 p-4 pb-24 relative z-10 h-full mt-2">
       <Link to="/ponto/distribuir" className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
         <ChevronLeft className="w-4 h-4" /> Voltar
       </Link>
@@ -131,124 +139,134 @@ function PontoPlanilha() {
         <p className="text-sm text-muted-foreground mt-1">Gerencie a distribuição das suas músicas.</p>
       </div>
 
-      {rows.length === 0 && (
-        <div className="p-8 text-center bg-white/5 rounded-2xl border border-white/10">
-          <AlertCircle className="w-8 h-8 mx-auto text-muted-foreground mb-3 opacity-50" />
-          <p className="text-sm text-muted-foreground">Nenhuma música encontrada na aba PONTOS.</p>
+      {msg?.key === "global" && (
+        <div className="p-4 bg-red-950/40 border border-red-500/50 rounded-2xl text-red-400 text-sm font-semibold">
+          {msg.text}
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        {rows.map((row) => {
-          const musicaOpen = musicaAberta === row.linha;
-          return (
-            <div
-              key={row.linha}
-              className="rounded-2xl border border-white/10 bg-card overflow-hidden shadow-lg transition-all"
-            >
-              <button
-                onClick={() => {
-                  setMusicaAberta(musicaOpen ? null : row.linha);
-                  setColunaAberta(null);
-                  setMsg(null);
-                }}
-                className={`w-full px-4 py-4 text-left transition-colors ${musicaOpen ? "bg-primary/5" : "hover:bg-white/5"}`}
+      {rows.length === 0 && !msg ? (
+        <div className="p-8 text-center bg-white/5 rounded-2xl border border-white/10">
+          <AlertCircle className="w-8 h-8 mx-auto text-muted-foreground mb-3 opacity-50" />
+          <p className="text-sm text-muted-foreground">
+            Nenhuma música encontrada na aba PONTOS para os seus artistas.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {rows.map((row) => {
+            const musicaOpen = musicaAberta === row.linha;
+            return (
+              <div
+                key={row.linha}
+                className="rounded-2xl border border-white/10 bg-card overflow-hidden shadow-lg transition-all"
               >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1 pr-4">
-                    <p className="text-xs text-primary font-bold uppercase tracking-wider mb-1">{row.artista}</p>
-                    <h3 className="font-bold text-lg leading-tight">{row.musica}</h3>
+                <button
+                  onClick={() => {
+                    setMusicaAberta(musicaOpen ? null : row.linha);
+                    setColunaAberta(null);
+                    setMsg(null);
+                  }}
+                  className={`w-full px-4 py-4 text-left transition-colors ${musicaOpen ? "bg-primary/5" : "hover:bg-white/5"}`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1 pr-4">
+                      <p className="text-xs text-primary font-bold uppercase tracking-wider mb-1">{row.artista}</p>
+                      <h3 className="font-bold text-lg leading-tight">{row.musica}</h3>
+                    </div>
+                    {musicaOpen ? (
+                      <ChevronUp className="w-5 h-5 text-primary shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-muted-foreground shrink-0" />
+                    )}
                   </div>
-                  {musicaOpen ? (
-                    <ChevronUp className="w-5 h-5 text-primary shrink-0" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-muted-foreground shrink-0" />
-                  )}
-                </div>
 
-                <div className="flex gap-4 mt-3 pt-3 border-t border-white/5">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase">Disponível</p>
-                    <p className="text-sm font-bold text-green-400">{row.pontosDisponiveis}</p>
+                  <div className="flex gap-4 mt-3 pt-3 border-t border-white/5">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase">Disponível</p>
+                      <p className="text-sm font-bold text-green-400">{row.pontosDisponiveis}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase">Utilizado</p>
+                      <p className="text-sm font-bold text-yellow-400">{row.pontosUtilizados}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase">Utilizado</p>
-                    <p className="text-sm font-bold text-yellow-400">{row.pontosUtilizados}</p>
-                  </div>
-                </div>
-              </button>
+                </button>
 
-              {musicaOpen && (
-                <div className="bg-black/20 p-3 flex flex-col gap-2">
-                  {Object.entries(OPCOES_PONTOS).map(([coluna, opcoes]) => {
-                    const colKey = `${row.linha}-${coluna}`;
-                    const colOpen = colunaAberta === colKey;
-                    const salvoVal = salvo[colKey] || row.valores?.[coluna] || "";
-                    const isSaving = saving === colKey;
+                {musicaOpen && (
+                  <div className="bg-black/20 p-3 flex flex-col gap-2">
+                    {Object.entries(OPCOES_PONTOS).map(([coluna, opcoes]) => {
+                      const colKey = `${row.linha}-${coluna}`;
+                      const colOpen = colunaAberta === colKey;
+                      const salvoVal = salvo[colKey] || row.valores?.[coluna] || "";
+                      const isSaving = saving === colKey;
 
-                    return (
-                      <div key={coluna} className="rounded-xl border border-white/5 bg-white/5 overflow-hidden">
-                        <button
-                          onClick={() => setColunaAberta(colOpen ? null : colKey)}
-                          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors"
-                        >
-                          <div>
-                            <p className="text-xs font-bold text-gray-300">{coluna}</p>
-                            {salvoVal && (
-                              <p className="text-[11px] text-primary flex items-center gap-1 mt-1">
-                                <CheckCircle2 className="w-3 h-3" /> Atual: {salvoVal}
-                              </p>
-                            )}
-                          </div>
-                          {colOpen ? (
-                            <ChevronUp className="w-4 h-4 text-primary" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                          )}
-                        </button>
-
-                        {colOpen && (
-                          <div className="p-3 pt-0 border-t border-white/5 mt-2">
-                            <div className="flex flex-wrap gap-2 mt-3">
-                              {opcoes.map((op) => {
-                                const sel = salvoVal === op;
-                                return (
-                                  <button
-                                    key={op}
-                                    disabled={isSaving}
-                                    onClick={() => salvarPonto(row, coluna, op)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all active:scale-95 ${
-                                      sel
-                                        ? "border-primary bg-primary/20 text-primary"
-                                        : "border-white/10 bg-black/40 hover:border-primary/50 text-gray-300"
-                                    }`}
-                                  >
-                                    {op}
-                                  </button>
-                                );
-                              })}
+                      return (
+                        <div key={coluna} className="rounded-xl border border-white/5 bg-white/5 overflow-hidden">
+                          <button
+                            onClick={() => setColunaAberta(colOpen ? null : colKey)}
+                            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors"
+                          >
+                            <div>
+                              <p className="text-xs font-bold text-gray-300">{coluna}</p>
+                              {salvoVal && (
+                                <p className="text-[11px] text-primary flex items-center gap-1 mt-1">
+                                  <CheckCircle2 className="w-3 h-3" /> Atual: {salvoVal}
+                                </p>
+                              )}
                             </div>
-                            {isSaving && (
-                              <div className="mt-3 flex items-center gap-2 text-xs text-primary">
-                                <Loader2 className="w-3 h-3 animate-spin" /> Salvando...
+                            {colOpen ? (
+                              <ChevronUp className="w-4 h-4 text-primary" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                            )}
+                          </button>
+
+                          {colOpen && (
+                            <div className="p-3 pt-0 border-t border-white/5 mt-2">
+                              <div className="flex flex-wrap gap-2 mt-3">
+                                {opcoes.map((op) => {
+                                  const sel = salvoVal === op;
+                                  return (
+                                    <button
+                                      key={op}
+                                      disabled={isSaving}
+                                      onClick={() => salvarPonto(row, coluna, op)}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all active:scale-95 ${
+                                        sel
+                                          ? "border-primary bg-primary/20 text-primary"
+                                          : "border-white/10 bg-black/40 hover:border-primary/50 text-gray-300"
+                                      }`}
+                                    >
+                                      {op}
+                                    </button>
+                                  );
+                                })}
                               </div>
-                            )}
-                            {msg?.key === colKey && (
-                              <p className={`mt-3 text-xs font-semibold ${msg.ok ? "text-green-400" : "text-red-400"}`}>
-                                {msg.text}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+                              {isSaving && (
+                                <div className="mt-3 flex items-center gap-2 text-xs text-primary">
+                                  <Loader2 className="w-3 h-3 animate-spin" /> Salvando...
+                                </div>
+                              )}
+                              {msg?.key === colKey && (
+                                <p
+                                  className={`mt-3 text-xs font-semibold ${msg.ok ? "text-green-400" : "text-red-400"}`}
+                                >
+                                  {msg.text}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </main>
   );
 }

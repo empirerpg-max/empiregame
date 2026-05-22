@@ -1,6 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
-import { ChevronLeft, ChevronDown, ChevronUp, Loader2, Coins, RefreshCw, Send, AlertTriangle } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Coins,
+  RefreshCw,
+  Send,
+  AlertTriangle,
+  AlertCircle,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useTelegramUser } from "@/lib/telegram";
 
@@ -48,13 +58,13 @@ type Musica = { linha: number; artista: string; musica: string };
 type Selecoes = Record<string, string>;
 
 function PontoPlaylistsPlanilha() {
-  const { user } = useTelegramUser();
+  const { user, ready } = useTelegramUser();
   const tgId = user?.id ? String(user.id) : localStorage.getItem("empire_tg_id") || "";
 
   const [musicas, setMusicas] = useState<Musica[]>([]);
   const [artistasDisp, setArtistasDisp] = useState<string[]>([]);
   const [artistaSel, setArtistaSel] = useState<string>("");
-  const [saldoAtual, setSaldoAtual] = useState<number>(0);
+  const [saldosMap, setSaldosMap] = useState<Record<string, number>>({});
 
   const [musicaAberta, setMusicaAberta] = useState<number | null>(null);
   const [pendente, setPendente] = useState<Record<string, Selecoes>>({});
@@ -69,30 +79,40 @@ function PontoPlaylistsPlanilha() {
     if (!tgId) return;
     setLoading(true);
     try {
-      // 1. Busca músicas da aba PONTOS
-      const pts: any = await api.pontoListarPontos(tgId);
+      // Busca músicas e saldos em paralelo
+      const [pts, sal]: [any, any] = await Promise.all([
+        api.pontoListarPontos(tgId).catch(() => ({})),
+        api.saldoEcoin(tgId).catch(() => ({})),
+      ]);
+
+      if (pts?.erro) setMsg({ key: "global", text: pts.erro, ok: false });
+
       const listaMusicas: Musica[] = (pts?.linhas || []).map((r: any) => ({
         linha: r.linha,
-        artista: r.artista,
-        musica: r.valores?.["MÚSICA"] || r.valores?.["MUSICA"] || "Desconhecida",
+        artista: r.artista || "",
+        musica: r.valores?.["MÚSICA"] || r.valores?.["NOME DA MÚSICA"] || r.valores?.["MUSICA"] || "Desconhecida",
       }));
 
-      const unicos = Array.from(new Set(listaMusicas.map((m) => m.artista)));
+      const unicos = Array.from(new Set(listaMusicas.map((m) => m.artista).filter((a) => a)));
       setArtistasDisp(unicos);
       setMusicas(listaMusicas);
+
+      if (sal?.saldos) {
+        setSaldosMap(sal.saldos);
+      }
     } finally {
       setLoading(false);
     }
   }, [tgId]);
 
-  const carregarSaldo = useCallback(
+  const atualizarSaldoIndividual = useCallback(
     async (artistaNome: string) => {
       if (!tgId || !artistaNome) return;
       setRefreshing(true);
       try {
         const sal: any = await api.saldoEcoin(tgId);
         if (sal?.saldos) {
-          setSaldoAtual(Number(sal.saldos[artistaNome]) || 0);
+          setSaldosMap(sal.saldos);
         }
       } finally {
         setRefreshing(false);
@@ -104,10 +124,6 @@ function PontoPlaylistsPlanilha() {
   useEffect(() => {
     carregarDados();
   }, [carregarDados]);
-
-  useEffect(() => {
-    if (artistaSel) carregarSaldo(artistaSel);
-  }, [artistaSel, carregarSaldo]);
 
   function toggleSelecao(musica: Musica, plataforma: string, playlist: string) {
     const mKey = String(musica.linha);
@@ -157,24 +173,25 @@ function PontoPlaylistsPlanilha() {
         return resto;
       });
       setMsg({ key: mKey, text: `✅ Sucesso! Playlists aplicadas na aba.`, ok: true });
-      carregarSaldo(musica.artista); // Atualiza saldo na hora
+      atualizarSaldoIndividual(musica.artista);
     } else {
       setMsg({ key: mKey, text: `❌ ${erros.join(" | ")}`, ok: false });
     }
   }
 
-  if (loading)
+  if (!ready || loading)
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="animate-spin text-primary w-8 h-8" />
       </div>
     );
 
-  const musicasFiltradas = musicas.filter((m) => m.artista === artistaSel);
+  const saldoAtual = saldosMap[artistaSel] || 0;
   const saldoNegativo = saldoAtual < 0;
+  const musicasFiltradas = musicas.filter((m) => m.artista === artistaSel);
 
   return (
-    <main className="flex flex-col gap-4 p-4 pb-32 w-full max-w-md mx-auto relative z-10">
+    <main className="flex-1 w-full max-w-md mx-auto flex flex-col gap-4 p-4 pb-24 relative z-10 h-full mt-2">
       <Link to="/ponto/playlists" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-2">
         <ChevronLeft className="w-4 h-4" /> Voltar
       </Link>
@@ -184,24 +201,37 @@ function PontoPlaylistsPlanilha() {
         <p className="text-sm text-muted-foreground mt-1">Selecione as músicas a partir da sua aba PONTOS.</p>
       </div>
 
-      <div className="flex overflow-x-auto gap-2 pb-2 hide-scrollbar">
-        {artistasDisp.map((a) => (
-          <button
-            key={a}
-            onClick={() => {
-              setArtistaSel(a);
-              setMusicaAberta(null);
-            }}
-            className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-colors ${
-              artistaSel === a
-                ? "bg-primary text-primary-foreground"
-                : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-white/10"
-            }`}
-          >
-            {a}
-          </button>
-        ))}
-      </div>
+      {msg?.key === "global" && (
+        <div className="p-4 bg-red-950/40 border border-red-500/50 rounded-2xl text-red-400 text-sm font-semibold mb-2">
+          {msg.text}
+        </div>
+      )}
+
+      {artistasDisp.length === 0 && !msg?.key ? (
+        <div className="p-8 text-center bg-white/5 rounded-2xl border border-white/10">
+          <AlertCircle className="w-8 h-8 mx-auto text-muted-foreground mb-3 opacity-50" />
+          <p className="text-sm text-muted-foreground">Nenhuma música/artista encontrado na aba PONTOS.</p>
+        </div>
+      ) : (
+        <div className="flex overflow-x-auto gap-2 pb-2 hide-scrollbar">
+          {artistasDisp.map((a) => (
+            <button
+              key={a}
+              onClick={() => {
+                setArtistaSel(a);
+                setMusicaAberta(null);
+              }}
+              className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-colors ${
+                artistaSel === a
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              {a}
+            </button>
+          ))}
+        </div>
+      )}
 
       {artistaSel && (
         <div
@@ -222,7 +252,7 @@ function PontoPlaylistsPlanilha() {
             )}
           </div>
           <button
-            onClick={() => carregarSaldo(artistaSel)}
+            onClick={() => atualizarSaldoIndividual(artistaSel)}
             disabled={refreshing}
             className="p-3 bg-white/5 rounded-xl hover:bg-white/10"
           >
@@ -231,109 +261,117 @@ function PontoPlaylistsPlanilha() {
         </div>
       )}
 
-      {artistaSel && musicasFiltradas.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {musicasFiltradas.map((m) => {
-            const mKey = String(m.linha);
-            const aberta = musicaAberta === m.linha;
-            const pendenteMusica = pendente[mKey] || {};
-            const confirmadoMusica = confirmado[mKey] || {};
-            const isEnviando = enviando === mKey;
-            const temPendente = Object.keys(pendenteMusica).length > 0;
+      {artistaSel && (
+        <div className="flex flex-col gap-3 w-full">
+          {musicasFiltradas.length === 0 ? (
+            <div className="p-4 bg-white/5 rounded-xl text-center text-sm text-muted-foreground">
+              Não encontramos músicas para {artistaSel}.
+            </div>
+          ) : (
+            musicasFiltradas.map((m) => {
+              const mKey = String(m.linha);
+              const aberta = musicaAberta === m.linha;
+              const pendenteMusica = pendente[mKey] || {};
+              const confirmadoMusica = confirmado[mKey] || {};
+              const isEnviando = enviando === mKey;
+              const temPendente = Object.keys(pendenteMusica).length > 0;
 
-            return (
-              <div key={m.linha} className="rounded-2xl border border-white/10 bg-card overflow-hidden shadow-lg">
-                <button
-                  onClick={() => {
-                    setMusicaAberta(aberta ? null : m.linha);
-                    setMsg(null);
-                  }}
-                  className={`w-full flex items-center justify-between px-4 py-4 text-left transition-colors ${aberta ? "bg-primary/5" : "hover:bg-white/5"}`}
-                >
-                  <div className="flex-1 pr-4">
-                    <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1">{m.artista}</p>
-                    <h3 className="font-bold text-base leading-tight">{m.musica}</h3>
-                  </div>
-                  {aberta ? (
-                    <ChevronUp className="w-5 h-5 text-primary" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                  )}
-                </button>
-
-                {aberta && (
-                  <div className="bg-black/20 p-3 flex flex-col gap-4 border-t border-white/5">
-                    {(["SPOTIFY", "APPLE MUSIC", "YOUTUBE"] as const).map((plat) => {
-                      const enviada = confirmadoMusica[plat];
-                      const selAtual = pendenteMusica[plat];
-
-                      return (
-                        <div key={plat} className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                          <div className="px-4 py-3 bg-white/5 border-b border-white/5 flex justify-between items-center">
-                            <p className="text-xs font-bold text-gray-300">{plat}</p>
-                            {enviada && (
-                              <span className="text-[10px] bg-green-900/30 text-green-400 px-2 py-1 rounded-full">
-                                ✓ Aplicada
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="p-2 flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar">
-                            {PLAYLISTS[plat].map((pl) => {
-                              const selecionada = selAtual === pl;
-                              const jaEnviada = enviada === pl;
-                              return (
-                                <button
-                                  key={pl}
-                                  disabled={isEnviando}
-                                  onClick={() => toggleSelecao(m, plat, pl)}
-                                  className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
-                                    jaEnviada
-                                      ? "bg-green-900/20 text-green-400 opacity-70"
-                                      : selecionada
-                                        ? "bg-primary/20 text-primary border border-primary/50"
-                                        : "hover:bg-white/5 text-gray-400 border border-transparent"
-                                  }`}
-                                >
-                                  {pl}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    <button
-                      disabled={!temPendente || isEnviando}
-                      onClick={() => enviarMusica(m)}
-                      className={`mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition-all ${
-                        temPendente && !isEnviando
-                          ? "bg-primary text-primary-foreground hover:brightness-110 shadow-[0_0_15px_rgba(var(--primary),0.3)]"
-                          : "bg-white/5 text-muted-foreground cursor-not-allowed"
-                      }`}
-                    >
-                      {isEnviando ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" /> Processando...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-4 h-4" /> Enviar Playlists Selecionadas
-                        </>
-                      )}
-                    </button>
-
-                    {msg?.key === mKey && (
-                      <p className={`text-center text-xs font-semibold ${msg.ok ? "text-green-400" : "text-red-400"}`}>
-                        {msg.text}
-                      </p>
+              return (
+                <div key={m.linha} className="rounded-2xl border border-white/10 bg-card overflow-hidden shadow-lg">
+                  <button
+                    onClick={() => {
+                      setMusicaAberta(aberta ? null : m.linha);
+                      setMsg(null);
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-4 text-left transition-colors ${aberta ? "bg-primary/5" : "hover:bg-white/5"}`}
+                  >
+                    <div className="flex-1 pr-4">
+                      <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1">{m.artista}</p>
+                      <h3 className="font-bold text-base leading-tight">{m.musica}</h3>
+                    </div>
+                    {aberta ? (
+                      <ChevronUp className="w-5 h-5 text-primary" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-muted-foreground" />
                     )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  </button>
+
+                  {aberta && (
+                    <div className="bg-black/20 p-3 flex flex-col gap-4 border-t border-white/5">
+                      {(["SPOTIFY", "APPLE MUSIC", "YOUTUBE"] as const).map((plat) => {
+                        const enviada = confirmadoMusica[plat];
+                        const selAtual = pendenteMusica[plat];
+
+                        return (
+                          <div key={plat} className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                            <div className="px-4 py-3 bg-white/5 border-b border-white/5 flex justify-between items-center">
+                              <p className="text-xs font-bold text-gray-300">{plat}</p>
+                              {enviada && (
+                                <span className="text-[10px] bg-green-900/30 text-green-400 px-2 py-1 rounded-full">
+                                  ✓ Aplicada
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="p-2 flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar">
+                              {PLAYLISTS[plat].map((pl) => {
+                                const selecionada = selAtual === pl;
+                                const jaEnviada = enviada === pl;
+                                return (
+                                  <button
+                                    key={pl}
+                                    disabled={isEnviando}
+                                    onClick={() => toggleSelecao(m, plat, pl)}
+                                    className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                                      jaEnviada
+                                        ? "bg-green-900/20 text-green-400 opacity-70"
+                                        : selecionada
+                                          ? "bg-primary/20 text-primary border border-primary/50"
+                                          : "hover:bg-white/5 text-gray-400 border border-transparent"
+                                    }`}
+                                  >
+                                    {pl}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      <button
+                        disabled={!temPendente || isEnviando}
+                        onClick={() => enviarMusica(m)}
+                        className={`mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition-all ${
+                          temPendente && !isEnviando
+                            ? "bg-primary text-primary-foreground hover:brightness-110 shadow-[0_0_15px_rgba(var(--primary),0.3)]"
+                            : "bg-white/5 text-muted-foreground cursor-not-allowed"
+                        }`}
+                      >
+                        {isEnviando ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" /> Processando...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-4 h-4" /> Enviar Playlists Selecionadas
+                          </>
+                        )}
+                      </button>
+
+                      {msg?.key === mKey && (
+                        <p
+                          className={`text-center text-xs font-semibold ${msg.ok ? "text-green-400" : "text-red-400"}`}
+                        >
+                          {msg.text}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       )}
     </main>
