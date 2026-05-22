@@ -63,7 +63,7 @@ function PontoPlaylistsPlanilha() {
     if (!tgId) return;
     setLoading(true);
     api
-      .call("ponto_saldo_ecoin", { tgId })
+      .saldoEcoin(tgId)
       .then((d: any) => {
         if (d?.saldos) {
           setArtistas(
