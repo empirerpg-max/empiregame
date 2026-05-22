@@ -45,6 +45,8 @@ import { Route as AlbumIdRouteImport } from './routes/album.$id'
 import { Route as AcoesTourRouteImport } from './routes/acoes.tour'
 import { Route as AcoesCinemaRouteImport } from './routes/acoes.cinema'
 import { Route as AcoesAlbumRouteImport } from './routes/acoes.album'
+import { Route as PontoPlaylistsIndexRouteImport } from './routes/ponto.playlists.index'
+import { Route as PontoDistribuirIndexRouteImport } from './routes/ponto.distribuir.index'
 import { Route as ArtistasNomeIndexRouteImport } from './routes/artistas.$nome.index'
 import { Route as PontoPlaylistsPlanilhaRouteImport } from './routes/ponto.playlists.planilha'
 import { Route as PontoDistribuirPlanilhaRouteImport } from './routes/ponto.distribuir.planilha'
@@ -233,6 +235,16 @@ const AcoesAlbumRoute = AcoesAlbumRouteImport.update({
   path: '/acoes/album',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PontoPlaylistsIndexRoute = PontoPlaylistsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PontoPlaylistsRoute,
+} as any)
+const PontoDistribuirIndexRoute = PontoDistribuirIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PontoDistribuirRoute,
+} as any)
 const ArtistasNomeIndexRoute = ArtistasNomeIndexRouteImport.update({
   id: '/artistas/$nome/',
   path: '/artistas/$nome/',
@@ -313,6 +325,8 @@ export interface FileRoutesByFullPath {
   '/ponto/distribuir/planilha': typeof PontoDistribuirPlanilhaRoute
   '/ponto/playlists/planilha': typeof PontoPlaylistsPlanilhaRoute
   '/artistas/$nome/': typeof ArtistasNomeIndexRoute
+  '/ponto/distribuir/': typeof PontoDistribuirIndexRoute
+  '/ponto/playlists/': typeof PontoPlaylistsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -343,8 +357,6 @@ export interface FileRoutesByTo {
   '/games/queridometro': typeof GamesQueridometroRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
-  '/ponto/distribuir': typeof PontoDistribuirRouteWithChildren
-  '/ponto/playlists': typeof PontoPlaylistsRouteWithChildren
   '/tours/$nome': typeof ToursNomeRoute
   '/artistas': typeof ArtistasIndexRoute
   '/games': typeof GamesIndexRoute
@@ -358,6 +370,8 @@ export interface FileRoutesByTo {
   '/ponto/distribuir/planilha': typeof PontoDistribuirPlanilhaRoute
   '/ponto/playlists/planilha': typeof PontoPlaylistsPlanilhaRoute
   '/artistas/$nome': typeof ArtistasNomeIndexRoute
+  '/ponto/distribuir': typeof PontoDistribuirIndexRoute
+  '/ponto/playlists': typeof PontoPlaylistsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -404,6 +418,8 @@ export interface FileRoutesById {
   '/ponto/distribuir/planilha': typeof PontoDistribuirPlanilhaRoute
   '/ponto/playlists/planilha': typeof PontoPlaylistsPlanilhaRoute
   '/artistas/$nome/': typeof ArtistasNomeIndexRoute
+  '/ponto/distribuir/': typeof PontoDistribuirIndexRoute
+  '/ponto/playlists/': typeof PontoPlaylistsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -451,6 +467,8 @@ export interface FileRouteTypes {
     | '/ponto/distribuir/planilha'
     | '/ponto/playlists/planilha'
     | '/artistas/$nome/'
+    | '/ponto/distribuir/'
+    | '/ponto/playlists/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -481,8 +499,6 @@ export interface FileRouteTypes {
     | '/games/queridometro'
     | '/playlists/$id'
     | '/playlists/nova'
-    | '/ponto/distribuir'
-    | '/ponto/playlists'
     | '/tours/$nome'
     | '/artistas'
     | '/games'
@@ -496,6 +512,8 @@ export interface FileRouteTypes {
     | '/ponto/distribuir/planilha'
     | '/ponto/playlists/planilha'
     | '/artistas/$nome'
+    | '/ponto/distribuir'
+    | '/ponto/playlists'
   id:
     | '__root__'
     | '/'
@@ -541,6 +559,8 @@ export interface FileRouteTypes {
     | '/ponto/distribuir/planilha'
     | '/ponto/playlists/planilha'
     | '/artistas/$nome/'
+    | '/ponto/distribuir/'
+    | '/ponto/playlists/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -839,6 +859,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcoesAlbumRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ponto/playlists/': {
+      id: '/ponto/playlists/'
+      path: '/'
+      fullPath: '/ponto/playlists/'
+      preLoaderRoute: typeof PontoPlaylistsIndexRouteImport
+      parentRoute: typeof PontoPlaylistsRoute
+    }
+    '/ponto/distribuir/': {
+      id: '/ponto/distribuir/'
+      path: '/'
+      fullPath: '/ponto/distribuir/'
+      preLoaderRoute: typeof PontoDistribuirIndexRouteImport
+      parentRoute: typeof PontoDistribuirRoute
+    }
     '/artistas/$nome/': {
       id: '/artistas/$nome/'
       path: '/artistas/$nome'
@@ -916,10 +950,12 @@ const PlaylistsIdRouteWithChildren = PlaylistsIdRoute._addFileChildren(
 
 interface PontoDistribuirRouteChildren {
   PontoDistribuirPlanilhaRoute: typeof PontoDistribuirPlanilhaRoute
+  PontoDistribuirIndexRoute: typeof PontoDistribuirIndexRoute
 }
 
 const PontoDistribuirRouteChildren: PontoDistribuirRouteChildren = {
   PontoDistribuirPlanilhaRoute: PontoDistribuirPlanilhaRoute,
+  PontoDistribuirIndexRoute: PontoDistribuirIndexRoute,
 }
 
 const PontoDistribuirRouteWithChildren = PontoDistribuirRoute._addFileChildren(
@@ -928,10 +964,12 @@ const PontoDistribuirRouteWithChildren = PontoDistribuirRoute._addFileChildren(
 
 interface PontoPlaylistsRouteChildren {
   PontoPlaylistsPlanilhaRoute: typeof PontoPlaylistsPlanilhaRoute
+  PontoPlaylistsIndexRoute: typeof PontoPlaylistsIndexRoute
 }
 
 const PontoPlaylistsRouteChildren: PontoPlaylistsRouteChildren = {
   PontoPlaylistsPlanilhaRoute: PontoPlaylistsPlanilhaRoute,
+  PontoPlaylistsIndexRoute: PontoPlaylistsIndexRoute,
 }
 
 const PontoPlaylistsRouteWithChildren = PontoPlaylistsRoute._addFileChildren(
