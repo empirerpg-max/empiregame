@@ -1,9 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 
-const GAS_URL =
-  import.meta.env.VITE_GAS_URL ||
-  import.meta.env.VITE_APJ_URL ||
-  "";
+const GAS_URL = import.meta.env.VITE_GAS_URL || import.meta.env.VITE_APJ_URL || "";
 
 let _cache: Record<string, { ts: number; data: any }> = {};
 const TTL = 60_000; // 1min
@@ -11,6 +8,8 @@ const TTL = 60_000; // 1min
 function invalidateCache() {
   _cache = {};
 }
+
+export { invalidateCache };
 
 async function call(params: Record<string, any>): Promise<any> {
   const key = JSON.stringify(params);
@@ -34,6 +33,135 @@ export type CommonResponse = {
   ok?: boolean;
   erro?: string;
 };
+
+// ============================================================
+// UTILITÁRIOS
+// ============================================================
+
+export function driveImg(fileId: string, size = 200): string {
+  if (!fileId) return "";
+  if (fileId.startsWith("http")) return fileId;
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}`;
+}
+
+export function driveAudioSrc(fileId: string): string {
+  if (!fileId) return "";
+  if (fileId.startsWith("http")) return fileId;
+  return `https://drive.google.com/uc?export=download&id=${fileId}`;
+}
+
+export function fmtEC(val: number | string | undefined | null): string {
+  const n = Number(val ?? 0);
+  if (isNaN(n)) return "0 EC";
+  return `${n.toLocaleString("pt-BR")} EC`;
+}
+
+export function fmtMoney(val: number | string | undefined | null): string {
+  const n = Number(val ?? 0);
+  if (isNaN(n)) return "R$ 0,00";
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+// ============================================================
+// TIPOS
+// ============================================================
+
+export type Artist = {
+  nome: string;
+  foto?: string;
+  saldo?: number;
+  fortuna_total?: number;
+  gravadora?: string;
+  fama?: number;
+  id?: string;
+  tgId?: string;
+  [key: string]: any;
+};
+
+export type AlbumFaixa = {
+  titulo: string;
+  drive_url?: string;
+  capa_url?: string;
+  duracao?: number;
+  [key: string]: any;
+};
+
+export type AlbumPayload = {
+  id?: string;
+  titulo: string;
+  artista: string;
+  capa_url?: string;
+  faixas?: AlbumFaixa[];
+  [key: string]: any;
+};
+
+export type PlaylistTrack = {
+  titulo: string;
+  artista?: string;
+  drive_url?: string;
+  capa_url?: string;
+  [key: string]: any;
+};
+
+export type PlaylistPayload = {
+  id?: string;
+  nome: string;
+  descricao?: string;
+  capa_url?: string;
+  tracks?: PlaylistTrack[];
+  [key: string]: any;
+};
+
+export type BemItem = {
+  id?: string;
+  nome: string;
+  categoria?: string;
+  valor?: number;
+  [key: string]: any;
+};
+
+export type Projeto = {
+  id?: string;
+  nome: string;
+  tipo?: string;
+  status?: string;
+  [key: string]: any;
+};
+
+export type RadarItem = {
+  artista: string;
+  musica?: string;
+  foto?: string;
+  [key: string]: any;
+};
+
+export type ChartData = {
+  artista: string;
+  posicao?: number;
+  pontos?: number;
+  [key: string]: any;
+};
+
+export type MarketItem = {
+  id: string | number;
+  nome: string;
+  preco?: number;
+  categoria?: string;
+  foto?: string;
+  descricao?: string;
+  [key: string]: any;
+};
+
+export type MuralItem = {
+  id: string | number;
+  nome: string;
+  preco?: number;
+  [key: string]: any;
+};
+
+// ============================================================
+// API
+// ============================================================
 
 export const api = {
   call,
