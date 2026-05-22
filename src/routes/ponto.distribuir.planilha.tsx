@@ -83,7 +83,6 @@ function PontoPlanilha() {
   useEffect(() => {
     if (!tgId) return;
     setLoading(true);
-    // Alterado para api.call direto
     api
       .call({ acao: "ponto_listar_pontos", tgId })
       .then((d: any) => {
@@ -112,7 +111,6 @@ function PontoPlanilha() {
     const key = `${row.linha}-${coluna}`;
     setSaving(key);
     setMsg(null);
-    // Alterado para api.call direto
     const d: any = await api.call({ acao: "ponto_salvar_celula", tgId, linha: row.linha, coluna, valor });
     setSaving(null);
     if (d?.ok || d?.message) {
@@ -131,7 +129,7 @@ function PontoPlanilha() {
     );
 
   return (
-    <main className="flex-1 w-full max-w-md mx-auto flex flex-col gap-4 p-4 pb-24 relative z-10 h-full mt-2">
+    <main className="flex-1 mx-auto w-full max-w-md px-6 pt-6 pb-24 flex flex-col gap-4">
       <Link to="/ponto/distribuir" className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
         <ChevronLeft className="w-4 h-4" /> Voltar
       </Link>

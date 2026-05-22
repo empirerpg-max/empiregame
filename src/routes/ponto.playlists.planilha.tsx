@@ -79,7 +79,6 @@ function PontoPlaylistsPlanilha() {
     if (!tgId) return;
     setLoading(true);
     try {
-      // Alterado para api.call direto
       const [pts, sal]: [any, any] = await Promise.all([
         api.call({ acao: "ponto_listar_pontos", tgId }).catch(() => ({})),
         api.call({ acao: "ponto_saldo_ecoin_dados", tgId }).catch(() => ({})),
@@ -110,7 +109,6 @@ function PontoPlaylistsPlanilha() {
       if (!tgId || !artistaNome) return;
       setRefreshing(true);
       try {
-        // Alterado para api.call direto
         const sal: any = await api.call({ acao: "ponto_saldo_ecoin_dados", tgId });
         if (sal?.saldos) {
           setSaldosMap(sal.saldos);
@@ -151,7 +149,6 @@ function PontoPlaylistsPlanilha() {
     let sucessos = 0;
 
     for (const [plataforma, playlist] of Object.entries(selecoes)) {
-      // Alterado para api.call direto
       const d: any = await api.call({
         acao: "ponto_salvar_playlist_ecoin",
         tgId,
@@ -190,12 +187,12 @@ function PontoPlaylistsPlanilha() {
       </div>
     );
 
-  const saldoAtual = saldosMap[artistaSel] || 0;
+  const saldoAtual = Number(saldosMap[artistaSel] || 0);
   const saldoNegativo = saldoAtual < 0;
   const musicasFiltradas = musicas.filter((m) => m.artista === artistaSel);
 
   return (
-    <main className="flex-1 w-full max-w-md mx-auto flex flex-col gap-4 p-4 pb-24 relative z-10 h-full mt-2">
+    <main className="flex-1 mx-auto w-full max-w-md px-6 pt-6 pb-24 flex flex-col gap-4">
       <Link to="/ponto/playlists" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-2">
         <ChevronLeft className="w-4 h-4" /> Voltar
       </Link>
