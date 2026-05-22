@@ -168,7 +168,20 @@ function PontoPlaylistsPlanilha() {
         </div>
       )}
 
-      {/* ── Músicas do artista ── */}
+      {/* ── Saldo do artista selecionado (live) ── */}
+      {artistaSel && (
+        <div className="mb-5 rounded-2xl bg-yellow-500/10 border border-yellow-500/30 px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-yellow-200/80 font-semibold">$ Bank Account</p>
+            <p className="text-lg font-extrabold text-yellow-300">
+              {(artistas.find((a) => a.nome === artistaSel)?.saldo ?? 0).toLocaleString("pt-BR")}
+            </p>
+          </div>
+          <Coins className="w-6 h-6 text-yellow-300" />
+        </div>
+      )}
+
+      {/* ── Músicas do artista (cada música é collapsible) ── */}
       {artistaSel && (
         <div className="mb-6">
           <p className="text-xs text-purple-300 uppercase tracking-widest mb-2 font-semibold flex items-center gap-2">
@@ -178,76 +191,94 @@ function PontoPlaylistsPlanilha() {
             <p className="text-sm text-gray-500">Nenhuma música encontrada.</p>
           ) : (
             <div className="flex flex-col gap-2">
-              {musicas.map((m) => (
-                <button
-                  key={m.linha}
-                  onClick={() => {
-                    setMusicaSel(m);
-                    setSalvo({});
-                    setMsg(null);
-                  }}
-                  className={`rounded-xl px-4 py-3 text-left text-sm border transition-all active:scale-95 ${
-                    musicaSel?.linha === m.linha
-                      ? "border-purple-400 bg-purple-800/50 font-semibold"
-                      : "border-white/10 bg-white/5 hover:bg-white/10"
-                  }`}
-                >
-                  🎵 {m.musica}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Playlists por plataforma ── */}
-      {musicaSel && (
-        <div className="flex flex-col gap-4">
-          <p className="text-xs text-purple-300 uppercase tracking-widest font-semibold">
-            🎯 Playlists para: <span className="text-white normal-case">{musicaSel.musica}</span>
-          </p>
-
-          {(["SPOTIFY", "APPLE MUSIC", "YOUTUBE"] as const).map((plat) => (
-            <div key={plat} className="bg-white/5 rounded-2xl p-4 border border-white/10">
-              <p className="text-xs text-gray-400 mb-2 font-semibold">{plat}</p>
-
-              {/* Caixinhas de opção */}
-              <div className="flex flex-col gap-2">
-                {PLAYLISTS[plat].map((pl) => {
-                  const selecionada = salvo[plat] === pl;
-                  return (
+              {musicas.map((m) => {
+                const aberto = musicaSel?.linha === m.linha;
+                return (
+                  <div key={m.linha} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
                     <button
-                      key={pl}
-                      disabled={saving === plat}
-                      onClick={() => salvarPlaylist(plat, pl)}
-                      className={`w-full text-left px-4 py-2.5 rounded-xl text-sm border transition-all active:scale-95 ${
-                        selecionada
-                          ? "border-green-400 bg-green-900/40 text-green-300 font-semibold"
-                          : "border-white/10 bg-white/5 hover:bg-purple-800/40 hover:border-purple-400"
-                      }`}
+                      onClick={() => {
+                        setMusicaSel(aberto ? null : m);
+                        setMsg(null);
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-3 text-left text-sm"
                     >
-                      {selecionada ? "✓ " : ""}
-                      {pl}
+                      <span className="truncate">🎵 {m.musica}</span>
+                      {aberto ? (
+                        <ChevronUp className="w-4 h-4 text-purple-300 shrink-0" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                      )}
                     </button>
-                  );
-                })}
-              </div>
 
-              {saving === plat && (
-                <div className="flex items-center gap-2 mt-2 text-xs text-purple-300">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Salvando...
-                </div>
-              )}
+                    {aberto && (
+                      <div className="border-t border-white/5 p-3 flex flex-col gap-3 bg-black/20">
+                        {(["SPOTIFY", "APPLE MUSIC", "YOUTUBE"] as const).map((plat) => {
+                          const expandKey = `${m.linha}-${plat}`;
+                          const aberta = plataformaAberta === expandKey;
+                          const salva = salvo[`${m.linha}-${plat}`];
+                          return (
+                            <div key={plat} className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                              <button
+                                onClick={() => setPlataformaAberta(aberta ? null : expandKey)}
+                                className="w-full flex items-center justify-between px-3 py-2 text-left"
+                              >
+                                <div className="min-w-0">
+                                  <p className="text-xs text-gray-400 font-semibold">{plat}</p>
+                                  {salva && <p className="text-[11px] text-green-400 truncate">✓ {salva}</p>}
+                                </div>
+                                {aberta ? (
+                                  <ChevronUp className="w-4 h-4 text-purple-300 shrink-0" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                                )}
+                              </button>
+
+                              {aberta && (
+                                <div className="flex flex-col gap-1.5 p-2 border-t border-white/5">
+                                  {PLAYLISTS[plat].map((pl) => {
+                                    const selecionada = salva === pl;
+                                    return (
+                                      <button
+                                        key={pl}
+                                        disabled={saving === plat}
+                                        onClick={() => salvarPlaylist(plat, pl)}
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-xs border transition-all active:scale-95 ${
+                                          selecionada
+                                            ? "border-green-400 bg-green-900/40 text-green-300 font-semibold"
+                                            : "border-white/10 bg-white/5 hover:bg-purple-800/40 hover:border-purple-400"
+                                        }`}
+                                      >
+                                        {selecionada ? "✓ " : ""}
+                                        {pl}
+                                      </button>
+                                    );
+                                  })}
+                                  {saving === plat && (
+                                    <div className="flex items-center gap-2 mt-1 text-[11px] text-purple-300">
+                                      <Loader2 className="w-3 h-3 animate-spin" /> Salvando...
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {msg && (
+                          <p className={`text-center text-xs font-semibold ${msg.ok ? "text-green-400" : "text-red-400"}`}>
+                            {msg.text}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          ))}
-
-          {msg && (
-            <p className={`text-center text-sm font-semibold mt-2 ${msg.ok ? "text-green-400" : "text-red-400"}`}>
-              {msg.text}
-            </p>
           )}
         </div>
       )}
     </main>
   );
 }
+
