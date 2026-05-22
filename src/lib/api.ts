@@ -51,6 +51,10 @@ export const api = {
     return call({ acao: "artistas_sem_id" });
   },
 
+  async getArtistasSemId() {
+    return call({ acao: "artistas_sem_id" });
+  },
+
   async meusArtistas(tgId: string) {
     return call({ acao: "meus_artistas", tgId });
   },
@@ -73,12 +77,20 @@ export const api = {
     return call({ acao: "charts" });
   },
 
+  async topCharts() {
+    return call({ acao: "top_charts" });
+  },
+
+  async projetos(nome: string) {
+    return call({ acao: "projetos", nome });
+  },
+
   // === RADAR ===
   async radar() {
     return call({ acao: "radar" });
   },
 
-  // === SOCIAL (posts, perfis, comentários, news) ===
+  // === SOCIAL ===
   async listarPostsSocial() {
     return call({ acao: "listarPostsSocial" });
   },
@@ -125,11 +137,20 @@ export const api = {
     return call({ acao: "listar_tours" });
   },
 
+  async listTours() {
+    return call({ acao: "listar_tours" });
+  },
+
   async getAgendaTour(nome: string) {
     return call({ acao: "agenda_tour", nome });
   },
 
   async compraTour(payload: Record<string, any>) {
+    invalidateCache();
+    return call({ acao: "compra_unificada_tour", ...payload });
+  },
+
+  async comprarTour(payload: Record<string, any>) {
     invalidateCache();
     return call({ acao: "compra_unificada_tour", ...payload });
   },
@@ -190,6 +211,10 @@ export const api = {
     return call({ acao: "buscar_musicas", q });
   },
 
+  async searchSongs(q: string) {
+    return call({ acao: "buscar_musicas", q });
+  },
+
   // === MARKET ===
   async listarMarket() {
     return call({ acao: "listar_market" });
@@ -218,6 +243,65 @@ export const api = {
     return call({ acao: "comprar_imovel", ...payload });
   },
 
+  // === CINEMA ===
+  async compraCinema(payload: Record<string, any>) {
+    invalidateCache();
+    return call({ acao: "compra_cinema", ...payload });
+  },
+
+  async comprarCinema(payload: Record<string, any>) {
+    invalidateCache();
+    return call({ acao: "compra_cinema", ...payload });
+  },
+
+  // === LEILÕES ===
+  async publicarLeilao(payload: Record<string, any>) {
+    invalidateCache();
+    return call({ acao: "publicar_leilao", ...payload });
+  },
+
+  async lanceLeilao(payload: Record<string, any>) {
+    invalidateCache();
+    return call({ acao: "lance_leilao", ...payload });
+  },
+
+  async darLance(payload: Record<string, any>) {
+    invalidateCache();
+    return call({ acao: "lance_leilao", ...payload });
+  },
+
+  async listarLeiloes() {
+    return call({ acao: "listar_market" });
+  },
+
+  async comprarItemMural(payload: Record<string, any>) {
+    invalidateCache();
+    return call({ acao: "comprar_item", ...payload });
+  },
+
+  async comprarMural(payload: Record<string, any>) {
+    invalidateCache();
+    return call({ acao: "comprar_item", ...payload });
+  },
+
+  async listarMural() {
+    return call({ acao: "mural" });
+  },
+
+  // === BET ===
+  async betApurar() {
+    return call({ acao: "bet_apurar" });
+  },
+
+  async getMusicasBet() {
+    return call({ acao: "listar_faixas_catalogo" });
+  },
+
+  async bet(payload: Record<string, any>) {
+    invalidateCache();
+    return call({ acao: "bet_apurar", ...payload });
+  },
+
   // === GAMES ===
   async syncGameCoins(tgId: string, wager: number, won: boolean, gameContext: string, artistName?: string) {
     invalidateCache();
@@ -239,13 +323,26 @@ export const api = {
     return call({ acao: "queridometro_status", tgId });
   },
 
+  async getQueridometroStatus(tgId: string) {
+    return call({ acao: "queridometro_status", tgId });
+  },
+
   async queridometroVotar(tgId: string, de: string, para: string, emoji: string) {
+    invalidateCache();
+    return call({ acao: "queridometro_votar", tgId, de, para, emoji });
+  },
+
+  async postQueridometroVoto(tgId: string, de: string, para: string, emoji: string) {
     invalidateCache();
     return call({ acao: "queridometro_votar", tgId, de, para, emoji });
   },
 
   // === PONTO ===
   async pontoGetJogador(tgId: string) {
+    return call({ acao: "ponto_get_jogador", tgId });
+  },
+
+  async getJogador(tgId: string) {
     return call({ acao: "ponto_get_jogador", tgId });
   },
 
@@ -258,13 +355,17 @@ export const api = {
     return call({ acao: "ponto_salvar_celula", ...payload });
   },
 
-  // alias usado em ponto.distribuir.planilha.tsx
   async salvarCelulaPontos(payload: Record<string, any>) {
     invalidateCache();
     return call({ acao: "ponto_salvar_celula", ...payload });
   },
 
   async pontoDistribuirAleatorio(tgId: string) {
+    invalidateCache();
+    return call({ acao: "ponto_distribuir_aleatorio", tgId });
+  },
+
+  async distribuirPontosAleatorio(tgId: string) {
     invalidateCache();
     return call({ acao: "ponto_distribuir_aleatorio", tgId });
   },
@@ -291,7 +392,6 @@ export const api = {
     return call({ acao: "ponto_listar_musicas_edicao", tgId });
   },
 
-  // saldoEcoin lê direto da aba DADOS fixa (AC=artista, AI=saldo em tempo real)
   async saldoEcoin(tgId: string): Promise<{
     saldos?: Record<string, any>;
     erro?: string;
@@ -317,17 +417,7 @@ export const api = {
     });
   },
 
-  // === APOSTAS (BET) ===
-  async betApurar() {
-    return call({ acao: "bet_apurar" });
-  },
-
   // === OUTROS ===
-  async compraCinema(payload: Record<string, any>) {
-    invalidateCache();
-    return call({ acao: "compra_cinema", ...payload });
-  },
-
   async viral(artista: string, musica: string) {
     invalidateCache();
     return call({ acao: "viral", artista, musica });
@@ -348,28 +438,9 @@ export const api = {
     return call({ acao: "rescisao", ...payload });
   },
 
-  async publicarLeilao(payload: Record<string, any>) {
-    invalidateCache();
-    return call({ acao: "publicar_leilao", ...payload });
-  },
-
-  async lanceLeilao(payload: Record<string, any>) {
-    invalidateCache();
-    return call({ acao: "lance_leilao", ...payload });
-  },
-
   async venderComposicao(payload: Record<string, any>) {
     invalidateCache();
     return call({ acao: "vender_composicao", ...payload });
-  },
-
-  async comprarItemMural(payload: Record<string, any>) {
-    invalidateCache();
-    return call({ acao: "comprar_item", ...payload });
-  },
-
-  async listarMural() {
-    return call({ acao: "mural" });
   },
 };
 
