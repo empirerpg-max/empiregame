@@ -2,14 +2,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import {
   ChevronLeft,
-  ChevronDown,
-  ChevronUp,
   Loader2,
   Coins,
   RefreshCw,
   Send,
   AlertTriangle,
   AlertCircle,
+  Music2,
 } from "lucide-react";
 import { useTelegramUser } from "@/lib/telegram";
 import { api } from "@/lib/api";
@@ -17,6 +16,7 @@ import { api } from "@/lib/api";
 export const Route = createFileRoute("/ponto/playlists/planilha")({
   component: PontoPlaylistsPlanilha,
 });
+
 const PLAYLISTS: Record<string, string[]> = {
   SPOTIFY: [
     "TOPO TODAY'S TOP HITS",
@@ -65,7 +65,7 @@ function PontoPlaylistsPlanilha() {
   const [artistaSel, setArtistaSel] = useState<string>("");
   const [saldosMap, setSaldosMap] = useState<Record<string, number>>({});
 
-  const [musicaAberta, setMusicaAberta] = useState<number | null>(null);
+  const [musicaSelecionada, setMusicaSelecionada] = useState<Musica | null>(null);
   const [pendente, setPendente] = useState<Record<string, Selecoes>>({});
   const [confirmado, setConfirmado] = useState<Record<string, Selecoes>>({});
 
@@ -172,10 +172,10 @@ function PontoPlaylistsPlanilha() {
         const { [mKey]: _, ...resto } = prev;
         return resto;
       });
-      setMsg({ key: mKey, text: `✅ ${sucessos} playlist(s) aplicada(s) com sucesso!`, ok: true });
+      setMsg({ key: mKey, text: `${sucessos} playlist(s) aplicada(s) com sucesso!`, ok: true });
       atualizarSaldoIndividual(musica.artista);
     } else {
-      setMsg({ key: mKey, text: `❌ ${erros.join(" | ")}`, ok: false });
+      setMsg({ key: mKey, text: `${erros.join(" | ")}`, ok: false });
     }
   }
 
@@ -190,9 +190,161 @@ function PontoPlaylistsPlanilha() {
   const saldoNegativo = saldoAtual < 0;
   const musicasFiltradas = musicas.filter((m) => m.artista === artistaSel);
 
+  // === VIEW DE DETALHE DA MÚSICA (substitui a lista, sem ficar embaixo) ===
+  if (musicaSelecionada) {
+    const mKey = String(musicaSelecionada.linha);
+    const pendenteMusica = pendente[mKey] || {};
+    const confirmadoMusica = confirmado[mKey] || {};
+    const isEnviando = enviando === mKey;
+    const temPendente = Object.keys(pendenteMusica).length > 0;
+
+    return (
+      <main className="flex-1 mx-auto w-full max-w-md px-5 pt-6 pb-24 flex flex-col gap-4">
+        <button
+          onClick={() => {
+            setMusicaSelecionada(null);
+            setMsg(null);
+          }}
+          className="flex items-center gap-1 text-sm text-muted-foreground mb-2 hover:text-primary transition-colors w-fit"
+        >
+          <ChevronLeft className="w-4 h-4" /> Voltar para músicas
+        </button>
+
+        {/* Header da música */}
+        <div className="rounded-2xl border border-white/10 bg-card p-4 flex items-start gap-3 shadow-lg">
+          <div className="size-11 rounded-xl bg-primary/15 grid place-items-center shrink-0">
+            <Music2 className="size-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-primary font-bold uppercase tracking-widest truncate mb-1">
+              {musicaSelecionada.artista}
+            </p>
+            <h2 className="font-black text-lg leading-tight truncate">{musicaSelecionada.musica}</h2>
+          </div>
+        </div>
+
+        {/* Saldo $ BANK ACCOUNT */}
+        <div
+          className={`p-4 rounded-2xl border flex items-center justify-between shadow-lg transition-colors ${
+            saldoNegativo ? "bg-red-950/40 border-red-500/50" : "bg-card border-white/10"
+          }`}
+        >
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1 font-bold">$ BANK ACCOUNT</p>
+            <div className="flex items-center gap-2">
+              <Coins className={`w-5 h-5 ${saldoNegativo ? "text-red-400" : "text-yellow-400"}`} />
+              <p className={`text-2xl font-black ${saldoNegativo ? "text-red-400" : "text-yellow-400"}`}>
+                {saldoAtual.toLocaleString("pt-BR")}
+              </p>
+            </div>
+            {saldoNegativo && (
+              <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> Orçamento estourado!
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => atualizarSaldoIndividual(musicaSelecionada.artista)}
+            disabled={refreshing}
+            className="p-3 bg-white/5 rounded-xl hover:bg-white/10"
+          >
+            <RefreshCw className={`w-5 h-5 text-muted-foreground ${refreshing ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+
+        {/* Plataformas */}
+        <div className="flex flex-col gap-3 mt-1">
+          {(["SPOTIFY", "APPLE MUSIC", "YOUTUBE"] as const).map((plat) => {
+            const enviada = confirmadoMusica[plat];
+            const selAtual = pendenteMusica[plat];
+
+            return (
+              <div key={plat} className="bg-card rounded-2xl border border-white/10 overflow-hidden">
+                <div className="px-4 py-3 bg-white/5 border-b border-white/5 flex justify-between items-center">
+                  <p className="text-xs font-black text-gray-200 tracking-wide">{plat}</p>
+                  {enviada && (
+                    <span className="text-[10px] bg-green-900/30 text-green-400 px-2 py-1 rounded-full font-bold">
+                      ✓ {enviada}
+                    </span>
+                  )}
+                </div>
+
+                <div className="p-2 flex flex-col gap-1">
+                  {PLAYLISTS[plat].map((pl) => {
+                    const selecionada = selAtual === pl;
+                    const jaEnviada = enviada === pl;
+                    const isTopo = pl.toUpperCase().startsWith("TOPO ");
+                    // TOPO já enviada para esta música → bloqueia nova seleção
+                    const topoBloqueada = isTopo && jaEnviada;
+                    return (
+                      <button
+                        key={pl}
+                        disabled={isEnviando || topoBloqueada}
+                        onClick={() => toggleSelecao(musicaSelecionada, plat, pl)}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-between gap-2 ${
+                          jaEnviada
+                            ? "bg-green-900/20 text-green-400 opacity-70"
+                            : selecionada
+                              ? "bg-primary/20 text-primary border border-primary/50"
+                              : "hover:bg-white/5 text-gray-300 border border-transparent"
+                        } ${topoBloqueada ? "cursor-not-allowed" : ""}`}
+                        title={topoBloqueada ? "Playlist TOPO já utilizada por esta música" : undefined}
+                      >
+                        <span className="truncate">{pl}</span>
+                        {isTopo && (
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                              jaEnviada
+                                ? "bg-green-500/20 text-green-400"
+                                : "bg-yellow-500/15 text-yellow-400"
+                            }`}
+                          >
+                            TOPO
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Botão Enviar */}
+          <button
+            disabled={!temPendente || isEnviando}
+            onClick={() => enviarMusica(musicaSelecionada)}
+            className={`mt-1 w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold transition-all ${
+              temPendente && !isEnviando
+                ? "bg-primary text-primary-foreground hover:brightness-110 shadow-[0_0_15px_rgba(var(--primary),0.3)]"
+                : "bg-white/5 text-muted-foreground cursor-not-allowed"
+            }`}
+          >
+            {isEnviando ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Processando...
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" /> Enviar Playlists Selecionadas
+              </>
+            )}
+          </button>
+
+          {msg?.key === mKey && (
+            <p className={`text-center text-xs font-semibold ${msg.ok ? "text-green-400" : "text-red-400"}`}>
+              {msg.text}
+            </p>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  // === VIEW DE LISTA DE MÚSICAS ===
   return (
-    <main className="flex-1 mx-auto w-full max-w-md px-6 pt-6 pb-24 flex flex-col gap-4">
-      <Link to="/ponto/playlists" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-2">
+    <main className="flex-1 mx-auto w-full max-w-md px-5 pt-6 pb-24 flex flex-col gap-4">
+      <Link to="/ponto/playlists" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-2 w-fit">
         <ChevronLeft className="w-4 h-4" /> Voltar
       </Link>
 
@@ -219,7 +371,6 @@ function PontoPlaylistsPlanilha() {
               key={a}
               onClick={() => {
                 setArtistaSel(a);
-                setMusicaAberta(null);
               }}
               className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-colors ${
                 artistaSel === a
@@ -269,121 +420,27 @@ function PontoPlaylistsPlanilha() {
             </div>
           ) : (
             musicasFiltradas.map((m) => {
-              const mKey = String(m.linha);
-              const aberta = musicaAberta === m.linha;
-              const pendenteMusica = pendente[mKey] || {};
-              const confirmadoMusica = confirmado[mKey] || {};
-              const isEnviando = enviando === mKey;
-              const temPendente = Object.keys(pendenteMusica).length > 0;
-
               return (
-                <div key={m.linha} className="rounded-2xl border border-white/10 bg-card overflow-hidden shadow-lg">
-                  <button
-                    onClick={() => {
-                      setMusicaAberta(aberta ? null : m.linha);
-                      setMsg(null);
-                    }}
-                    className={`w-full flex items-center justify-between px-4 py-4 text-left transition-colors ${aberta ? "bg-primary/5" : "hover:bg-white/5"}`}
-                  >
-                    <div className="flex-1 pr-4">
-                      <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1">{m.artista}</p>
-                      <h3 className="font-bold text-base leading-tight">{m.musica}</h3>
+                <button
+                  key={m.linha}
+                  onClick={() => {
+                    setMusicaSelecionada(m);
+                    setMsg(null);
+                  }}
+                  className="rounded-2xl border border-white/10 bg-card overflow-hidden shadow-lg transition-all hover:border-primary/40 text-left"
+                >
+                  <div className="px-4 py-4 flex items-center gap-3">
+                    <div className="size-9 rounded-xl bg-primary/10 grid place-items-center shrink-0">
+                      <Music2 className="size-4 text-primary" />
                     </div>
-                    {aberta ? (
-                      <ChevronUp className="w-5 h-5 text-primary" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                    )}
-                  </button>
-
-                  {aberta && (
-                    <div className="bg-black/20 p-3 flex flex-col gap-4 border-t border-white/5">
-                      {(["SPOTIFY", "APPLE MUSIC", "YOUTUBE"] as const).map((plat) => {
-                        const enviada = confirmadoMusica[plat];
-                        const selAtual = pendenteMusica[plat];
-
-                        return (
-                          <div key={plat} className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                            <div className="px-4 py-3 bg-white/5 border-b border-white/5 flex justify-between items-center">
-                              <p className="text-xs font-bold text-gray-300">{plat}</p>
-                              {enviada && (
-                                <span className="text-[10px] bg-green-900/30 text-green-400 px-2 py-1 rounded-full">
-                                  ✓ Aplicada
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="p-2 flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar">
-                              {PLAYLISTS[plat].map((pl) => {
-                                const selecionada = selAtual === pl;
-                                const jaEnviada = enviada === pl;
-                                const isTopo = pl.toUpperCase().startsWith("TOPO ");
-                                // TOPO já enviada para esta música→bloqueia nova seleção (uma única vez por música)
-                                const topoBloqueada = isTopo && jaEnviada;
-                                return (
-                                  <button
-                                    key={pl}
-                                    disabled={isEnviando || topoBloqueada}
-                                    onClick={() => toggleSelecao(m, plat, pl)}
-                                    className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-between gap-2 ${
-                                      jaEnviada
-                                        ? "bg-green-900/20 text-green-400 opacity-70"
-                                        : selecionada
-                                          ? "bg-primary/20 text-primary border border-primary/50"
-                                          : "hover:bg-white/5 text-gray-400 border border-transparent"
-                                    } ${topoBloqueada ? "cursor-not-allowed" : ""}`}
-                                    title={topoBloqueada ? "Playlist TOPO já utilizada por esta música" : undefined}
-                                  >
-                                    <span className="truncate">{pl}</span>
-                                    {isTopo && (
-                                      <span
-                                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
-                                          jaEnviada
-                                            ? "bg-green-500/20 text-green-400"
-                                            : "bg-yellow-500/15 text-yellow-400"
-                                        }`}
-                                      >
-                                        TOPO
-                                      </span>
-                                    )}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      <button
-                        disabled={!temPendente || isEnviando}
-                        onClick={() => enviarMusica(m)}
-                        className={`mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition-all ${
-                          temPendente && !isEnviando
-                            ? "bg-primary text-primary-foreground hover:brightness-110 shadow-[0_0_15px_rgba(var(--primary),0.3)]"
-                            : "bg-white/5 text-muted-foreground cursor-not-allowed"
-                        }`}
-                      >
-                        {isEnviando ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" /> Processando...
-                          </>
-                        ) : (
-                          <>
-                            <Send className="w-4 h-4" /> Enviar Playlists Selecionadas
-                          </>
-                        )}
-                      </button>
-
-                      {msg?.key === mKey && (
-                        <p
-                          className={`text-center text-xs font-semibold ${msg.ok ? "text-green-400" : "text-red-400"}`}
-                        >
-                          {msg.text}
-                        </p>
-                      )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1 truncate">
+                        {m.artista}
+                      </p>
+                      <h3 className="font-bold text-base leading-tight truncate">{m.musica}</h3>
                     </div>
-                  )}
-                </div>
+                  </div>
+                </button>
               );
             })
           )}
