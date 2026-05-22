@@ -63,7 +63,7 @@ function PontoPlaylistsPlanilha() {
     if (!tgId) return;
     setLoading(true);
     api
-      .call("ponto_saldo_ecoin", { tgId })
+      .saldoEcoin(tgId)
       .then((d: any) => {
         if (d?.saldos) {
           setArtistas(
@@ -81,7 +81,7 @@ function PontoPlaylistsPlanilha() {
     setMusicaSel(null);
     setSalvo({});
     setMsg(null);
-    api.call("ponto_listar_musicas_edicao", { tgId }).then((d: any) => {
+    api.listarMusicasEdicao(tgId).then((d: any) => {
       const todas: Musica[] = d?.musicas || [];
       setMusicas(todas.filter((m) => m.artista?.toLowerCase() === artistaSel.toLowerCase()));
     });
@@ -91,7 +91,7 @@ function PontoPlaylistsPlanilha() {
     if (!musicaSel) return;
     setSaving(plataforma);
     setMsg(null);
-    const d: any = await api.call("ponto_salvar_playlist_ecoin", {
+    const d: any = await api.salvarPlaylistEcoin({
       tgId,
       artista: artistaSel,
       musica: musicaSel.musica,
