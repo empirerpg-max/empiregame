@@ -1304,9 +1304,18 @@ function acaopontosalvarplaylistecoinp(p) {
       if (ra === artistaNorm && rm === musicaNorm) { linhaAlvo = i + 1; break; }
     }
 
-    // Não existe ainda → cria nova linha
+    // Não existe ainda → cria na primeira linha vazia após cabeçalho (linha 3+)
     if (linhaAlvo < 0) {
-      linhaAlvo = vals.length + 1;
+      // Busca primeira linha vazia a partir dos dados (índice 2 = linha 3 na planilha)
+      let novaLinha = -1;
+      for (let i = 2; i < vals.length; i++) {
+        const ra = String(vals[i][COL_ARTISTA] || '').trim();
+        const rm = String(vals[i][COL_MUSICA]  || '').trim();
+        if (!ra && !rm) { novaLinha = i + 1; break; }
+      }
+      // Se não achou linha vazia, insere após a última linha com dados
+      if (novaLinha < 0) novaLinha = vals.length + 1;
+      linhaAlvo = novaLinha;
       sh.getRange(linhaAlvo, COL_ARTISTA + 1).setValue(artista);
       sh.getRange(linhaAlvo, COL_MUSICA  + 1).setValue(musica);
     }
@@ -1324,7 +1333,8 @@ function acaopontosalvarplaylistecoinp(p) {
 }
 function acaopontosaldoecoindados(p) {
   try {
-    const sheetId = p.sheetId || PONTO_SS_ID;
+    // Sempre usa a planilha DADOS fixa (AC2=artista, AI=saldo em tempo real)
+    const sheetId = '1wNbtP78MrtrOc2Jb1ejXcHVjqndR2Vm4-3EIVqa8aOg';
     const ss  = SpreadsheetApp.openById(sheetId);
     const aba = ss.getSheetByName('DADOS');
     if (!aba) return { erro: 'Aba DADOS não encontrada.' };
