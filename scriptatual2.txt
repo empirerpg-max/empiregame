@@ -61,6 +61,7 @@ function processAction(p) {
   if (acao == "pontosalvarplaylistecoin") return jsonOut(acaopontosalvarplaylistecoinp(p));
   if (acao == 'pontolistarmusicasecoin') return jsonOut(acaopontolistarmusicasecoinp(p));
   if (acao == 'ponto_salvar_playlist_ecoin') return jsonOut(acaopontosalvarplaylistecoinp(p));
+  if (acao === 'ponto_saldo_ecoin_dados') return jsonOut(acaopontosaldoecoindados(p));
 
   if (acao === 'listar_acts')          return jsonOut(aba('ACTS').getDataRange().getValues().slice(1).map(_mapActs));
   if (acao === 'listar_todos')         return jsonOut(aba('DB_ARTISTAS').getDataRange().getValues().slice(1).map(_mapArtistaJogador));
@@ -1147,12 +1148,11 @@ function acao_ponto_salvar_playlist_ecoin_(p) {
 
     const vals = sh.getDataRange().getValues();
 
-    // ── Detectar header dinamicamente (linha com 3+ colunas preenchidas) ──
+    // Header: primeira linha com 3+ colunas preenchidas
     let headerRowIdx = -1;
     let header = [];
     for (let i = 0; i < vals.length; i++) {
-      const preenchidas = vals[i].filter(c => String(c).trim() !== '').length;
-      if (preenchidas >= 3) {
+      if (vals[i].filter(c => String(c).trim() !== '').length >= 3) {
         headerRowIdx = i;
         header = vals[i].map(c => String(c).trim().toUpperCase());
         break;
@@ -1160,70 +1160,61 @@ function acao_ponto_salvar_playlist_ecoin_(p) {
     }
     if (headerRowIdx === -1) return { erro: 'Header não encontrado na aba.' };
 
-    // ── Mapear colunas pelo nome do header ──
     const COL_ARTISTA = header.indexOf('NOME DO ARTISTA');
     const COL_MUSICA  = header.indexOf('NOME DA MÚSICA') !== -1
-                        ? header.indexOf('NOME DA MÚSICA')
-                        : header.indexOf('NOME DA MUSICA');
-    const COL_BANK    = header.indexOf('BANK');
+                      ? header.indexOf('NOME DA MÚSICA')
+                      : header.indexOf('NOME DA MUSICA');
+    const COL_BANK    = header.findIndex(h => h.includes('BANK'));
 
     const colMapNomes = {
-        'SPOTIFY':     header.indexOf('INVESTIMENTO PLAYLIST SPOTIFY'),
-        'APPLE MUSIC': header.indexOf('INVESTIMENTO PLAYLIST APPLE MUSIC'),
-        'YOUTUBE':     header.indexOf('INVESTIMENTO PLAYLIST YOUTUBE')
-};
+      'SPOTIFY':     header.indexOf('INVESTIMENTO PLAYLIST SPOTIFY'),
+      'APPLE MUSIC': header.indexOf('INVESTIMENTO PLAYLIST APPLE MUSIC'),
+      'YOUTUBE':     header.indexOf('INVESTIMENTO PLAYLIST YOUTUBE')
+    };
 
-    if (COL_ARTISTA === -1 || COL_MUSICA === -1) {
-      return { erro: 'Colunas obrigatórias não encontradas. Header detectado: ' + header.join(' | ') };
-    }
+    if (COL_ARTISTA === -1 || COL_MUSICA === -1)
+      return { erro: 'Colunas obrigatórias não encontradas. Header: ' + header.join(' | ') };
 
     const plataformaKey = String(p.plataforma || '').trim().toUpperCase();
     const COL_DESTINO   = colMapNomes[plataformaKey];
-    if (COL_DESTINO === undefined || COL_DESTINO === -1) {
+    if (COL_DESTINO === undefined || COL_DESTINO === -1)
       return { erro: 'Plataforma inválida ou coluna não encontrada: ' + p.plataforma };
-    }
 
     const artistaNorm = String(p.artista || '').trim().toUpperCase();
     const musicaNorm  = String(p.musica  || '').trim().toUpperCase();
-
-    if (!artistaNorm || !musicaNorm) {
+    if (!artistaNorm || !musicaNorm)
       return { erro: 'Artista e música são obrigatórios.' };
-    }
 
-    // ── Buscar linha com artista + música (igual a acao_ponto_distribuir_aleatorio_) ──
+    // Busca linha existente (artista + música)
     let linhaEncontrada = -1;
     for (let i = headerRowIdx + 1; i < vals.length; i++) {
-      const rowArtista = String(vals[i][COL_ARTISTA] || '').trim().toUpperCase();
-      const rowMusica  = String(vals[i][COL_MUSICA]  || '').trim().toUpperCase();
-      if (rowArtista === artistaNorm && rowMusica === musicaNorm) {
-        linhaEncontrada = i;
-        break;
-      }
+      const ra = String(vals[i][COL_ARTISTA] || '').trim().toUpperCase();
+      const rm = String(vals[i][COL_MUSICA]  || '').trim().toUpperCase();
+      if (ra === artistaNorm && rm === musicaNorm) { linhaEncontrada = i; break; }
     }
 
     let linhaReal; // 1-based para getRange
 
     if (linhaEncontrada !== -1) {
-      // ── Linha encontrada → apenas salvar playlist ──
+      // Linha já existe → apenas salva a playlist
       linhaReal = linhaEncontrada + 1;
       sh.getRange(linhaReal, COL_DESTINO + 1).setValue(p.playlist);
     } else {
-      // ── Não encontrou → criar nova linha na primeira vazia após o header ──
-      let primeiraVazia = vals.length; // padrão: após todos os dados
+      // ── PRIMEIRA LINHA VAZIA após o cabeçalho ──
+      linhaReal = -1;
       for (let i = headerRowIdx + 1; i < vals.length; i++) {
         if (vals[i].every(c => String(c).trim() === '')) {
-          primeiraVazia = i;
+          linhaReal = i + 1; // converte índice 0-based para linha 1-based
           break;
         }
       }
-      linhaReal = primeiraVazia + 1;
+      if (linhaReal === -1) linhaReal = vals.length + 1; // tudo preenchido? adiciona ao final
 
       sh.getRange(linhaReal, COL_ARTISTA + 1).setValue(p.artista);
       sh.getRange(linhaReal, COL_MUSICA  + 1).setValue(p.musica);
       sh.getRange(linhaReal, COL_DESTINO + 1).setValue(p.playlist);
     }
 
-    // ── Ler saldo do BANK para retornar ──
     const saldo = COL_BANK >= 0
       ? sh.getRange(linhaReal, COL_BANK + 1).getValue()
       : null;
@@ -1236,7 +1227,6 @@ function acao_ponto_salvar_playlist_ecoin_(p) {
       saldo,
       linha: linhaReal
     };
-
   } catch(e) {
     return { erro: e.message };
   }
@@ -1330,5 +1320,30 @@ function acaopontosalvarplaylistecoinp(p) {
     return { ok: true, message: '✅ ' + plataforma + ' salva para "' + musica + '"', linha: linhaAlvo, saldo };
   } catch(e) {
     return { erro: e.message };
+  }
+}
+function acaopontosaldoecoindados(p) {
+  try {
+    const sheetId = p.sheetId || PONTO_SS_ID;
+    const ss  = SpreadsheetApp.openById(sheetId);
+    const aba = ss.getSheetByName('DADOS');
+    if (!aba) return { erro: 'Aba DADOS não encontrada.' };
+
+    const ultLinha = aba.getLastRow();
+    if (ultLinha < 2) return { saldos: {} };
+
+    // AC = coluna 29, AI = coluna 35 (1-based)
+    const nomes  = aba.getRange(2, 29, ultLinha - 1, 1).getValues(); // AC2:AC
+    const saldos = aba.getRange(2, 35, ultLinha - 1, 1).getValues(); // AI2:AI
+
+    const resultado = {};
+    for (let i = 0; i < nomes.length; i++) {
+      const nome  = String(nomes[i][0] || '').trim();
+      const saldo = Number(saldos[i][0] || 0);
+      if (nome) resultado[nome] = saldo;
+    }
+    return { saldos: resultado };
+  } catch(e) {
+    return { erro: String(e) };
   }
 }
