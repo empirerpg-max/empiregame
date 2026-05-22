@@ -55,6 +55,7 @@ function PontoPlaylistsPlanilha() {
   const [artistaSel, setArtistaSel] = useState<string>("");
   const [musicaSel, setMusicaSel] = useState<Musica | null>(null);
   const [salvo, setSalvo] = useState<Record<string, string>>({});
+  const [plataformaAberta, setPlataformaAberta] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
