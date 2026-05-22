@@ -1,12 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import { api } from "@/lib/api";
 import { useTelegramUser } from "@/lib/telegram";
 
 export const Route = createFileRoute("/ponto/distribuir/planilha")({
   component: PontoPlanilha,
 });
+
+// Comunicação direta para burlar o cache do Lovable
+const GAS_URL = import.meta.env.VITE_GAS_URL || import.meta.env.VITE_APJ_URL || "";
+async function fetchData(params: Record<string, any>) {
+  const url = new URL(GAS_URL);
+  Object.entries(params).forEach(([key, val]) => {
+    if (val !== undefined && val !== null) url.searchParams.append(key, String(val));
+  });
+  const res = await fetch(url.toString());
+  return res.json();
+}
 
 const OPCOES_PONTOS: Record<string, string[]> = {
   "BILLBOARD HOT 100": ["1,00%", "2,00%", "3,00%", "4,00%", "5,00%", "6,00%", "7,00%", "8,00%", "9,00%", "10,00%"],
@@ -41,7 +51,7 @@ function PontoPlanilha() {
   useEffect(() => {
     if (!tgId) return;
     setLoading(true);
-    api.call({ acao: "ponto_listar_pontos", tgId }).then((d: any) => {
+    fetchData({ acao: "ponto_listar_pontos", tgId }).then((d: any) => {
       if (d?.erro) {
         setMsg({ key: "global", text: d.erro, ok: false });
         return;
@@ -65,7 +75,7 @@ function PontoPlanilha() {
     const key = `${row.linha}-${coluna}`;
     setSaving(key);
     setMsg(null);
-    const d: any = await api.call({ acao: "ponto_salvar_celula", tgId, linha: row.linha, coluna, valor });
+    const d: any = await fetchData({ acao: "ponto_salvar_celula", tgId, linha: row.linha, coluna, valor });
     setSaving(null);
     if (d?.ok || d?.message) {
       setSalvo((prev) => ({ ...prev, [key]: valor }));
