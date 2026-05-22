@@ -85,8 +85,7 @@ function PontoPlaylistsPlanilha() {
       if (mostrarLoader) setLoading(true);
       else setRefreshing(true);
       try {
-        // Passa sheetId diretamente via api.call para garantir que o GAS receba
-        const sal: any = await api.call({
+        const sal: any = await (api as any).call({
           acao: "ponto_saldo_ecoin_dados",
           tgId,
           sheetId: SHEET_ID,
@@ -97,6 +96,15 @@ function PontoPlaylistsPlanilha() {
               ([nome, saldo]) => ({ nome, saldo: Number(saldo) || 0 })
             )
           );
+        } else {
+          const sal2: any = await api.saldoEcoin(tgId);
+          if (sal2?.saldos) {
+            setArtistas(
+              Object.entries(sal2.saldos as Record<string, number>).map(
+                ([nome, saldo]) => ({ nome, saldo: Number(saldo) || 0 })
+              )
+            );
+          }
         }
       } finally {
         if (mostrarLoader) setLoading(false);
@@ -118,12 +126,7 @@ function PontoPlaylistsPlanilha() {
     setPendente({});
     setConfirmado({});
     setMsg(null);
-    // Passa sheetId para que o GAS saiba de qual planilha listar as músicas
-    api.call({
-      acao: "ponto_listar_musicas_edicao",
-      tgId,
-      sheetId: SHEET_ID,
-    }).then((d: any) => {
+    api.listarMusicasEdicao(tgId).then((d: any) => {
       const todas: Musica[] = d?.musicas || [];
       setMusicas(
         todas.filter((m) => m.artista?.toLowerCase() === artistaSel.toLowerCase())
@@ -156,14 +159,12 @@ function PontoPlaylistsPlanilha() {
     let sucessos = 0;
 
     for (const [plataforma, playlist] of Object.entries(selecoes)) {
-      const d: any = await api.call({
-        acao: "ponto_salvar_playlist_ecoin",
+      const d: any = await api.salvarPlaylistEcoin({
         tgId,
         artista: musica.artista,
         musica: musica.musica,
         plataforma,
         playlist,
-        sheetId: SHEET_ID,
       });
       if (d?.ok) {
         sucessos++;
@@ -238,7 +239,7 @@ function PontoPlaylistsPlanilha() {
         </div>
       )}
 
-      {/* Saldo em tempo real (aba DADOS, coluna AI) */}
+      {/* $ Bank Account — saldo live (aba DADOS, coluna AI) */}
       {artistaSel && (
         <div className="mb-5 rounded-2xl bg-yellow-500/10 border border-yellow-500/30 px-4 py-3 flex items-center justify-between">
           <div>
