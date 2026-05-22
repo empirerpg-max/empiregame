@@ -258,6 +258,12 @@ export const api = {
     return call({ acao: "ponto_salvar_celula", ...payload });
   },
 
+  // alias usado em ponto.distribuir.planilha.tsx
+  async salvarCelulaPontos(payload: Record<string, any>) {
+    invalidateCache();
+    return call({ acao: "ponto_salvar_celula", ...payload });
+  },
+
   async pontoDistribuirAleatorio(tgId: string) {
     invalidateCache();
     return call({ acao: "ponto_distribuir_aleatorio", tgId });
