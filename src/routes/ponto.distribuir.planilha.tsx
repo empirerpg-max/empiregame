@@ -1,6 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronDown, ChevronUp, Loader2, CheckCircle2 } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  CheckCircle2,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useTelegramUser } from "@/lib/telegram";
 
@@ -9,53 +15,26 @@ export const Route = createFileRoute("/ponto/distribuir/planilha")({
 });
 
 const OPCOES_PONTOS: Record<string, string[]> = {
-  "BILLBOARD HOT 100": ["1,00%", "2,00%", "3,00%", "4,00%", "5,00%", "6,00%", "7,00%", "8,00%", "9,00%", "10,00%"],
-  SPOTIFY: ["30,00%", "40,00%", "50,00%", "60,00%", "70,00%"],
-  "APPLE MUSIC": ["30,00%", "40,00%", "50,00%", "60,00%", "70,00%"],
+  "BILLBOARD HOT 100": [
+    "1,00%","2,00%","3,00%","4,00%","5,00%",
+    "6,00%","7,00%","8,00%","9,00%","10,00%",
+  ],
+  SPOTIFY: ["30,00%","40,00%","50,00%","60,00%","70,00%"],
+  "APPLE MUSIC": ["30,00%","40,00%","50,00%","60,00%","70,00%"],
   YOUTUBE: [
-    "10,00%",
-    "15,00%",
-    "20,00%",
-    "25,00%",
-    "30,00%",
-    "35,00%",
-    "40,00%",
-    "45,00%",
-    "50,00%",
-    "55,00%",
-    "60,00%",
-    "65,00%",
-    "70,00%",
+    "10,00%","15,00%","20,00%","25,00%","30,00%",
+    "35,00%","40,00%","45,00%","50,00%","55,00%",
+    "60,00%","65,00%","70,00%",
   ],
   "DIGITAL SALES": [
-    "10,00%",
-    "15,00%",
-    "20,00%",
-    "25,00%",
-    "30,00%",
-    "35,00%",
-    "40,00%",
-    "45,00%",
-    "50,00%",
-    "55,00%",
-    "60,00%",
-    "65,00%",
-    "70,00%",
+    "10,00%","15,00%","20,00%","25,00%","30,00%",
+    "35,00%","40,00%","45,00%","50,00%","55,00%",
+    "60,00%","65,00%","70,00%",
   ],
   "BILLBOARD 200": [
-    "10,00%",
-    "15,00%",
-    "20,00%",
-    "25,00%",
-    "30,00%",
-    "35,00%",
-    "40,00%",
-    "45,00%",
-    "50,00%",
-    "55,00%",
-    "60,00%",
-    "65,00%",
-    "70,00%",
+    "10,00%","15,00%","20,00%","25,00%","30,00%",
+    "35,00%","40,00%","45,00%","50,00%","55,00%",
+    "60,00%","65,00%","70,00%",
   ],
 };
 
@@ -68,7 +47,9 @@ type PontoRow = {
 
 function PontoPlanilha() {
   const { user, ready } = useTelegramUser();
-  const tgId = user?.id ? String(user.id) : localStorage.getItem("empire_tg_id") || "";
+  const tgId = user?.id
+    ? String(user.id)
+    : localStorage.getItem("empire_tg_id") || "";
 
   const [rows, setRows] = useState<PontoRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,15 +58,16 @@ function PontoPlanilha() {
   const [colunaAberta, setColunaAberta] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [salvo, setSalvo] = useState<Record<string, string>>({});
-  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [msg, setMsg] = useState<{ key: string; text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
     if (!tgId) return;
     api
       .listarPontosJogador(tgId)
       .then((d: any) => {
-        const lista: PontoRow[] = (d?.rows || d || []).map((r: any) => ({
-          linha: r.linha || r.row,
+        const linhas = d?.linhas || d?.rows || [];
+        const lista: PontoRow[] = linhas.map((r: any) => ({
+          linha: r.linha ?? r.row ?? 0,
           artista: r.artista || r.ARTISTA || "",
           musica: r.musica || r.MUSICA || "",
           valores: r.valores || {},
@@ -95,9 +77,9 @@ function PontoPlanilha() {
       .finally(() => setLoading(false));
   }, [tgId]);
 
-  // Agrupa por artista
   const porArtista = rows.reduce<Record<string, PontoRow[]>>((acc, r) => {
-    (acc[r.artista] = acc[r.artista] || []).push(r);
+    const key = r.artista || "(sem artista)";
+    (acc[key] = acc[key] || []).push(r);
     return acc;
   }, {});
 
@@ -105,13 +87,18 @@ function PontoPlanilha() {
     const key = `${row.linha}-${coluna}`;
     setSaving(key);
     setMsg(null);
-    const d: any = await api.salvarCelulaPontos({ tgId, linha: row.linha, coluna, valor });
+    const d: any = await api.salvarCelulaPontos({
+      tgId,
+      linha: row.linha,
+      coluna,
+      valor,
+    });
     setSaving(null);
     if (d?.ok || d?.message) {
       setSalvo((prev) => ({ ...prev, [key]: valor }));
-      setMsg({ text: `✅ ${coluna} salvo!`, ok: true });
+      setMsg({ key, text: `✅ ${coluna} salvo!`, ok: true });
     } else {
-      setMsg({ text: `❌ ${d?.erro || "Erro"}`, ok: false });
+      setMsg({ key, text: `❌ ${d?.erro || "Erro"}`, ok: false });
     }
   }
 
@@ -131,7 +118,10 @@ function PontoPlanilha() {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-24">
-      <Link to="/ponto/distribuir" className="flex items-center gap-1 text-sm text-muted-foreground">
+      <Link
+        to="/ponto/distribuir"
+        className="flex items-center gap-1 text-sm text-muted-foreground"
+      >
         <ChevronLeft className="w-4 h-4" /> Voltar
       </Link>
 
@@ -143,15 +133,19 @@ function PontoPlanilha() {
       </div>
 
       {Object.keys(porArtista).length === 0 && (
-        <p className="text-sm text-muted-foreground py-8 text-center">Nenhuma música encontrada.</p>
+        <p className="text-sm text-muted-foreground py-8 text-center">
+          Nenhuma música encontrada.
+        </p>
       )}
 
-      {/* ── Accordion por Artista ── */}
+      {/* Accordion por Artista */}
       {Object.entries(porArtista).map(([artista, musicasArtista]) => {
         const artistaOpen = artistaAberto === artista;
         return (
-          <div key={artista} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-            {/* Cabeçalho do artista */}
+          <div
+            key={artista}
+            className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden"
+          >
             <button
               onClick={() => {
                 setArtistaAberto(artistaOpen ? null : artista);
@@ -162,7 +156,9 @@ function PontoPlanilha() {
             >
               <span className="font-bold text-sm">🎤 {artista}</span>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{musicasArtista.length} música(s)</span>
+                <span className="text-xs text-muted-foreground">
+                  {musicasArtista.length} música(s)
+                </span>
                 {artistaOpen ? (
                   <ChevronUp className="w-4 h-4 text-purple-300" />
                 ) : (
@@ -171,14 +167,15 @@ function PontoPlanilha() {
               </div>
             </button>
 
-            {/* Músicas do artista */}
             {artistaOpen && (
               <div className="border-t border-white/5 flex flex-col gap-1 p-2 bg-black/10">
                 {musicasArtista.map((row) => {
                   const musicaOpen = musicaAberta === row.linha;
                   return (
-                    <div key={row.linha} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
-                      {/* Cabeçalho da música */}
+                    <div
+                      key={row.linha}
+                      className="rounded-xl border border-white/10 bg-white/5 overflow-hidden"
+                    >
                       <button
                         onClick={() => {
                           setMusicaAberta(musicaOpen ? null : row.linha);
@@ -195,7 +192,6 @@ function PontoPlanilha() {
                         )}
                       </button>
 
-                      {/* Colunas de pontos */}
                       {musicaOpen && (
                         <div className="border-t border-white/5 p-2 flex flex-col gap-1.5 bg-black/20">
                           {Object.entries(OPCOES_PONTOS).map(([coluna, opcoes]) => {
@@ -209,16 +205,20 @@ function PontoPlanilha() {
                                 key={coluna}
                                 className="rounded-lg border border-white/10 bg-white/5 overflow-hidden"
                               >
-                                {/* Cabeçalho da coluna */}
                                 <button
-                                  onClick={() => setColunaAberta(colOpen ? null : colKey)}
+                                  onClick={() =>
+                                    setColunaAberta(colOpen ? null : colKey)
+                                  }
                                   className="w-full flex items-center justify-between px-3 py-2 text-left"
                                 >
                                   <div className="min-w-0">
-                                    <p className="text-xs font-semibold text-gray-300">{coluna}</p>
+                                    <p className="text-xs font-semibold text-gray-300">
+                                      {coluna}
+                                    </p>
                                     {salvoVal && (
                                       <p className="text-[11px] text-green-400 flex items-center gap-1 mt-0.5">
-                                        <CheckCircle2 className="w-3 h-3" /> {salvoVal}
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        {salvoVal}
                                       </p>
                                     )}
                                   </div>
@@ -229,7 +229,6 @@ function PontoPlanilha() {
                                   )}
                                 </button>
 
-                                {/* Opções de ponto */}
                                 {colOpen && (
                                   <div className="flex flex-wrap gap-1.5 p-2 border-t border-white/5">
                                     {opcoes.map((op) => {
@@ -245,8 +244,7 @@ function PontoPlanilha() {
                                               : "border-white/10 bg-white/5 hover:bg-purple-800/40 hover:border-purple-400"
                                           }`}
                                         >
-                                          {sel ? "✓ " : ""}
-                                          {op}
+                                          {sel ? "✓ " : ""}{op}
                                         </button>
                                       );
                                     })}
@@ -255,17 +253,19 @@ function PontoPlanilha() {
                                     )}
                                   </div>
                                 )}
+
+                                {msg?.key === colKey && (
+                                  <p
+                                    className={`text-[11px] text-center px-2 pb-1.5 font-semibold ${
+                                      msg.ok ? "text-green-400" : "text-red-400"
+                                    }`}
+                                  >
+                                    {msg.text}
+                                  </p>
+                                )}
                               </div>
                             );
                           })}
-
-                          {msg && musicaOpen && (
-                            <p
-                              className={`text-xs text-center font-semibold mt-1 ${msg.ok ? "text-green-400" : "text-red-400"}`}
-                            >
-                              {msg.text}
-                            </p>
-                          )}
                         </div>
                       )}
                     </div>
