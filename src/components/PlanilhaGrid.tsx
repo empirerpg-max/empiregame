@@ -110,11 +110,24 @@ export function PlanilhaGrid({ tgId, loader, saver, opcoesColunas = {} }: Planil
   );
 
   return (
-    <div className="flex flex-col gap-6 pb-6">
-      {Object.entries(porArtista).map(([artista, linhas]) => (
-        <div key={artista}>
-          <h3 className="text-xs font-bold uppercase tracking-widest text-primary mb-2 px-1">{artista}</h3>
-          <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3 pb-6">
+      {Object.entries(porArtista).map(([artista, linhas]) => {
+        const aberto = artistaAberto === artista;
+        return (
+          <div key={artista} className="rounded-2xl bg-card border border-white/5 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setArtistaAberto(aberto ? null : artista)}
+              className="w-full flex items-center justify-between px-4 py-3 text-left"
+            >
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-primary">{artista}</h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{linhas.length} música{linhas.length>1?'s':''}</p>
+              </div>
+              {aberto ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            </button>
+            {aberto && (
+              <div className="flex flex-col gap-2 px-2 pb-3">
             {linhas.map((row) => {
               const musica = String(row.valores["MÚSICA"] || row.valores["MUSIC"] || "").replace(`${artista} - `, "");
               const weeks = row.valores["WEEKS"] ?? "";
