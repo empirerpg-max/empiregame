@@ -79,10 +79,10 @@ function PontoPlaylistsPlanilha() {
     if (!tgId) return;
     setLoading(true);
     try {
-      // Busca músicas e saldos em paralelo
+      // Alterado para api.call direto
       const [pts, sal]: [any, any] = await Promise.all([
-        api.pontoListarPontos(tgId).catch(() => ({})),
-        api.saldoEcoin(tgId).catch(() => ({})),
+        api.call({ acao: "ponto_listar_pontos", tgId }).catch(() => ({})),
+        api.call({ acao: "ponto_saldo_ecoin_dados", tgId }).catch(() => ({})),
       ]);
 
       if (pts?.erro) setMsg({ key: "global", text: pts.erro, ok: false });
@@ -110,7 +110,8 @@ function PontoPlaylistsPlanilha() {
       if (!tgId || !artistaNome) return;
       setRefreshing(true);
       try {
-        const sal: any = await api.saldoEcoin(tgId);
+        // Alterado para api.call direto
+        const sal: any = await api.call({ acao: "ponto_saldo_ecoin_dados", tgId });
         if (sal?.saldos) {
           setSaldosMap(sal.saldos);
         }
@@ -150,13 +151,16 @@ function PontoPlaylistsPlanilha() {
     let sucessos = 0;
 
     for (const [plataforma, playlist] of Object.entries(selecoes)) {
-      const d: any = await api.salvarPlaylistEcoin({
+      // Alterado para api.call direto
+      const d: any = await api.call({
+        acao: "ponto_salvar_playlist_ecoin",
         tgId,
         artista: musica.artista,
         musica: musica.musica,
         plataforma,
         playlist,
       });
+
       if (d?.ok) {
         sucessos++;
         setConfirmado((prev) => ({ ...prev, [mKey]: { ...(prev[mKey] || {}), [plataforma]: playlist } }));
