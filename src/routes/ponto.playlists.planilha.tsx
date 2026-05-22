@@ -147,11 +147,14 @@ function PontoPlaylistsPlanilha() {
     const erros: string[] = [];
     let sucessos = 0;
 
+    // Garantia: nunca enviar artista vazio (fallback para o chip selecionado)
+    const artistaFinal = (musica.artista || artistaSel || "").trim();
+
     for (const [plataforma, playlist] of Object.entries(selecoes)) {
       const d: any = await api.call({
         acao: "ponto_salvar_playlist_ecoin",
         tgId,
-        artista: musica.artista,
+        artista: artistaFinal,
         musica: musica.musica,
         plataforma,
         playlist,
