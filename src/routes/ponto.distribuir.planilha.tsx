@@ -83,8 +83,9 @@ function PontoPlanilha() {
   useEffect(() => {
     if (!tgId) return;
     setLoading(true);
+    // Alterado para api.call direto
     api
-      .pontoListarPontos(tgId)
+      .call({ acao: "ponto_listar_pontos", tgId })
       .then((d: any) => {
         if (d?.erro) {
           setMsg({ key: "global", text: d.erro, ok: false });
@@ -111,7 +112,8 @@ function PontoPlanilha() {
     const key = `${row.linha}-${coluna}`;
     setSaving(key);
     setMsg(null);
-    const d: any = await api.salvarCelulaPontos({ tgId, linha: row.linha, coluna, valor });
+    // Alterado para api.call direto
+    const d: any = await api.call({ acao: "ponto_salvar_celula", tgId, linha: row.linha, coluna, valor });
     setSaving(null);
     if (d?.ok || d?.message) {
       setSalvo((prev) => ({ ...prev, [key]: valor }));
