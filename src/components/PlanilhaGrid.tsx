@@ -28,6 +28,7 @@ export function PlanilhaGrid({ tgId, loader, saver, opcoesColunas = {} }: Planil
   const [saving, setSaving] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [expandido, setExpandido] = useState<number | null>(null);
+  const [artistaAberto, setArtistaAberto] = useState<string | null>(null);
   const [editando, setEditando] = useState<Record<string, any>>({});
 
   useEffect(() => {
