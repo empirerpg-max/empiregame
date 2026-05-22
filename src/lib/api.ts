@@ -9,4 +9,13 @@ export const api = {
     const res = await fetch(url.toString());
     return await res.json();
   },
+
+  // Helpers específicos do módulo PONTO
+  getJogador: async (tgId: string) => {
+    return api.call({ acao: "ponto_get_jogador", tgId });
+  },
+
+  distribuirPontosAleatorio: async (tgId: string) => {
+    return api.call({ acao: "ponto_distribuir_aleatorio", tgId });
+  },
 };

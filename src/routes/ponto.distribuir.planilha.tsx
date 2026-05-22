@@ -1,6 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  ChevronLeft,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Music2,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
+import { api } from "@/lib/api";
 import { useTelegramUser } from "@/lib/telegram";
 
 export const Route = createFileRoute("/ponto/distribuir/planilha")({
@@ -73,8 +83,7 @@ function PontoPlanilha() {
 
   const [rows, setRows] = useState<PontoRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [musicaAberta, setMusicaAberta] = useState<number | null>(null);
-  const [colunaAberta, setColunaAberta] = useState<string | null>(null);
+  const [musicaSelecionada, setMusicaSelecionada] = useState<PontoRow | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [salvo, setSalvo] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ key: string; text: string; ok: boolean } | null>(null);
@@ -135,7 +144,7 @@ function PontoPlanilha() {
 
       <div className="mb-2">
         <h2 className="text-2xl font-black italic tracking-tighter">Pontos · Manual</h2>
-        <p className="text-sm text-muted-foreground mt-1">Gerencie a distribuição das suas músicas.</p>
+        <p className="text-sm text-muted-foreground mt-1">Toque em uma música para distribuir.</p>
       </div>
 
       {msg?.key === "global" && (
@@ -154,116 +163,176 @@ function PontoPlanilha() {
       ) : (
         <div className="flex flex-col gap-3">
           {rows.map((row) => {
-            const musicaOpen = musicaAberta === row.linha;
+            const disponivelNum = parseFloat(String(row.pontosDisponiveis).replace("%", "").replace(",", ".")) || 0;
+            const utilizadoNum = parseFloat(String(row.pontosUtilizados).replace("%", "").replace(",", ".")) || 0;
+
             return (
-              <div
+              <button
                 key={row.linha}
-                className="rounded-2xl border border-white/10 bg-card overflow-hidden shadow-lg transition-all"
+                onClick={() => {
+                  setMusicaSelecionada(row);
+                  setMsg(null);
+                }}
+                className="rounded-2xl border border-white/10 bg-card overflow-hidden shadow-lg transition-all hover:border-primary/40 text-left"
               >
-                <button
-                  onClick={() => {
-                    setMusicaAberta(musicaOpen ? null : row.linha);
-                    setColunaAberta(null);
-                    setMsg(null);
-                  }}
-                  className={`w-full px-4 py-4 text-left transition-colors ${musicaOpen ? "bg-primary/5" : "hover:bg-white/5"}`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex-1 pr-4">
-                      <p className="text-xs text-primary font-bold uppercase tracking-wider mb-1">{row.artista}</p>
-                      <h3 className="font-bold text-lg leading-tight">{row.musica}</h3>
+                <div className="px-4 py-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1 pr-4 min-w-0">
+                      <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1 truncate">
+                        {row.artista}
+                      </p>
+                      <h3 className="font-bold text-base leading-tight truncate">{row.musica}</h3>
                     </div>
-                    {musicaOpen ? (
-                      <ChevronUp className="w-5 h-5 text-primary shrink-0" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-muted-foreground shrink-0" />
-                    )}
-                  </div>
-
-                  <div className="flex gap-4 mt-3 pt-3 border-t border-white/5">
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase">Disponível</p>
-                      <p className="text-sm font-bold text-green-400">{row.pontosDisponiveis}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase">Utilizado</p>
-                      <p className="text-sm font-bold text-yellow-400">{row.pontosUtilizados}</p>
+                    <div className="size-9 rounded-xl bg-primary/10 grid place-items-center shrink-0">
+                      <Music2 className="size-4 text-primary" />
                     </div>
                   </div>
-                </button>
 
-                {musicaOpen && (
-                  <div className="bg-black/20 p-3 flex flex-col gap-2">
-                    {Object.entries(OPCOES_PONTOS).map(([coluna, opcoes]) => {
-                      const colKey = `${row.linha}-${coluna}`;
-                      const colOpen = colunaAberta === colKey;
-                      const salvoVal = salvo[colKey] || row.valores?.[coluna] || "";
-                      const isSaving = saving === colKey;
-
-                      return (
-                        <div key={coluna} className="rounded-xl border border-white/5 bg-white/5 overflow-hidden">
-                          <button
-                            onClick={() => setColunaAberta(colOpen ? null : colKey)}
-                            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors"
-                          >
-                            <div>
-                              <p className="text-xs font-bold text-gray-300">{coluna}</p>
-                              {salvoVal && (
-                                <p className="text-[11px] text-primary flex items-center gap-1 mt-1">
-                                  <CheckCircle2 className="w-3 h-3" /> Atual: {salvoVal}
-                                </p>
-                              )}
-                            </div>
-                            {colOpen ? (
-                              <ChevronUp className="w-4 h-4 text-primary" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                            )}
-                          </button>
-
-                          {colOpen && (
-                            <div className="p-3 pt-0 border-t border-white/5 mt-2">
-                              <div className="flex flex-wrap gap-2 mt-3">
-                                {opcoes.map((op) => {
-                                  const sel = salvoVal === op;
-                                  return (
-                                    <button
-                                      key={op}
-                                      disabled={isSaving}
-                                      onClick={() => salvarPonto(row, coluna, op)}
-                                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all active:scale-95 ${
-                                        sel
-                                          ? "border-primary bg-primary/20 text-primary"
-                                          : "border-white/10 bg-black/40 hover:border-primary/50 text-gray-300"
-                                      }`}
-                                    >
-                                      {op}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              {isSaving && (
-                                <div className="mt-3 flex items-center gap-2 text-xs text-primary">
-                                  <Loader2 className="w-3 h-3 animate-spin" /> Salvando...
-                                </div>
-                              )}
-                              {msg?.key === colKey && (
-                                <p
-                                  className={`mt-3 text-xs font-semibold ${msg.ok ? "text-green-400" : "text-red-400"}`}
-                                >
-                                  {msg.text}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-xl bg-white/5 border border-white/5 px-3 py-2">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <Wallet className="w-3 h-3 text-green-400" />
+                        <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-bold">
+                          Disponível
+                        </p>
+                      </div>
+                      <p className="text-sm font-black text-green-400">{row.pontosDisponiveis}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/5 border border-white/5 px-3 py-2">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <TrendingUp className="w-3 h-3 text-yellow-400" />
+                        <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-bold">
+                          Utilizado
+                        </p>
+                      </div>
+                      <p className="text-sm font-black text-yellow-400">{row.pontosUtilizados}</p>
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  {(disponivelNum > 0 || utilizadoNum > 0) && (
+                    <div className="mt-3 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-yellow-400 to-primary transition-all"
+                        style={{
+                          width: `${Math.min(100, (utilizadoNum / Math.max(1, utilizadoNum + disponivelNum)) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </button>
             );
           })}
+        </div>
+      )}
+
+      {/* OVERLAY MODERNO NO TOPO — carrega acima da lista, não embaixo */}
+      {musicaSelecionada && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 pt-10 overflow-y-auto"
+          onClick={() => setMusicaSelecionada(null)}
+        >
+          <div
+            className="w-full max-w-md bg-card border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-top duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header sticky */}
+            <div className="sticky top-0 z-10 bg-card/95 backdrop-blur border-b border-white/5 px-5 py-4 flex items-start gap-3">
+              <div className="size-10 rounded-xl bg-primary/15 grid place-items-center shrink-0">
+                <Music2 className="size-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-primary font-bold uppercase tracking-widest truncate">
+                  {musicaSelecionada.artista}
+                </p>
+                <h3 className="font-black text-base leading-tight truncate">{musicaSelecionada.musica}</h3>
+              </div>
+              <button
+                onClick={() => setMusicaSelecionada(null)}
+                className="size-9 rounded-xl bg-white/5 hover:bg-white/10 grid place-items-center shrink-0"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {/* Saldo desta música (Disponível / Utilizado) */}
+            <div className="px-5 py-3 grid grid-cols-2 gap-2 border-b border-white/5 bg-black/20">
+              <div className="rounded-xl bg-white/5 px-3 py-2">
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-bold mb-0.5">
+                  Disponível
+                </p>
+                <p className="text-base font-black text-green-400">{musicaSelecionada.pontosDisponiveis}</p>
+              </div>
+              <div className="rounded-xl bg-white/5 px-3 py-2">
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-bold mb-0.5">
+                  Utilizado
+                </p>
+                <p className="text-base font-black text-yellow-400">{musicaSelecionada.pontosUtilizados}</p>
+              </div>
+            </div>
+
+            {/* Categorias */}
+            <div className="p-4 flex flex-col gap-4 max-h-[60vh] overflow-y-auto">
+              {Object.entries(OPCOES_PONTOS).map(([coluna, opcoes]) => {
+                const colKey = `${musicaSelecionada.linha}-${coluna}`;
+                const salvoVal = salvo[colKey] || musicaSelecionada.valores?.[coluna] || "";
+                const isSaving = saving === colKey;
+
+                return (
+                  <div key={coluna} className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+                    <div className="px-4 py-3 bg-white/5 border-b border-white/5 flex items-center justify-between">
+                      <p className="text-xs font-black text-gray-200 tracking-wide">{coluna}</p>
+                      {salvoVal && (
+                        <span className="text-[10px] bg-primary/15 text-primary px-2 py-1 rounded-full flex items-center gap-1 font-bold">
+                          <CheckCircle2 className="w-3 h-3" /> {salvoVal}
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-3 flex flex-wrap gap-1.5">
+                      {opcoes.map((op) => {
+                        const sel = salvoVal === op;
+                        return (
+                          <button
+                            key={op}
+                            disabled={isSaving}
+                            onClick={() => salvarPonto(musicaSelecionada, coluna, op)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all active:scale-95 ${
+                              sel
+                                ? "border-primary bg-primary/20 text-primary shadow-[0_0_10px_rgba(var(--primary),0.25)]"
+                                : "border-white/10 bg-black/30 hover:border-primary/50 text-gray-300"
+                            } ${isSaving ? "opacity-50 cursor-wait" : ""}`}
+                          >
+                            {op}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {isSaving && (
+                      <div className="px-4 pb-3 flex items-center gap-2 text-xs text-primary">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Salvando...
+                      </div>
+                    )}
+                    {msg?.key === colKey && (
+                      <p
+                        className={`px-4 pb-3 text-xs font-semibold ${msg.ok ? "text-green-400" : "text-red-400"}`}
+                      >
+                        {msg.text}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="px-5 py-4 border-t border-white/5 bg-black/30">
+              <button
+                onClick={() => setMusicaSelecionada(null)}
+                className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/15 text-sm font-bold transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>

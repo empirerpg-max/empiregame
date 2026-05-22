@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useTelegramUser } from "@/lib/telegram";
+import { api } from "@/lib/api";
 
 export const Route = createFileRoute("/ponto/playlists/planilha")({
   component: PontoPlaylistsPlanilha,
@@ -143,7 +144,7 @@ function PontoPlaylistsPlanilha() {
     setEnviando(mKey);
     setMsg(null);
 
-    let erros: string[] = [];
+    const erros: string[] = [];
     let sucessos = 0;
 
     for (const [plataforma, playlist] of Object.entries(selecoes)) {
@@ -171,7 +172,7 @@ function PontoPlaylistsPlanilha() {
         const { [mKey]: _, ...resto } = prev;
         return resto;
       });
-      setMsg({ key: mKey, text: `✅ Sucesso! Playlists aplicadas na aba.`, ok: true });
+      setMsg({ key: mKey, text: `✅ ${sucessos} playlist(s) aplicada(s) com sucesso!`, ok: true });
       atualizarSaldoIndividual(musica.artista);
     } else {
       setMsg({ key: mKey, text: `❌ ${erros.join(" | ")}`, ok: false });
@@ -316,20 +317,35 @@ function PontoPlaylistsPlanilha() {
                               {PLAYLISTS[plat].map((pl) => {
                                 const selecionada = selAtual === pl;
                                 const jaEnviada = enviada === pl;
+                                const isTopo = pl.toUpperCase().startsWith("TOPO ");
+                                // TOPO já enviada para esta música→bloqueia nova seleção (uma única vez por música)
+                                const topoBloqueada = isTopo && jaEnviada;
                                 return (
                                   <button
                                     key={pl}
-                                    disabled={isEnviando}
+                                    disabled={isEnviando || topoBloqueada}
                                     onClick={() => toggleSelecao(m, plat, pl)}
-                                    className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
+                                    className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium transition-all flex items-center justify-between gap-2 ${
                                       jaEnviada
                                         ? "bg-green-900/20 text-green-400 opacity-70"
                                         : selecionada
                                           ? "bg-primary/20 text-primary border border-primary/50"
                                           : "hover:bg-white/5 text-gray-400 border border-transparent"
-                                    }`}
+                                    } ${topoBloqueada ? "cursor-not-allowed" : ""}`}
+                                    title={topoBloqueada ? "Playlist TOPO já utilizada por esta música" : undefined}
                                   >
-                                    {pl}
+                                    <span className="truncate">{pl}</span>
+                                    {isTopo && (
+                                      <span
+                                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                                          jaEnviada
+                                            ? "bg-green-500/20 text-green-400"
+                                            : "bg-yellow-500/15 text-yellow-400"
+                                        }`}
+                                      >
+                                        TOPO
+                                      </span>
+                                    )}
                                   </button>
                                 );
                               })}
