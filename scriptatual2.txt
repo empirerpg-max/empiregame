@@ -1276,13 +1276,13 @@ function acaopontosalvarplaylistecoinp(p) {
     const sh = ss.getSheetByName('ECOIN + INVESTIMENTO');
     if (!sh) return { erro: 'Aba ECOIN + INVESTIMENTO nao encontrada.' };
 
-    const artista  = String(p.artista  || '').trim();
-    const musica   = String(p.musica   || '').trim();
-    const playlist = String(p.playlist || '').trim();
+    const artista   = String(p.artista   || '').trim();
+    const musica    = String(p.musica    || '').trim();
+    const playlist  = String(p.playlist  || '').trim();
     const plataforma = String(p.plataforma || '').trim().toUpperCase();
 
-    if (!artista || !musica)   return { erro: 'Artista e música são obrigatórios.' };
-    if (!playlist)             return { erro: 'Playlist é obrigatória.' };
+    if (!artista || !musica) return { erro: 'Artista e música são obrigatórios.' };
+    if (!playlist)           return { erro: 'Playlist é obrigatória.' };
 
     const colMap = {
       'SPOTIFY':    'INVESTIMENTO PLAYLIST SPOTIFY',
@@ -1295,32 +1295,23 @@ function acaopontosalvarplaylistecoinp(p) {
     // Header na linha 2 (índice 1)
     const header = vals[1].map(c => String(c).trim().toUpperCase());
 
-    const COL_ARTISTA  = header.indexOf('NOME DO ARTISTA');
-    const COL_MUSICA   = header.findIndex(h => h === 'NOME DA MÚSICA' || h === 'NOME DA MUSICA');
-    const COL_DESTINO  = header.indexOf(colMap[plataforma]);
+    // Posições FIXAS exigidas pelo cliente: C = artista, D = música
+    const COL_ARTISTA = 2; // coluna C
+    const COL_MUSICA  = 3; // coluna D
+    const COL_DESTINO = header.indexOf(colMap[plataforma]);
+    if (COL_DESTINO < 0) return { erro: 'Coluna ' + colMap[plataforma] + ' não encontrada.' };
 
-    if (COL_ARTISTA  < 0) return { erro: 'Coluna NOME DO ARTISTA não encontrada.' };
-    if (COL_MUSICA   < 0) return { erro: 'Coluna NOME DA MÚSICA não encontrada.' };
-    if (COL_DESTINO  < 0) return { erro: 'Coluna ' + colMap[plataforma] + ' não encontrada.' };
-
-    const artistaNorm = artista.toUpperCase();
-    const musicaNorm  = musica.toUpperCase();
-
-    // Busca linha existente com mesmo artista + música
+    // Sempre gravar na PRIMEIRA LINHA VAZIA após o header (linha 3 em diante)
     let linhaAlvo = -1;
     for (let i = 2; i < vals.length; i++) {
-      const ra = String(vals[i][COL_ARTISTA] || '').trim().toUpperCase();
-      const rm = String(vals[i][COL_MUSICA]  || '').trim().toUpperCase();
-      if (ra === artistaNorm && rm === musicaNorm) { linhaAlvo = i + 1; break; }
+      const linhaToda = vals[i].map(c => String(c).trim()).join('');
+      if (linhaToda === '') { linhaAlvo = i + 1; break; }
     }
+    if (linhaAlvo < 0) linhaAlvo = vals.length + 1;
 
-    // Não existe ainda → cria nova linha
-    if (linhaAlvo < 0) {
-      linhaAlvo = vals.length + 1;
-      sh.getRange(linhaAlvo, COL_ARTISTA + 1).setValue(artista);
-      sh.getRange(linhaAlvo, COL_MUSICA  + 1).setValue(musica);
-    }
-
+    // Grava artista (C), música (D) e a playlist da plataforma
+    sh.getRange(linhaAlvo, COL_ARTISTA + 1).setValue(artista);
+    sh.getRange(linhaAlvo, COL_MUSICA  + 1).setValue(musica);
     sh.getRange(linhaAlvo, COL_DESTINO + 1).setValue(playlist);
 
     // Saldo: coluna BANK do header
