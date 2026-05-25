@@ -346,106 +346,111 @@ function PontoPlaylistsPlanilha() {
 
   // === VIEW DE LISTA DE MÚSICAS ===
   return (
-    <main className="flex-1 mx-auto w-full max-w-md px-5 pt-6 pb-24 flex flex-col gap-4">
-      <Link to="/ponto/playlists" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-2 w-fit">
-        <ChevronLeft className="w-4 h-4" /> Voltar
-      </Link>
+    <main className="flex-1 mx-auto w-full max-w-md px-4 pt-4 pb-24 flex flex-col gap-3">
+      {/* Topo compacto sticky */}
+      <div className="sticky top-0 z-10 -mx-4 px-4 pt-2 pb-3 bg-background/85 backdrop-blur-md border-b border-white/5 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <Link to="/ponto/playlists" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
+            <ChevronLeft className="w-4 h-4" /> Voltar
+          </Link>
+          <h2 className="text-sm font-black italic tracking-tighter">Playlists · Manual</h2>
+          <button
+            onClick={() => artistaSel && atualizarSaldoIndividual(artistaSel)}
+            disabled={refreshing || !artistaSel}
+            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-40"
+            aria-label="Atualizar saldo"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-muted-foreground ${refreshing ? "animate-spin" : ""}`} />
+          </button>
+        </div>
 
-      <div className="mb-2">
-        <h2 className="text-2xl font-black italic tracking-tighter">Playlists · Manual</h2>
-        <p className="text-sm text-muted-foreground mt-1">Selecione as músicas a partir da sua aba PONTOS.</p>
+        {artistasDisp.length > 0 && (
+          <div className="flex overflow-x-auto gap-1.5 hide-scrollbar -mx-1 px-1">
+            {artistasDisp.map((a) => (
+              <button
+                key={a}
+                onClick={() => setArtistaSel(a)}
+                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                  artistaSel === a
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-white/10"
+                }`}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {artistaSel && (
+          <div
+            className={`flex items-center justify-between gap-3 px-3 py-2 rounded-xl border ${
+              saldoNegativo ? "bg-red-950/40 border-red-500/40" : "bg-card border-white/10"
+            }`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Coins className={`w-4 h-4 shrink-0 ${saldoNegativo ? "text-red-400" : "text-yellow-400"}`} />
+              <div className="min-w-0">
+                <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold leading-none">
+                  $ Bank
+                </p>
+                <p className={`text-base font-black leading-tight ${saldoNegativo ? "text-red-400" : "text-yellow-400"}`}>
+                  {saldoAtual.toLocaleString("pt-BR")}
+                </p>
+              </div>
+            </div>
+            {saldoNegativo && (
+              <span className="text-[9px] text-red-400 flex items-center gap-1 font-bold uppercase tracking-wider">
+                <AlertTriangle className="w-3 h-3" /> Estourado
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {msg?.key === "global" && (
-        <div className="p-4 bg-red-950/40 border border-red-500/50 rounded-2xl text-red-400 text-sm font-semibold mb-2">
+        <div className="p-3 bg-red-950/40 border border-red-500/50 rounded-xl text-red-400 text-xs font-semibold">
           {msg.text}
         </div>
       )}
 
       {artistasDisp.length === 0 && !msg?.key ? (
-        <div className="p-8 text-center bg-white/5 rounded-2xl border border-white/10">
+        <div className="p-8 text-center bg-white/5 rounded-2xl border border-white/10 mt-4">
           <AlertCircle className="w-8 h-8 mx-auto text-muted-foreground mb-3 opacity-50" />
           <p className="text-sm text-muted-foreground">Nenhuma música/artista encontrado na aba PONTOS.</p>
         </div>
+      ) : !artistaSel ? (
+        <div className="p-6 text-center bg-white/5 rounded-2xl border border-white/10 mt-2">
+          <p className="text-xs text-muted-foreground">Selecione um artista acima para ver as músicas.</p>
+        </div>
       ) : (
-        <div className="flex overflow-x-auto gap-2 pb-2 hide-scrollbar">
-          {artistasDisp.map((a) => (
-            <button
-              key={a}
-              onClick={() => {
-                setArtistaSel(a);
-              }}
-              className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-colors ${
-                artistaSel === a
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-white/10"
-              }`}
-            >
-              {a}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {artistaSel && (
-        <div
-          className={`p-4 rounded-2xl border flex items-center justify-between mb-2 shadow-lg transition-colors ${saldoNegativo ? "bg-red-950/40 border-red-500/50" : "bg-card border-white/10"}`}
-        >
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1 font-bold">$ BANK ACCOUNT</p>
-            <div className="flex items-center gap-2">
-              <Coins className={`w-5 h-5 ${saldoNegativo ? "text-red-400" : "text-yellow-400"}`} />
-              <p className={`text-2xl font-black ${saldoNegativo ? "text-red-400" : "text-yellow-400"}`}>
-                {saldoAtual.toLocaleString("pt-BR")}
-              </p>
-            </div>
-            {saldoNegativo && (
-              <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3" /> Orçamento estourado!
-              </p>
-            )}
-          </div>
-          <button
-            onClick={() => atualizarSaldoIndividual(artistaSel)}
-            disabled={refreshing}
-            className="p-3 bg-white/5 rounded-xl hover:bg-white/10"
-          >
-            <RefreshCw className={`w-5 h-5 text-muted-foreground ${refreshing ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-      )}
-
-      {artistaSel && (
-        <div className="flex flex-col gap-3 w-full">
+        <div className="flex flex-col gap-2 mt-1">
           {musicasFiltradas.length === 0 ? (
             <div className="p-4 bg-white/5 rounded-xl text-center text-sm text-muted-foreground">
               Não encontramos músicas para {artistaSel}.
             </div>
           ) : (
-            musicasFiltradas.map((m) => {
-              return (
-                <button
-                  key={m.linha}
-                  onClick={() => {
-                    setMusicaSelecionada(m);
-                    setMsg(null);
-                  }}
-                  className="rounded-2xl border border-white/10 bg-card overflow-hidden shadow-lg transition-all hover:border-primary/40 text-left"
-                >
-                  <div className="px-4 py-4 flex items-center gap-3">
-                    <div className="size-9 rounded-xl bg-primary/10 grid place-items-center shrink-0">
-                      <Music2 className="size-4 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1 truncate">
-                        {m.artista}
-                      </p>
-                      <h3 className="font-bold text-base leading-tight truncate">{m.musica}</h3>
-                    </div>
-                  </div>
-                </button>
-              );
-            })
+            musicasFiltradas.map((m) => (
+              <button
+                key={m.linha}
+                onClick={() => {
+                  setMusicaSelecionada(m);
+                  setMsg(null);
+                }}
+                className="rounded-xl border border-white/10 bg-card hover:border-primary/40 hover:bg-white/5 transition-all text-left px-3 py-3 flex items-center gap-3 group"
+              >
+                <div className="size-9 rounded-lg bg-primary/10 grid place-items-center shrink-0 group-hover:bg-primary/20 transition-colors">
+                  <Music2 className="size-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-sm leading-tight truncate">{m.musica}</h3>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider truncate mt-0.5">
+                    {m.artista}
+                  </p>
+                </div>
+                <ChevronLeft className="w-4 h-4 text-muted-foreground rotate-180 shrink-0 group-hover:text-primary transition-colors" />
+              </button>
+            ))
           )}
         </div>
       )}
