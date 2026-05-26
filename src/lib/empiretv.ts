@@ -148,3 +148,19 @@ export function getProgramStatus(p: TvProgram, currentRowNum?: number): "live" |
   if (s === "finalizado") return "ended";
   return "upcoming";
 }
+export function driveImgUrl(url: string): string {
+  if (!url) return "";
+  const s = url.trim();
+  if (s.includes("drive.google.com")) {
+    let id = "";
+    if (s.includes("id=")) {
+      id = s.split("id=")[1].split("&")[0];
+    } else {
+      const parts = s.split("/");
+      const dIdx = parts.indexOf("d");
+      if (dIdx !== -1) id = parts[dIdx + 1];
+    }
+    if (id) return `https://lh3.googleusercontent.com/d/${id}`;
+  }
+  return s;
+}
