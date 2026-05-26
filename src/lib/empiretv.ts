@@ -1,21 +1,22 @@
 export const EMPIRETV_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycby7OeFYuai1QoTEXD427-Kn_2KBvh3nakD4iKSuOji9-i3x7sK8DD59BHRBRc5Ow1YB/exec";
 
-export const KICK_CHANNEL = "empiretvoficial"; // troca pelo nome real do canal no Kick
+export const KICK_CHANNEL = "empirerpg"; // troca pelo nome real do canal no Kick
 
 export interface TvProgram {
+  id?:             string;
   programa?:       string;
   titulo?:         string;
   tipo?:           string;
   material?:       string;
   buff?:           string;
+  capaUrl?:        string;
   inicio?:         number | string;
   fim?:            number | string;
   horario?:        string;
+  data?:           string;
   duracao?:        number;
   driveId?:        string;
-  driveUrl?:       string;
-  streamUrl?:      string;
   topicoId?:       string;
   topicoUrl?:      string;
   status?:         string;
@@ -32,16 +33,6 @@ export interface TvStatus {
   timestamp?:    string;
   current?:      TvProgram | null;
   fullSchedule?: TvProgram[];
-}
-
-export interface TvChatMessage {
-  id?:     string;
-  tgId?:   string;
-  nome?:   string;
-  texto:   string;
-  tipo?:   "texto" | "gif";
-  gifUrl?: string;
-  data?:   string;
 }
 
 export interface GifResult {
@@ -82,7 +73,6 @@ export const tvApi = {
   status(): Promise<TvStatus> {
     return call<TvStatus>({});
   },
-
   async registrarParticipacao(p: { tgId: string; nome: string; programa: string; tipo?: string }) {
     return call<{ ok?: boolean }>(
       { acao: "tv_participacao", tgId: p.tgId, nome: p.nome, programa: p.programa, tipo: p.tipo || "" },
@@ -105,12 +95,35 @@ export async function searchGifs(query: string): Promise<GifResult[]> {
   } catch { return []; }
 }
 
-export function extractDriveId(v?: string | null): string | null {
-  if (!v) return null;
-  const m = String(v).trim().match(/[-\w]{25,}/);
-  return m ? m[0] : null;
-}
-
 export function buildPlayerSrc(_p?: TvProgram | null): string {
   return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false`;
+}
+
+// Agrupa programas por data para a grade
+export function groupByDate(schedule: TvProgram[]): Record<string, TvProgram[]> {
+  const groups: Record<string, TvProgram[]> = {};
+  for (const p of schedule) {
+    const key = String(p.data || "Sem data");
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(p);
+  }
+  return groups;
+}
+
+// Agrupa por nome do programa (para cards Netflix)
+export function groupByPrograma(schedule: TvProgram[]): Record<string, TvProgram[]> {
+  const groups: Record<string, TvProgram[]> = {};
+  for (const p of schedule) {
+    const key = String(p.programa || p.titulo || "Sem nome");
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(p);
+  }
+  return groups;
+}
+
+export function getProgramStatus(p: TvProgram, currentRowNum?: number): "live" | "upcoming" | "ended" {
+  const s = String(p.status || "").toLowerCase();
+  if (s === "transmitindo" || p.rowNum === currentRowNum) return "live";
+  if (s === "finalizado") return "ended";
+  return "upcoming";
 }
