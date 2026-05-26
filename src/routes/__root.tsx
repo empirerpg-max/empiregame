@@ -35,6 +35,7 @@ import {
   Share2,
   Send,
   Target,
+  Tv,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
@@ -484,6 +485,20 @@ function RootInner() {
                    <div className="flex-1 min-w-0">
                       <p className="font-black uppercase tracking-widest text-xs">Acesso Rápido</p>
                       <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Canais oficiais Telegram</p>
+                   </div>
+                </Link>
+
+                <Link
+                  to="/tv"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-4 p-5 rounded-3xl bg-red-600/10 border border-red-600/30 text-red-500 hover:bg-red-600/15 transition-all"
+                >
+                   <div className="size-11 rounded-2xl bg-red-600 text-white grid place-items-center">
+                      <Tv className="size-5" />
+                   </div>
+                   <div className="flex-1 min-w-0">
+                      <p className="font-black uppercase tracking-widest text-xs">Empire TV</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Transmissões agendadas + chat ao vivo</p>
                    </div>
                 </Link>
 
