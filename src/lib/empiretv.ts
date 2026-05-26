@@ -1,5 +1,9 @@
+// URL do Apps Script — usada APENAS no proxy, nunca chamada diretamente do frontend
 export const EMPIRETV_SCRIPT_URL =
   "https://script.google.com/macros/s/1onh3JyLiMWozurKqg10O2_0gNm_pia_Cm9vemiIStwk/exec";
+
+// Proxy que resolve CORS
+const PROXY_BASE = "https://ais-pre-xdvvwb2nomenedx7hnl5yn-237278842798.us-east5.run.app";
 
 export const KICK_CHANNEL = "empiretvoficial";
 
@@ -42,28 +46,25 @@ export interface GifResult {
   title:   string;
 }
 
-function qs(p: Record<string, string | number | undefined>) {
-  const u = new URLSearchParams();
-  for (const [k, v] of Object.entries(p)) {
-    if (v === undefined || v === null) continue;
-    u.set(k, String(v));
-  }
-  u.set("_t", String(Date.now()));
-  return u.toString();
-}
-
 async function call<T = unknown>(
   params: Record<string, unknown>,
   method: "GET" | "POST" = "GET"
 ): Promise<T> {
   const isPost = method === "POST";
-  const url = isPost
-    ? EMPIRETV_SCRIPT_URL
-    : `${EMPIRETV_SCRIPT_URL}?${qs(params as any)}`;
-  const res = await fetch(url, {
+
+  // Roteia pelo proxy para evitar CORS
+  // GET  → /tv-status?_t=...
+  // POST → /tv-action  (body JSON com { acao, ... })
+  const endpoint = isPost
+    ? `${PROXY_BASE}/tv-action`
+    : `${PROXY_BASE}/tv-status?_t=${Date.now()}`;
+
+  const res = await fetch(endpoint, {
     method,
-    body: isPost ? JSON.stringify(params) : undefined,
+    headers: isPost ? { "Content-Type": "application/json" } : undefined,
+    body: isPost ? JSON.stringify({ ...params, _scriptUrl: EMPIRETV_SCRIPT_URL }) : undefined,
   });
+
   const text = await res.text();
   try { return JSON.parse(text) as T; }
   catch { return text as unknown as T; }
