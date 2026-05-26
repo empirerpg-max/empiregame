@@ -1,9 +1,5 @@
-// URL do Apps Script — usada APENAS no proxy, nunca chamada diretamente do frontend
 export const EMPIRETV_SCRIPT_URL =
   "https://script.google.com/macros/s/1onh3JyLiMWozurKqg10O2_0gNm_pia_Cm9vemiIStwk/exec";
-
-// Proxy que resolve CORS
-const PROXY_BASE = "https://ais-pre-xdvvwb2nomenedx7hnl5yn-237278842798.us-east5.run.app";
 
 export const KICK_CHANNEL = "empiretvoficial";
 
@@ -46,25 +42,40 @@ export interface GifResult {
   title:   string;
 }
 
-async function call<T = unknown>(
-  params: Record<string, unknown>,
-  method: "GET" | "POST" = "GET"
-): Promise<T> {
-  const isPost = method === "POST";
+// JSONP — resolve CORS do Apps Script sem precisar de proxy
+function jsonp<T>(url: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const cbName = "_gjp_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+    const script = document.createElement("script");
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("JSONP timeout"));
+    }, 15000);
 
-  // Roteia pelo proxy para evitar CORS
-  // GET  → /tv-status?_t=...
-  // POST → /tv-action  (body JSON com { acao, ... })
-  const endpoint = isPost
-    ? `${PROXY_BASE}/tv-action`
-    : `${PROXY_BASE}/tv-status?_t=${Date.now()}`;
+    function cleanup() {
+      clearTimeout(timeout);
+      delete (window as any)[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
 
-  const res = await fetch(endpoint, {
-    method,
-    headers: isPost ? { "Content-Type": "application/json" } : undefined,
-    body: isPost ? JSON.stringify({ ...params, _scriptUrl: EMPIRETV_SCRIPT_URL }) : undefined,
+    (window as any)[cbName] = (data: T) => {
+      cleanup();
+      resolve(data);
+    };
+
+    script.src = `${url}${url.includes("?") ? "&" : "?"}callback=${cbName}&_t=${Date.now()}`;
+    script.onerror = () => { cleanup(); reject(new Error("JSONP error")); };
+    document.head.appendChild(script);
   });
+}
 
+// POST ainda usa fetch normal — Apps Script aceita POST cross-origin sem preflight
+async function postScript<T>(params: Record<string, unknown>): Promise<T> {
+  const res = await fetch(EMPIRETV_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" }, // evita preflight CORS
+    body: JSON.stringify(params),
+  });
   const text = await res.text();
   try { return JSON.parse(text) as T; }
   catch { return text as unknown as T; }
@@ -72,13 +83,16 @@ async function call<T = unknown>(
 
 export const tvApi = {
   status(): Promise<TvStatus> {
-    return call<TvStatus>({});
+    return jsonp<TvStatus>(EMPIRETV_SCRIPT_URL);
   },
-  async registrarParticipacao(p: { tgId: string; nome: string; programa: string; tipo?: string }) {
-    return call<{ ok?: boolean }>(
-      { acao: "tv_participacao", tgId: p.tgId, nome: p.nome, programa: p.programa, tipo: p.tipo || "" },
-      "POST"
-    );
+  registrarParticipacao(p: { tgId: string; nome: string; programa: string; tipo?: string }) {
+    return postScript<{ ok?: boolean }>({
+      acao: "tv_participacao",
+      tgId: p.tgId,
+      nome: p.nome,
+      programa: p.programa,
+      tipo: p.tipo || "",
+    });
   },
 };
 
