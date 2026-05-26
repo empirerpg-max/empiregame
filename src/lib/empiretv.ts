@@ -1,20 +1,29 @@
-// Empire TV — cliente do Apps Script dedicado à TV.
-// Mantém o mesmo padrão de src/lib/api.ts (GET com query string).
-
 export const EMPIRETV_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycby7OeFYuai1QoTEXD427-Kn_2KBvh3nakD4iKSuOji9-i3x7sK8DD59BHRBRc5Ow1YB/exec";
+
+// Coloque aqui o nome do seu canal no Kick (sem @)
+export const KICK_CHANNEL = "empiretvoficial";
 
 export interface TvProgram {
   programa?: string;
   titulo?: string;
-  inicio?: string; // ISO ou string da planilha
+  tipo?: string;
+  material?: string;
+  buff?: string;
+  inicio?: string;
   fim?: string;
+  horario?: string;
   duracao?: number;
   driveId?: string;
   driveUrl?: string;
   streamUrl?: string;
   capa?: string;
   descricao?: string;
+  status?: string;
+  rowNum?: number;
+  seekOffset?: number;
+  secondsToStart?: number;
+  isBackup?: boolean;
   [k: string]: unknown;
 }
 
@@ -31,7 +40,16 @@ export interface TvChatMessage {
   tgId?: string;
   nome?: string;
   texto: string;
+  tipo?: "texto" | "gif";
+  gifUrl?: string;
   data?: string;
+}
+
+export interface GifResult {
+  id: string;
+  url: string;
+  preview: string;
+  title: string;
 }
 
 function qs(p: Record<string, string | number | undefined>) {
@@ -44,9 +62,14 @@ function qs(p: Record<string, string | number | undefined>) {
   return u.toString();
 }
 
-async function call<T = unknown>(params: Record<string, unknown>, method: "GET" | "POST" = "GET"): Promise<T> {
+async function call<T = unknown>(
+  params: Record<string, unknown>,
+  method: "GET" | "POST" = "GET"
+): Promise<T> {
   const isPost = method === "POST";
-  const url = isPost ? EMPIRETV_SCRIPT_URL : `${EMPIRETV_SCRIPT_URL}?${qs(params as any)}`;
+  const url = isPost
+    ? EMPIRETV_SCRIPT_URL
+    : `${EMPIRETV_SCRIPT_URL}?${qs(params as any)}`;
   const res = await fetch(url, {
     method,
     body: isPost ? JSON.stringify(params) : undefined,
@@ -60,27 +83,67 @@ async function call<T = unknown>(params: Record<string, unknown>, method: "GET" 
 }
 
 export const tvApi = {
-  // doGet sem params devolve current + fullSchedule
   status(): Promise<TvStatus> {
     return call<TvStatus>({});
   },
-  // Os endpoints de chat abaixo dependem do Apps Script ter as acoes
-  // "tv_chat_list" e "tv_chat_send". Se não tiver, o front mostra o chat vazio
-  // e o envio falha silenciosamente — adicione ao seu Script da TV.
+
   async chatList(): Promise<TvChatMessage[]> {
-    const r = await call<TvChatMessage[] | { mensagens?: TvChatMessage[] }>({ acao: "tv_chat_list" });
+    const r = await call<TvChatMessage[] | { mensagens?: TvChatMessage[] }>({
+      acao: "tv_chat_list",
+    });
     if (Array.isArray(r)) return r;
     return Array.isArray((r as any)?.mensagens) ? (r as any).mensagens : [];
   },
-  async chatSend(p: { tgId: string; nome: string; texto: string }) {
+
+  async chatSend(p: {
+    tgId: string;
+    nome: string;
+    texto: string;
+    tipo?: "texto" | "gif";
+    gifUrl?: string;
+  }) {
     return call<{ ok?: boolean; erro?: string }>(
-      { acao: "tv_chat_send", tgId: p.tgId, nome: p.nome, texto: p.texto },
-      "POST",
+      {
+        acao: "tv_chat_send",
+        tgId: p.tgId,
+        nome: p.nome,
+        texto: p.texto,
+        tipo: p.tipo || "texto",
+        gifUrl: p.gifUrl || "",
+      },
+      "POST"
+    );
+  },
+
+  async registrarParticipacao(p: {
+    tgId: string;
+    nome: string;
+    programa: string;
+  }) {
+    return call<{ ok?: boolean }>(
+      { acao: "tv_participacao", tgId: p.tgId, nome: p.nome, programa: p.programa },
+      "POST"
     );
   },
 };
 
-// Tenta extrair um ID do Drive de um campo livre (URL completa ou só ID)
+// Busca GIFs via Tenor (gratuito, sem necessidade de chave para uso básico)
+export async function searchGifs(query: string): Promise<GifResult[]> {
+  try {
+    const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=AIzaSyAyimkuYQYF_FXVALexPmHA0hUeP4pIHEA&limit=12&media_filter=gif`;
+    const res = await fetch(url);
+    const data = await res.json();
+    return (data.results || []).map((r: any) => ({
+      id: r.id,
+      url: r.media_formats?.gif?.url || "",
+      preview: r.media_formats?.tinygif?.url || r.media_formats?.gif?.url || "",
+      title: r.content_description || "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export function extractDriveId(v?: string | null): string | null {
   if (!v) return null;
   const s = String(v).trim();
@@ -88,11 +151,7 @@ export function extractDriveId(v?: string | null): string | null {
   return m ? m[0] : null;
 }
 
-// URL embarcável: usa streamUrl da planilha quando vier; senão, Drive preview.
-export function buildPlayerSrc(p?: TvProgram | null): string | null {
-  if (!p) return null;
-  if (p.streamUrl) return p.streamUrl;
-  const id = p.driveId || extractDriveId(p.driveUrl);
-  if (id) return `https://drive.google.com/file/d/${id}/preview`;
-  return null;
+// Retorna sempre o player do Kick
+export function buildPlayerSrc(_p?: TvProgram | null): string {
+  return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false`;
 }
