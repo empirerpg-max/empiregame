@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TvRouteImport } from './routes/tv'
+import { Route as TvIdRouteImport } from './routes/tv.$id'
 import { Route as TutorialRouteImport } from './routes/tutorial'
 import { Route as SocialRouteImport } from './routes/social'
 import { Route as RescisaoRouteImport } from './routes/rescisao'
@@ -57,6 +58,11 @@ import { Route as AlbumIdEditarRouteImport } from './routes/album.$id.editar'
 const TvRoute = TvRouteImport.update({
   id: '/tv',
   path: '/tv',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TvIdRoute = TvIdRouteImport.update({
+  id: '/tv/$id',
+  path: '/tv/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TutorialRoute = TutorialRouteImport.update({
@@ -295,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/social': typeof SocialRoute
   '/tutorial': typeof TutorialRoute
   '/tv': typeof TvRoute
+  '/tv/$id': typeof TvIdRoute
   '/acoes/album': typeof AcoesAlbumRoute
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
@@ -321,6 +328,7 @@ export interface FileRoutesByFullPath {
   '/ponto/playlists/planilha': typeof PontoPlaylistsPlanilhaRoute
   '/artistas/$nome/': typeof ArtistasNomeIndexRoute
 }
+
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/acesso-rapido': typeof AcessoRapidoRoute
@@ -341,6 +349,7 @@ export interface FileRoutesByTo {
   '/social': typeof SocialRoute
   '/tutorial': typeof TutorialRoute
   '/tv': typeof TvRoute
+  '/tv/$id': typeof TvIdRoute
   '/acoes/album': typeof AcoesAlbumRoute
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
@@ -367,6 +376,7 @@ export interface FileRoutesByTo {
   '/ponto/playlists/planilha': typeof PontoPlaylistsPlanilhaRoute
   '/artistas/$nome': typeof ArtistasNomeIndexRoute
 }
+
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
@@ -388,6 +398,7 @@ export interface FileRoutesById {
   '/social': typeof SocialRoute
   '/tutorial': typeof TutorialRoute
   '/tv': typeof TvRoute
+  '/tv/$id': typeof TvIdRoute
   '/acoes/album': typeof AcoesAlbumRoute
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
@@ -414,6 +425,7 @@ export interface FileRoutesById {
   '/ponto/playlists/planilha': typeof PontoPlaylistsPlanilhaRoute
   '/artistas/$nome/': typeof ArtistasNomeIndexRoute
 }
+
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
@@ -436,6 +448,7 @@ export interface FileRouteTypes {
     | '/social'
     | '/tutorial'
     | '/tv'
+    | '/tv/$id'
     | '/acoes/album'
     | '/acoes/cinema'
     | '/acoes/tour'
@@ -482,6 +495,7 @@ export interface FileRouteTypes {
     | '/social'
     | '/tutorial'
     | '/tv'
+    | '/tv/$id'
     | '/acoes/album'
     | '/acoes/cinema'
     | '/acoes/tour'
@@ -528,6 +542,7 @@ export interface FileRouteTypes {
     | '/social'
     | '/tutorial'
     | '/tv'
+    | '/tv/$id'
     | '/acoes/album'
     | '/acoes/cinema'
     | '/acoes/tour'
@@ -555,6 +570,7 @@ export interface FileRouteTypes {
     | '/artistas/$nome/'
   fileRoutesById: FileRoutesById
 }
+
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcessoRapidoRoute: typeof AcessoRapidoRoute
@@ -575,6 +591,7 @@ export interface RootRouteChildren {
   SocialRoute: typeof SocialRoute
   TutorialRoute: typeof TutorialRoute
   TvRoute: typeof TvRoute
+  TvIdRoute: typeof TvIdRoute
   AcoesAlbumRoute: typeof AcoesAlbumRoute
   AcoesCinemaRoute: typeof AcoesCinemaRoute
   AcoesTourRoute: typeof AcoesTourRoute
@@ -605,6 +622,13 @@ declare module '@tanstack/react-router' {
       path: '/tv'
       fullPath: '/tv'
       preLoaderRoute: typeof TvRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tv/$id': {
+      id: '/tv/$id'
+      path: '/tv/$id'
+      fullPath: '/tv/$id'
+      preLoaderRoute: typeof TvIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tutorial': {
@@ -978,6 +1002,7 @@ const rootRouteChildren: RootRouteChildren = {
   SocialRoute: SocialRoute,
   TutorialRoute: TutorialRoute,
   TvRoute: TvRoute,
+  TvIdRoute: TvIdRoute,
   AcoesAlbumRoute: AcoesAlbumRoute,
   AcoesCinemaRoute: AcoesCinemaRoute,
   AcoesTourRoute: AcoesTourRoute,
@@ -1000,6 +1025,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArtistasNomeProjetosRoute: ArtistasNomeProjetosRoute,
   ArtistasNomeIndexRoute: ArtistasNomeIndexRoute,
 }
+
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
