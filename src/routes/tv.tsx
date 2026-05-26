@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Tv, Loader2, Radio, Calendar, ChevronLeft, ChevronRight,
-  ArrowLeft, ExternalLink, MessageCircle, Send
+  ArrowLeft, MessageCircle, Send
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useTelegramUser } from "@/lib/telegram";
@@ -41,7 +41,7 @@ function fmtDataLabel(str: string) {
 function fmtTime(v?: string | number) {
   if (v === undefined || v === null) return "—";
   if (typeof v === "number") {
-    return `${String(Math.floor(v / 3600)).padStart(2, "0")}:${String(Math.floor((v % 3600) / 60)).padStart(2, "0")}`;
+    return `${String(Math.floor(v / 3600)).padStart(2, "0")}:${String(Math.floor((v % 3600) / 60)).padStart(2, "00")}`;
   }
   const m = String(v).match(/^(\d{1,2}):(\d{2})/);
   if (m) return `${m[1].padStart(2, "0")}:${m[2]}`;
@@ -169,7 +169,7 @@ function MiniCalendar({ schedule, selectedDate, onSelect }: {
   );
 }
 
-// ─── SALA DO EVENTO (inline, sem rota separada) ───────────────────────────────
+// ─── SALA DO EVENTO ───────────────────────────────────────────────────────────
 function EventRoom({ program, current, onBack }: {
   program: TvProgram;
   current: TvProgram | null;
@@ -188,14 +188,22 @@ function EventRoom({ program, current, onBack }: {
     return /^\d+$/.test(last) ? last : null;
   })();
 
+  // Registra participação quando a transmissão está ao vivo
   useEffect(() => {
     if (!user?.id || !isBroadcasting) return;
     const programa = program.programa || program.titulo || "";
-    const chave    = `${user.id}_${programa}`;
+    const chave    = `${user.id}_${programa}_${program.topicoId || ""}`;
     if (participacaoRegistrada.current.has(chave)) return;
     participacaoRegistrada.current.add(chave);
-    tvApi.registrarParticipacao({ tgId: String(user.id), nome: user.name || "Jogador", programa, tipo: String(program.tipo || "") });
-  }, [user, isBroadcasting, program.programa]);
+    tvApi.registrarParticipacao({
+      tgId: String(user.id),
+      nome: user.name || "Jogador",
+      programa,
+      tipo: String(program.tipo || ""),
+      topicoId: String(program.topicoId || ""),
+      topicoUrl: String(program.topicoUrl || ""),
+    });
+  }, [user, isBroadcasting, program.programa, program.topicoId]);
 
   return (
     <div className="space-y-5">
@@ -237,15 +245,20 @@ function EventRoom({ program, current, onBack }: {
       </motion.div>
 
       <div className="grid lg:grid-cols-[1fr,380px] gap-6">
-        {/* Player Kick */}
+        {/* Player Kick — embutido, sem link externo */}
         <div className="space-y-3">
           <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
             className="relative w-full rounded-3xl overflow-hidden border border-border bg-black"
             style={{ aspectRatio: "16/9" }}
           >
             {isBroadcasting ? (
-              <iframe src={playerSrc} title="Empire TV — Kick" className="absolute inset-0 w-full h-full"
-                allow="autoplay; encrypted-media; fullscreen" allowFullScreen />
+              <iframe
+                src={playerSrc}
+                title="Empire TV — Kick"
+                className="absolute inset-0 w-full h-full"
+                allow="autoplay; encrypted-media; fullscreen"
+                allowFullScreen
+              />
             ) : (
               <div className="absolute inset-0 grid place-items-center bg-black">
                 <div className="text-center px-6 space-y-3">
@@ -272,10 +285,7 @@ function EventRoom({ program, current, onBack }: {
               </div>
             )}
           </motion.div>
-          <a href="https://kick.com/empiretvoficial" target="_blank" rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-2xl border border-border bg-card text-sm font-bold hover:bg-white/5 transition-colors">
-            <ExternalLink className="size-4" /> Abrir no Kick
-          </a>
+          {/* Botão Abrir no Kick removido — transmissão é somente dentro do app */}
         </div>
 
         {/* Chat Telegram */}
@@ -285,10 +295,6 @@ function EventRoom({ program, current, onBack }: {
               <MessageCircle className="size-4 text-primary" />
               <p className="text-xs font-black uppercase tracking-widest">Chat ao vivo</p>
             </div>
-            <a href={topicoUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1 text-[10px] font-bold text-primary hover:underline">
-              <ExternalLink className="size-3" /> Telegram
-            </a>
           </div>
           <div className="flex-1 relative">
             {threadId ? (
@@ -344,7 +350,6 @@ function TvPage() {
   });
   const isBroadcasting = current?.status === "broadcasting";
 
-  // Se tem um programa aberto, mostra a sala
   if (openProgram) {
     return (
       <div className="min-h-screen bg-background text-foreground pb-24">
@@ -424,7 +429,6 @@ function TvPage() {
           <div className="grid lg:grid-cols-[1fr,300px] gap-6">
             <div className="space-y-8">
 
-              {/* Modo Netflix */}
               {viewMode === "netflix" && Object.entries(byProgram).map(([programa, items]) => {
                 const capa = items.find(i => i.capaUrl)?.capaUrl as string | undefined;
                 return (
@@ -444,7 +448,6 @@ function TvPage() {
                 );
               })}
 
-              {/* Modo por data */}
               {viewMode === "date" && (selectedDate ? [selectedDate] : sortedDates).map(dateStr => {
                 const items = byDate[dateStr] || [];
                 const label = fmtDataLabel(dateStr);

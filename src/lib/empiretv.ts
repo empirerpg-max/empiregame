@@ -69,11 +69,10 @@ function jsonp<T>(url: string): Promise<T> {
   });
 }
 
-// POST ainda usa fetch normal — Apps Script aceita POST cross-origin sem preflight
 async function postScript<T>(params: Record<string, unknown>): Promise<T> {
   const res = await fetch(EMPIRETV_SCRIPT_URL, {
     method: "POST",
-    headers: { "Content-Type": "text/plain" }, // evita preflight CORS
+    headers: { "Content-Type": "text/plain" },
     body: JSON.stringify(params),
   });
   const text = await res.text();
@@ -85,13 +84,22 @@ export const tvApi = {
   status(): Promise<TvStatus> {
     return jsonp<TvStatus>(EMPIRETV_SCRIPT_URL);
   },
-  registrarParticipacao(p: { tgId: string; nome: string; programa: string; tipo?: string }) {
+  registrarParticipacao(p: {
+    tgId: string;
+    nome: string;
+    programa: string;
+    tipo?: string;
+    topicoId?: string;
+    topicoUrl?: string;
+  }) {
     return postScript<{ ok?: boolean }>({
       acao: "tv_participacao",
       tgId: p.tgId,
       nome: p.nome,
       programa: p.programa,
       tipo: p.tipo || "",
+      topicoId: p.topicoId || "",
+      topicoUrl: p.topicoUrl || "",
     });
   },
 };
