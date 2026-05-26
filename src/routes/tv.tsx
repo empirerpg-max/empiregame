@@ -8,7 +8,7 @@ import { motion } from "motion/react";
 import { useTelegramUser } from "@/lib/telegram";
 import {
   tvApi, groupByDate, groupByPrograma, getProgramStatus,
-  buildPlayerSrc, type TvStatus, type TvProgram
+  buildPlayerSrc, driveImgUrl, type TvStatus, type TvProgram
 } from "@/lib/empiretv";
 
 export const Route = createFileRoute("/tv")({
@@ -69,7 +69,7 @@ function ProgramCard({ program, currentRowNum, onClick }: {
   onClick: () => void;
 }) {
   const status = getProgramStatus(program, currentRowNum);
-  const capa   = program.capaUrl as string | undefined;
+  const capa   = driveImgUrl(program.capaUrl as string | undefined ?? "");
   return (
     <motion.button
       whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
@@ -146,7 +146,7 @@ function MiniCalendar({ schedule, selectedDate, onSelect }: {
         {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`e-${i}`} />)}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day      = i + 1;
-          const dateStr  = `${String(day).padStart(2,"0")}/${String(month+1).padStart(2,"0")}/${year}`;
+          const dateStr  = `${String(day).padStart(2,"0")}/${String(month+1).padStart(2,"00")}/${year}`;
           const hasEvent = datesWithEvents.has(dateStr);
           const isToday  = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
           const isSel    = selectedDate === dateStr;
@@ -181,6 +181,7 @@ function EventRoom({ program, current, onBack }: {
   const isBroadcasting = isCurrent && current?.status === "broadcasting";
   const playerSrc      = buildPlayerSrc(program);
   const topicoUrl      = (program.topicoUrl as string | undefined) || `https://t.me/${TELEGRAM_CHANNEL}`;
+  const capaConvertida = driveImgUrl(program.capaUrl as string | undefined ?? "");
   const threadId       = (() => {
     if (!program.topicoUrl) return null;
     const parts = String(program.topicoUrl).split("/");
@@ -188,7 +189,6 @@ function EventRoom({ program, current, onBack }: {
     return /^\d+$/.test(last) ? last : null;
   })();
 
-  // Registra participação quando a transmissão está ao vivo
   useEffect(() => {
     if (!user?.id || !isBroadcasting) return;
     const programa = program.programa || program.titulo || "";
@@ -214,9 +214,9 @@ function EventRoom({ program, current, onBack }: {
 
       {/* Banner */}
       <motion.div initial={{ opacity:0, y:-6 }} animate={{ opacity:1, y:0 }} className="rounded-3xl border border-border bg-card overflow-hidden">
-        {(program.capaUrl as string) && (
+        {capaConvertida && (
           <div className="relative w-full" style={{ aspectRatio: "21/4" }}>
-            <img src={program.capaUrl as string} alt="" className="w-full h-full object-cover" />
+            <img src={capaConvertida} alt="" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-card via-card/50 to-transparent" />
           </div>
         )}
@@ -245,7 +245,7 @@ function EventRoom({ program, current, onBack }: {
       </motion.div>
 
       <div className="grid lg:grid-cols-[1fr,380px] gap-6">
-        {/* Player Kick — embutido, sem link externo */}
+        {/* Player Kick */}
         <div className="space-y-3">
           <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
             className="relative w-full rounded-3xl overflow-hidden border border-border bg-black"
@@ -262,8 +262,8 @@ function EventRoom({ program, current, onBack }: {
             ) : (
               <div className="absolute inset-0 grid place-items-center bg-black">
                 <div className="text-center px-6 space-y-3">
-                  {(program.capaUrl as string)
-                    ? <img src={program.capaUrl as string} alt="" className="w-32 rounded-xl mx-auto opacity-40" />
+                  {capaConvertida
+                    ? <img src={capaConvertida} alt="" className="w-32 rounded-xl mx-auto opacity-40" />
                     : <Tv className="size-12 text-muted-foreground mx-auto" />
                   }
                   <p className="font-black uppercase tracking-widest text-sm text-white">
@@ -285,7 +285,6 @@ function EventRoom({ program, current, onBack }: {
               </div>
             )}
           </motion.div>
-          {/* Botão Abrir no Kick removido — transmissão é somente dentro do app */}
         </div>
 
         {/* Chat Telegram */}
@@ -394,8 +393,8 @@ function TvPage() {
             onClick={() => setOpenProgram(current)}
             style={{ aspectRatio: "21/6" }}
           >
-            {(current.capaUrl as string) && (
-              <img src={current.capaUrl as string} alt=""
+            {driveImgUrl(current.capaUrl as string | undefined ?? "") && (
+              <img src={driveImgUrl(current.capaUrl as string | undefined ?? "")} alt=""
                 className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-50 transition-opacity" />
             )}
             <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent" />
@@ -430,7 +429,8 @@ function TvPage() {
             <div className="space-y-8">
 
               {viewMode === "netflix" && Object.entries(byProgram).map(([programa, items]) => {
-                const capa = items.find(i => i.capaUrl)?.capaUrl as string | undefined;
+                const capaRaw = items.find(i => i.capaUrl)?.capaUrl as string | undefined;
+                const capa = driveImgUrl(capaRaw ?? "");
                 return (
                   <div key={programa}>
                     <div className="flex items-center gap-3 mb-4">

@@ -1,0 +1,13 @@
+{
+  "name": "empiretv-worker",
+  "version": "1.0.0",
+  "description": "Worker de transmissão Empire TV → Kick (Google Cloud Run)",
+  "type": "module",
+  "main": "worker.js",
+  "scripts": {
+    "start": "node worker.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
