@@ -7,6 +7,7 @@ const PROXY_URL       = "https://ais-pre-xdvvwb2nomenedx7hnl5yn-237278842798.us-
 const WORKER_SECRET   = "garupapa@123";
 const CANAL_ID        = "-1001375093150";
 const SUPERGRUPO_ID   = "-1001515446791";
+const WORKER_URL      = "https://empiretv-worker.onrender.com";
 
 const COL = {
   ORDEM:      0,
@@ -47,8 +48,6 @@ function doGet(e) {
     var callback = e && e.parameter && e.parameter.callback ? e.parameter.callback : null;
 
     if (acao === "tv_chat_list") return respondJson(handleChatListData(), callback);
-
-    // ── KICK WORKER ──
     if (acao === "kick_fila")   return respondJson(getKickFila(), callback);
 
     var ss = SPREADSHEET_ID
@@ -93,7 +92,6 @@ function doPost(e) {
     var acao = body.acao || "";
     if (acao === "tv_chat_send")    return handleChatSend(body);
     if (acao === "tv_participacao") return handleParticipacao(body);
-    // ── KICK WORKER ──
     if (acao === "kick_status")     return createJsonResponse(setKickStatus(body));
     return createJsonResponse({ ok: false, erro: "Ação desconhecida: " + acao });
   } catch (err) {
@@ -117,6 +115,103 @@ function createJsonResponse(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============================================================
+// WORKER RENDER — acionamento automático por horario
+// ============================================================
+
+/**
+ * Roda a cada 1 minuto (via trigger).
+ * Verifica se existe algum item na fila cuja data/horário chegou,
+ * e aciona o worker do Render se ainda não estiver transmitindo.
+ */
+function verificarEAcionarWorker() {
+  try {
+    var ss   = SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
+    var sh   = ss.getSheetByName("Programacao_RPG");
+    if (!sh) return;
+
+    var rows     = sh.getDataRange().getValues();
+    var agora    = new Date();
+    var hojeStr  = Utilities.formatDate(agora, "America/Sao_Paulo", "dd/MM/yyyy");
+    var nowSecs  = getSecondsToday();
+    var MARGEM   = 5 * 60; // aciona até 5 minutos após o horário
+
+    var deveAcionar = false;
+
+    for (var i = 1; i < rows.length; i++) {
+      var driveId   = parseDriveId(rows[i][COL.DRIVE_ID]);
+      if (!driveId) continue;
+
+      var status    = String(rows[i][COL.STATUS] || "").trim().toLowerCase();
+      if (status === "finalizado" || status === "transmitindo") continue;
+
+      var dataItem    = formatarData(rows[i][COL.DATA]);
+      if (dataItem && dataItem !== hojeStr) continue; // só itens de hoje
+
+      var horarioSecs = parseHorarioToSeconds(rows[i][COL.HORARIO]);
+      if (horarioSecs === null) continue;
+
+      // Se o horário já passou (mas não mais de MARGEM minutos)
+      if (nowSecs >= horarioSecs && nowSecs <= horarioSecs + MARGEM) {
+        deveAcionar = true;
+        break;
+      }
+    }
+
+    if (!deveAcionar) {
+      Logger.log("[Worker] Nenhum programa no horário agora.");
+      return;
+    }
+
+    // Verifica se já está transmitindo
+    var statusResp = UrlFetchApp.fetch(WORKER_URL + "/health", {
+      muteHttpExceptions: true,
+      method: "get"
+    });
+    var statusJson = JSON.parse(statusResp.getContentText());
+    if (statusJson.status === "transmitindo") {
+      Logger.log("[Worker] Já está transmitindo, não aciona novamente.");
+      return;
+    }
+
+    // Aciona!
+    var resp = UrlFetchApp.fetch(WORKER_URL + "/transmitir", {
+      muteHttpExceptions: true,
+      method: "get"
+    });
+    Logger.log("[Worker] Acionado: " + resp.getContentText());
+
+  } catch (err) {
+    Logger.log("[Worker] Erro em verificarEAcionarWorker: " + err);
+  }
+}
+
+/**
+ * Instala o trigger de 1 minuto para verificarEAcionarWorker.
+ * Execute esta função UMA VEZ manualmente no Apps Script.
+ */
+function instalarTriggerWorker() {
+  // Remove triggers antigos da mesma função
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === "verificarEAcionarWorker") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("verificarEAcionarWorker")
+    .timeBased()
+    .everyMinutes(1)
+    .create();
+  Logger.log("✅ Trigger do worker instalado! Verificando a cada 1 minuto.");
+}
+
+/**
+ * Remove o trigger (use para pausar o acionamento automatico).
+ */
+function removerTriggerWorker() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === "verificarEAcionarWorker") ScriptApp.deleteTrigger(t);
+  });
+  Logger.log("⏹️ Trigger do worker removido.");
 }
 
 // ============================================================
