@@ -1,32 +1,30 @@
 /**
  * Empire TV — Worker de transmissão para a Kick
- * Roda em Google Cloud Run (Node.js + ffmpeg)
- * Variáveis de ambiente necessárias:
- *   APPS_SCRIPT_URL  — URL do doGet/doPost do Apps Script da TV
- *   KICK_RTMP_URL    — ex: rtmp://fa723fc1b171.global-contribute.live-video.net/app/SUA_CHAVE
+ * Variáveis de ambiente:
+ *   APPS_SCRIPT_URL  — URL do Apps Script da TV
+ *   KICK_RTMP_URL    — URL RTMP completa com chave
  */
 
-import { spawn } from "child_process";
+import { spawn }                           from "child_process";
 import { existsSync, unlinkSync, createWriteStream } from "fs";
-import https from "https";
-import http from "http";
-import path from "path";
+import https                               from "https";
+import http                                from "http";
+import path                                from "path";
 
-const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
-const KICK_RTMP       = process.env.KICK_RTMP_URL;
+const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL
+  || "https://script.google.com/macros/s/AKfycby7OeFYuai1QoTEXD427-Kn_2KBvh3nakD4iKSuOji9-i3x7sK8DD59BHRBRc5Ow1YB/exec";
 
-if (!APPS_SCRIPT_URL) { console.error("APPS_SCRIPT_URL não definida"); process.exit(1); }
-if (!KICK_RTMP)       { console.error("KICK_RTMP_URL não definida");  process.exit(1); }
+const KICK_RTMP = process.env.KICK_RTMP_URL
+  || "rtmp://fa723fc1b171.global-contribute.live-video.net/app/sk_us-west-2_uup5d441E9QX_xchfyt3s6vMUxxtwRSsm4FKQEDOY6c";
 
-// ── Utilitários ──────────────────────────────────────────────────────────────
+// ── HTTP helpers ─────────────────────────────────────────────────────────────
 
 function get(url) {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith("https") ? https : http;
     mod.get(url, (res) => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
+      if (res.statusCode === 301 || res.statusCode === 302)
         return get(res.headers.location).then(resolve).catch(reject);
-      }
       let body = "";
       res.on("data", d => body += d);
       res.on("end",  () => resolve(body));
@@ -66,12 +64,10 @@ function downloadDrive(driveId, filePath) {
     function request(u) {
       const mod = u.startsWith("https") ? https : http;
       mod.get(u, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
+        if (res.statusCode === 301 || res.statusCode === 302)
           return request(res.headers.location);
-        }
-        if (res.statusCode !== 200) {
+        if (res.statusCode !== 200)
           return reject(new Error(`HTTP ${res.statusCode} ao baixar driveId=${driveId}`));
-        }
         const file = createWriteStream(filePath);
         res.pipe(file);
         file.on("finish", () => { file.close(); resolve(filePath); });
@@ -112,9 +108,9 @@ function limpar(filePath) {
   try { if (existsSync(filePath)) unlinkSync(filePath); } catch (_) {}
 }
 
-// ── Loop principal ────────────────────────────────────────────────────────────
+// ── Loop principal (exportado para o server.js) ───────────────────────────────────
 
-async function main() {
+export async function run() {
   console.log("🎬 Empire TV Worker iniciado");
 
   const fila = await buscarFila();
@@ -132,7 +128,6 @@ async function main() {
     const nomeAtual = `clip_${atual.ordem}_${atual.driveId}.mp4`;
     const pathAtual = path.join("/tmp", nomeAtual);
 
-    // ── Download do clip atual ────────────────────────────────────────────────
     console.log(`\n⬇️  [${i+1}/${fila.length}] Baixando: ${atual.programa} (ordem ${atual.ordem})`);
     try {
       await downloadDrive(atual.driveId, pathAtual);
@@ -142,17 +137,15 @@ async function main() {
       continue;
     }
 
-    // ── Pré-download do próximo em paralelo ───────────────────────────────────
+    // Pré-download do próximo em paralelo
     let preDownload = null;
     if (proximo) {
-      const nomeProx = `clip_${proximo.ordem}_${proximo.driveId}.mp4`;
-      const pathProx = path.join("/tmp", nomeProx);
+      const pathProx = path.join("/tmp", `clip_${proximo.ordem}_${proximo.driveId}.mp4`);
       console.log(`  🔄 Pré-download: ${proximo.programa}`);
       preDownload = downloadDrive(proximo.driveId, pathProx)
-        .catch(e => console.warn(`  ⚠️  Pré-download falhou (${proximo.programa}): ${e.message}`));
+        .catch(e => console.warn(`  ⚠️  Pré-download falhou: ${e.message}`));
     }
 
-    // ── Transmissão ───────────────────────────────────────────────────────────
     console.log(`  📡 Transmitindo: ${atual.programa}`);
     await marcarStatus(atual.ordem, "Transmitindo");
     try {
@@ -164,14 +157,9 @@ async function main() {
       await marcarStatus(atual.ordem, "Erro");
     }
 
-    // Aguarda pré-download terminar antes de continuar o loop
     if (preDownload) await preDownload;
-
-    // Limpa /tmp para não lotar o container (512 MB de limite no Cloud Run)
     limpar(pathAtual);
   }
 
   console.log("\n🏁 Fila concluída.");
 }
-
-main().catch(err => { console.error("Erro fatal:", err); process.exit(1); });
