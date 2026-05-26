@@ -1,5 +1,5 @@
 export const EMPIRETV_SCRIPT_URL =
-  "https://script.google.com/macros/s/1onh3JyLiMWozurKqg10O2_0gNm_pia_Cm9vemiIStwk/exec";
+  "https://script.google.com/macros/s/AKfycby7OeFYuai1QoTEXD427-Kn_2KBvh3nakD4iKSuOji9-i3x7sK8DD59BHRBRc5Ow1YB/exec";
 
 export const KICK_CHANNEL = "empiretvoficial";
 
