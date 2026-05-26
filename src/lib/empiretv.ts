@@ -1,7 +1,7 @@
 export const EMPIRETV_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycby7OeFYuai1QoTEXD427-Kn_2KBvh3nakD4iKSuOji9-i3x7sK8DD59BHRBRc5Ow1YB/exec";
+  "https://script.google.com/macros/s/1onh3JyLiMWozurKqg10O2_0gNm_pia_Cm9vemiIStwk/exec";
 
-export const KICK_CHANNEL = "empirerpg"; // troca pelo nome real do canal no Kick
+export const KICK_CHANNEL = "empiretvoficial";
 
 export interface TvProgram {
   id?:             string;
@@ -99,7 +99,6 @@ export function buildPlayerSrc(_p?: TvProgram | null): string {
   return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false`;
 }
 
-// Agrupa programas por data para a grade
 export function groupByDate(schedule: TvProgram[]): Record<string, TvProgram[]> {
   const groups: Record<string, TvProgram[]> = {};
   for (const p of schedule) {
@@ -110,7 +109,6 @@ export function groupByDate(schedule: TvProgram[]): Record<string, TvProgram[]> 
   return groups;
 }
 
-// Agrupa por nome do programa (para cards Netflix)
 export function groupByPrograma(schedule: TvProgram[]): Record<string, TvProgram[]> {
   const groups: Record<string, TvProgram[]> = {};
   for (const p of schedule) {

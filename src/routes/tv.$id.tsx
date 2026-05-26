@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Tv, Loader2, Radio, ExternalLink, MessageCircle } from "lucide-react";
+import { ArrowLeft, Tv, Loader2, Radio, ExternalLink, MessageCircle, Send } from "lucide-react";
 import { motion } from "motion/react";
 import { useTelegramUser } from "@/lib/telegram";
 import { tvApi, buildPlayerSrc, type TvStatus, type TvProgram } from "@/lib/empiretv";
@@ -8,6 +8,8 @@ import { tvApi, buildPlayerSrc, type TvStatus, type TvProgram } from "@/lib/empi
 export const Route = createFileRoute("/tv/$id")({
   component: TvRoomPage,
 });
+
+const TELEGRAM_CHANNEL = "empiretvoficial";
 
 function fmtTime(v?: string | number) {
   if (v === undefined || v === null) return "—";
@@ -35,7 +37,6 @@ function TvRoomPage() {
     return () => { alive = false; clearInterval(idInterval); };
   }, []);
 
-  // Encontra o programa pelo rowNum
   const schedule = data?.fullSchedule ?? [];
   const current  = data?.current ?? null;
   const program: TvProgram | null =
@@ -45,8 +46,16 @@ function TvRoomPage() {
   const isCurrent      = current && String(current.rowNum) === id;
   const isBroadcasting = isCurrent && current?.status === "broadcasting";
   const playerSrc      = buildPlayerSrc(program);
-  const topicoUrl      = program?.topicoUrl as string | undefined;
-  const threadId       = topicoUrl?.split("/").pop();
+
+  // Resolve URL do tópico Telegram: usa campo da planilha ou fallback pro canal
+  const topicoUrl = (program?.topicoUrl as string | undefined)
+    || `https://t.me/${TELEGRAM_CHANNEL}`;
+  const threadId  = (() => {
+    if (!program?.topicoUrl) return null;
+    const parts = String(program.topicoUrl).split("/");
+    const last  = parts[parts.length - 1];
+    return /^\d+$/.test(last) ? last : null;
+  })();
 
   // Registra participação
   useEffect(() => {
@@ -140,7 +149,7 @@ function TvRoomPage() {
 
             <div className="grid lg:grid-cols-[1fr,380px] gap-6">
 
-              {/* Player */}
+              {/* Player Kick */}
               <div className="space-y-3">
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
@@ -158,7 +167,7 @@ function TvRoomPage() {
                     />
                   ) : (
                     <div className="absolute inset-0 grid place-items-center bg-black">
-                      <div className="text-center px-6 space-y-2">
+                      <div className="text-center px-6 space-y-3">
                         {(program.capaUrl as string) ? (
                           <img src={program.capaUrl as string} alt="" className="w-32 rounded-xl mx-auto opacity-40" />
                         ) : (
@@ -172,6 +181,16 @@ function TvRoomPage() {
                             às {fmtTime(program.horario as string)}
                           </p>
                         )}
+                        {/* Botão para acompanhar no Telegram enquanto espera */}
+                        <a
+                          href={`https://t.me/${TELEGRAM_CHANNEL}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/20 text-primary text-xs font-bold hover:bg-primary/30 transition-colors"
+                        >
+                          <Send className="size-3" />
+                          Acompanhar no Telegram
+                        </a>
                       </div>
                     </div>
                   )}
@@ -183,54 +202,67 @@ function TvRoomPage() {
                     </div>
                   )}
                 </motion.div>
+
+                {/* Link direto no Kick */}
+                <a
+                  href={`https://kick.com/${KICK_CHANNEL}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-2xl border border-border bg-card text-sm font-bold hover:bg-white/5 transition-colors"
+                >
+                  <ExternalLink className="size-4" />
+                  Abrir no Kick
+                </a>
               </div>
 
-              {/* Chat Telegram */}
+              {/* Chat Telegram embed */}
               <div className="rounded-3xl border border-border bg-card flex flex-col overflow-hidden" style={{ minHeight: 520 }}>
                 <div className="p-4 border-b border-border flex items-center justify-between">
-                  <p className="text-xs font-black uppercase tracking-widest">Chat</p>
-                  {topicoUrl && (
-                    <a
-                      href={topicoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-[10px] font-bold text-primary hover:underline"
-                    >
-                      <ExternalLink className="size-3" />
-                      Abrir no Telegram
-                    </a>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <MessageCircle className="size-4 text-primary" />
+                    <p className="text-xs font-black uppercase tracking-widest">Chat ao vivo</p>
+                  </div>
+                  <a
+                    href={topicoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[10px] font-bold text-primary hover:underline"
+                  >
+                    <ExternalLink className="size-3" />
+                    Telegram
+                  </a>
                 </div>
 
                 <div className="flex-1 relative">
                   {threadId ? (
+                    // Tópico específico do evento
                     <iframe
                       key={threadId}
-                      src={`https://t.me/empireventos1/${threadId}?embed=1&discussion=empireventos1&comments_limit=50&color=8B5CF6&dark=1`}
+                      src={`https://t.me/${TELEGRAM_CHANNEL}/${threadId}?embed=1&discussion=${TELEGRAM_CHANNEL}&comments_limit=50&color=53d769&dark=1`}
                       className="absolute inset-0 w-full h-full border-0"
                       allow="autoplay; encrypted-media"
                       title="Chat Empire TV"
                     />
                   ) : (
-                    <div className="absolute inset-0 grid place-items-center">
-                      <div className="text-center px-6 space-y-2">
-                        <MessageCircle className="size-8 text-muted-foreground mx-auto" />
-                        <p className="text-xs text-muted-foreground">
-                          O chat será aberto quando a transmissão começar.
-                        </p>
-                      </div>
-                    </div>
+                    // Fallback: canal geral
+                    <iframe
+                      key="general"
+                      src={`https://t.me/${TELEGRAM_CHANNEL}?embed=1&dark=1`}
+                      className="absolute inset-0 w-full h-full border-0"
+                      allow="autoplay; encrypted-media"
+                      title="Chat Empire TV"
+                    />
                   )}
                 </div>
 
                 <div className="p-3 border-t border-border">
                   <a
-                    href={topicoUrl || "https://t.me/empireventos1"}
+                    href={topicoUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-opacity"
                   >
-                    <MessageCircle className="size-4" />
+                    <Send className="size-4" />
                     Comentar no Telegram
                   </a>
                 </div>
