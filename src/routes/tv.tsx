@@ -1,287 +1,464 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { Tv, Loader2, Radio, CalendarClock, ExternalLink, MessageCircle } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Tv, Loader2, Radio, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
-import { useTelegramUser } from "@/lib/telegram";
-import { tvApi, buildPlayerSrc, type TvStatus } from "@/lib/empiretv";
+import { tvApi, groupByDate, groupByPrograma, getProgramStatus, type TvStatus, type TvProgram } from "@/lib/empiretv";
 
 export const Route = createFileRoute("/tv")({
   head: () => ({
     meta: [
-      { title: "Empire TV — Transmissões" },
-      { name: "description", content: "Programação ao vivo da Empire TV." },
+      { title: "Empire TV — Programação" },
+      { name: "description", content: "Grade de programação da Empire TV." },
     ],
   }),
   component: TvPage,
 });
 
+const DIAS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const MESES_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+function parseDataBR(str: string): Date | null {
+  const m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function fmtDataLabel(str: string): { diaSemana: string; dia: string; mes: string } {
+  const d = parseDataBR(str);
+  if (!d) return { diaSemana: "—", dia: str, mes: "" };
+  return {
+    diaSemana: DIAS_PT[d.getDay()],
+    dia:       String(d.getDate()).padStart(2, "0"),
+    mes:       MESES_PT[d.getMonth()],
+  };
+}
+
 function fmtTime(v?: string | number) {
   if (v === undefined || v === null) return "—";
   if (typeof v === "number") {
-    const h = Math.floor(v / 3600);
-    const m = Math.floor((v % 3600) / 60);
-    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+    return `${String(Math.floor(v/3600)).padStart(2,"0")}:${String(Math.floor((v%3600)/60)).padStart(2,"0")}`;
   }
-  const d = new Date(v);
-  if (!Number.isNaN(d.getTime()))
-    return d.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" });
   const m = String(v).match(/^(\d{1,2}):(\d{2})/);
   if (m) return `${m[1].padStart(2,"0")}:${m[2]}`;
   return String(v);
 }
 
-function TvPage() {
-  const { user }    = useTelegramUser();
-  const [data, setData]     = useState<TvStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const participacaoRegistrada = useRef<Set<string>>(new Set());
+function StatusBadge({ status }: { status: "live" | "upcoming" | "ended" }) {
+  if (status === "live") return (
+    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-widest">
+      <span className="size-1.5 rounded-full bg-white animate-pulse" />
+      Ao vivo
+    </span>
+  );
+  if (status === "ended") return (
+    <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/50 text-[9px] font-black uppercase tracking-widest">
+      Encerrado
+    </span>
+  );
+  return (
+    <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-[9px] font-black uppercase tracking-widest">
+      Em breve
+    </span>
+  );
+}
 
-  // Polling status a cada 15s
-  useEffect(() => {
-    let alive = true;
-    const tick = () => {
-      tvApi.status()
-        .then((r) => alive && setData(r))
-        .finally(() => alive && setLoading(false));
-    };
-    tick();
-    const id = setInterval(tick, 15_000);
-    return () => { alive = false; clearInterval(id); };
-  }, []);
-
-  // Registra participação ao abrir durante transmissão
-  useEffect(() => {
-    if (!user?.id || !data?.current) return;
-    const programa = data.current.programa || data.current.titulo || "";
-    const chave    = `${user.id}_${programa}`;
-    if (participacaoRegistrada.current.has(chave)) return;
-    participacaoRegistrada.current.add(chave);
-    tvApi.registrarParticipacao({
-      tgId:    String(user.id),
-      nome:    user.name || "Jogador",
-      programa,
-      tipo:    String(data.current.tipo || ""),
-    });
-  }, [user, data?.current?.programa]);
-
-  const current        = data?.current ?? null;
-  const schedule       = data?.fullSchedule ?? [];
-  const playerSrc      = buildPlayerSrc(current);
-  const isBroadcasting = current?.status === "broadcasting";
-  const topicoUrl      = current?.topicoUrl as string | undefined;
+function ProgramCard({ program, currentRowNum, onClick }: {
+  program: TvProgram;
+  currentRowNum?: number;
+  onClick: () => void;
+}) {
+  const status = getProgramStatus(program, currentRowNum);
+  const capa   = program.capaUrl as string | undefined;
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-24">
-      <div className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
-
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="size-11 rounded-2xl bg-primary text-primary-foreground grid place-items-center">
-            <Tv className="size-5" />
+    <motion.button
+      whileHover={{ scale: 1.03 }}
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      className="relative w-full text-left rounded-2xl overflow-hidden border border-border bg-card group cursor-pointer"
+    >
+      {/* Imagem de capa */}
+      <div className="aspect-video w-full bg-black/60 relative overflow-hidden">
+        {capa ? (
+          <img
+            src={capa}
+            alt={program.programa || "Programa"}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full grid place-items-center bg-gradient-to-br from-primary/30 to-black">
+            <Tv className="size-8 text-primary/60" />
           </div>
-          <div>
-            <h1 className="text-2xl font-black uppercase tracking-widest">Empire TV</h1>
-            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Transmissão ao vivo
-            </p>
-          </div>
+        )}
+        {/* Overlay escuro no hover */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300" />
+        {/* Status badge */}
+        <div className="absolute top-2 left-2">
+          <StatusBadge status={status} />
         </div>
+        {/* Play button no hover */}
+        {status !== "ended" && (
+          <div className="absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="size-12 rounded-full bg-white/20 backdrop-blur-sm grid place-items-center border border-white/40">
+              <div className="w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-l-[12px] border-l-white ml-1" />
+            </div>
+          </div>
+        )}
+      </div>
 
-        <div className="grid lg:grid-cols-[1fr,380px] gap-6">
+      {/* Info */}
+      <div className="p-3 space-y-1">
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-black text-sm leading-tight line-clamp-1">
+            {program.programa || program.titulo || "Programa"}
+          </p>
+          <p className="text-[10px] font-bold text-muted-foreground shrink-0 tabular-nums">
+            {fmtTime(program.horario || program.inicio as any)}
+          </p>
+        </div>
+        {program.tipo && (
+          <p className="text-[10px] font-bold text-primary uppercase tracking-wide">{program.tipo}</p>
+        )}
+        {program.material && (
+          <p className="text-xs text-muted-foreground line-clamp-1">{program.material}</p>
+        )}
+        {program.buff && (
+          <span className="inline-block px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 text-[9px] font-black">
+            ⚡ {program.buff}
+          </span>
+        )}
+      </div>
+    </motion.button>
+  );
+}
 
-          {/* Coluna esquerda */}
-          <div className="space-y-4">
+function MiniCalendar({ schedule, selectedDate, onSelect }: {
+  schedule: TvProgram[];
+  selectedDate: string | null;
+  onSelect: (date: string) => void;
+}) {
+  const today    = new Date();
+  const [year, setYear]   = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth());
 
-            {/* Cabeçalho do programa atual */}
-            {isBroadcasting && (
-              <motion.div
-                initial={{ opacity:0, y:-6 }}
-                animate={{ opacity:1, y:0 }}
-                className="rounded-3xl border border-primary/30 bg-primary/5 p-4 space-y-1"
-              >
-                <p className="text-[10px] font-black uppercase tracking-widest text-primary">
-                  No ar agora
-                </p>
-                <h2 className="text-xl font-black">
-                  {current?.programa || current?.titulo || "Programa"}
-                </h2>
-                {current?.tipo && (
-                  <p className="text-sm font-bold text-muted-foreground uppercase tracking-wide">
-                    {current.tipo}
-                  </p>
-                )}
-                {current?.material && (
-                  <p className="text-sm text-foreground/80">{current.material}</p>
-                )}
-                {current?.buff && (
-                  <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 text-[10px] font-black uppercase tracking-widest">
-                    ⚡ BUFF: {current.buff}
-                  </span>
-                )}
-              </motion.div>
-            )}
+  const daysInMonth  = new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
 
-            {/* Player Kick — aspect ratio original sem corte */}
-            <motion.div
-              initial={{ opacity:0, y:8 }}
-              animate={{ opacity:1, y:0 }}
-              className="relative w-full rounded-3xl overflow-hidden border border-border bg-black"
-              style={{ aspectRatio:"16/9" }}
+  // Datas com eventos
+  const datesWithEvents = new Set(
+    schedule.map(p => {
+      const d = parseDataBR(String(p.data || ""));
+      if (!d) return null;
+      return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+    }).filter(Boolean)
+  );
+
+  function navMonth(dir: number) {
+    let m = month + dir;
+    let y = year;
+    if (m < 0)  { m = 11; y--; }
+    if (m > 11) { m = 0;  y++; }
+    setMonth(m); setYear(y);
+  }
+
+  return (
+    <div className="rounded-3xl border border-border bg-card p-4 select-none">
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={() => navMonth(-1)} className="size-7 rounded-lg hover:bg-white/10 grid place-items-center transition-colors">
+          <ChevronLeft className="size-4" />
+        </button>
+        <p className="text-xs font-black uppercase tracking-widest">
+          {MESES_PT[month]} {year}
+        </p>
+        <button onClick={() => navMonth(1)} className="size-7 rounded-lg hover:bg-white/10 grid place-items-center transition-colors">
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+
+      {/* Cabeçalho dias da semana */}
+      <div className="grid grid-cols-7 mb-1">
+        {DIAS_PT.map(d => (
+          <div key={d} className="text-center text-[9px] font-black text-muted-foreground py-1">{d}</div>
+        ))}
+      </div>
+
+      {/* Dias */}
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+          <div key={`empty-${i}`} />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day     = i + 1;
+          const dateStr = `${String(day).padStart(2,"0")}/${String(month+1).padStart(2,"0")}/${year}`;
+          const hasEvent = datesWithEvents.has(dateStr);
+          const isToday  = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
+          const isSelected = selectedDate === dateStr;
+
+          return (
+            <button
+              key={day}
+              onClick={() => hasEvent && onSelect(dateStr)}
+              disabled={!hasEvent}
+              className={`
+                relative h-8 rounded-lg text-xs font-bold transition-colors
+                ${isSelected ? "bg-primary text-primary-foreground" : ""}
+                ${isToday && !isSelected ? "border border-primary text-primary" : ""}
+                ${hasEvent && !isSelected ? "hover:bg-white/10" : ""}
+                ${!hasEvent ? "text-muted-foreground/30 cursor-default" : "cursor-pointer"}
+              `}
             >
-              {loading ? (
-                <div className="absolute inset-0 grid place-items-center">
-                  <Loader2 className="size-8 animate-spin text-primary" />
-                </div>
-              ) : (
-                <iframe
-                  key={playerSrc}
-                  src={playerSrc}
-                  title="Empire TV — Kick"
-                  className="absolute inset-0 w-full h-full"
-                  allow="autoplay; encrypted-media; fullscreen"
-                  allowFullScreen
-                />
+              {day}
+              {hasEvent && !isSelected && (
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 size-1 rounded-full bg-primary" />
               )}
-
-              {isBroadcasting && (
-                <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1 rounded-full bg-red-600/90 text-white text-[10px] font-black uppercase tracking-widest z-10">
-                  <span className="size-2 rounded-full bg-white animate-pulse" />
-                  Ao vivo
-                </div>
-              )}
-
-              {!loading && !isBroadcasting && (
-                <div className="absolute inset-0 grid place-items-center bg-black/80">
-                  <div className="text-center px-6">
-                    <Radio className="size-10 text-muted-foreground mx-auto mb-2" />
-                    <p className="font-black uppercase tracking-widest text-sm text-white">
-                      {current?.status === "upcoming" ? "Em breve" : "Sem transmissão no ar"}
-                    </p>
-                    {current?.status === "upcoming" && current?.programa && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Próximo: <strong>{current.programa}</strong> às {fmtTime(current.horario as string)}
-                      </p>
-                    )}
-                    {data?.message && (
-                      <p className="text-xs text-muted-foreground mt-1">{data.message}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </motion.div>
-
-            {/* Grade */}
-            <div className="rounded-3xl border border-border bg-card p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <CalendarClock className="size-4 text-primary" />
-                <p className="text-xs font-black uppercase tracking-widest">Programação</p>
-              </div>
-              {schedule.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nenhum programa agendado.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {schedule.map((p, i) => {
-                    const isNow = isBroadcasting &&
-                      (p.programa || p.titulo) === (current?.programa || current?.titulo) &&
-                      p.inicio === current?.inicio;
-                    return (
-                      <li
-                        key={i}
-                        className={`flex items-center gap-3 p-3 rounded-2xl border transition-colors ${
-                          isNow ? "border-primary/40 bg-primary/10" : "border-border bg-background"
-                        }`}
-                      >
-                        <div className="text-xs font-black tabular-nums w-16 text-muted-foreground shrink-0">
-                          {fmtTime(p.inicio as any)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold truncate">{p.programa || p.titulo || "—"}</p>
-                          {p.tipo && (
-                            <p className="text-xs text-muted-foreground truncate">{p.tipo}</p>
-                          )}
-                          {p.material && (
-                            <p className="text-xs text-foreground/60 truncate">{p.material}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {p.topicoUrl && (
-                            <a
-                              href={String(p.topicoUrl)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline"
-                            >
-                              <MessageCircle className="size-3" />
-                              Chat
-                            </a>
-                          )}
-                          {isNow && (
-                            <span className="text-[10px] font-black uppercase tracking-widest text-primary">
-                              Agora
-                            </span>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          </div>
-
-          {/* Coluna direita — Chat Telegram embedado */}
-          <div className="rounded-3xl border border-border bg-card flex flex-col overflow-hidden" style={{ minHeight: 600 }}>
-            <div className="p-4 border-b border-border flex items-center justify-between">
-              <p className="text-xs font-black uppercase tracking-widest">Chat ao vivo</p>
-              {topicoUrl && (
-                <a
-                  href={topicoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[10px] font-bold text-primary hover:underline"
-                >
-                  <ExternalLink className="size-3" />
-                  Abrir no Telegram
-                </a>
-              )}
-            </div>
-
-            <div className="flex-1 relative">
-              {topicoUrl ? (
-                // Widget oficial do Telegram — chat em tempo real nativo
-                <iframe
-                  key={topicoUrl}
-                  src={`https://t.me/empireventos1/${topicoUrl.split("/").pop()}?embed=1&discussion=empireventos1&comments_limit=50&color=8B5CF6&dark=1`}
-                  className="absolute inset-0 w-full h-full border-0"
-                  allow="autoplay; encrypted-media"
-                  title="Chat Empire TV"
-                />
-              ) : (
-                // Fallback: chat geral do supergrupo enquanto não há programa no ar
-                <iframe
-                  src="https://t.me/empireventos1?embed=1&discussion=empireventos1&comments_limit=50&color=8B5CF6&dark=1"
-                  className="absolute inset-0 w-full h-full border-0"
-                  allow="autoplay; encrypted-media"
-                  title="Chat Empire TV"
-                />
-              )}
-            </div>
-
-            {/* Botão para comentar — abre o tópico no Telegram */}
-            <div className="p-3 border-t border-border">
-              <a
-                href={topicoUrl || "https://t.me/empireventos1"}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-opacity"
-              >
-                <MessageCircle className="size-4" />
-                Comentar no Telegram
-              </a>
-            </div>
-          </div>
-        </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
+}
+
+function TvPage() {
+  const navigate = useNavigate();
+  const [data, setData]           = useState<TvStatus | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [viewMode, setViewMode]   = useState<"netflix" | "date">("netflix");
+
+  useEffect(() => {
+    let alive = true;
+    const tick = () => tvApi.status().then(r => alive && setData(r)).finally(() => alive && setLoading(false));
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
+  const current  = data?.current ?? null;
+  const schedule = data?.fullSchedule ?? [];
+  const isBroadcasting = current?.status === "broadcasting";
+
+  // Agrupamentos
+  const byDate    = groupByDate(schedule);
+  const byProgram = groupByPrograma(schedule);
+
+  // Filtra por data selecionada
+  const filteredSchedule = selectedDate
+    ? schedule.filter(p => String(p.data || "") === selectedDate)
+    : schedule;
+
+  // Datas ordenadas
+  const sortedDates = Object.keys(byDate).sort((a, b) => {
+    const da = parseDataBR(a), db = parseDataBR(b);
+    if (!da || !db) return 0;
+    return da.getTime() - db.getTime();
+  });
+
+  function openProgram(program: TvProgram) {
+    const id = program.rowNum ? String(program.rowNum) : "0";
+    navigate({ to: "/tv/$id", params: { id } });
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground pb-24">
+      <div className="max-w-7xl mx-auto px-4 pt-6 space-y-6">
+
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-11 rounded-2xl bg-primary text-primary-foreground grid place-items-center">
+              <Tv className="size-5" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black uppercase tracking-widest">Empire TV</h1>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Programação
+              </p>
+            </div>
+          </div>
+
+          {/* Toggle de view */}
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border">
+            <button
+              onClick={() => setViewMode("netflix")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                viewMode === "netflix" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Grade
+            </button>
+            <button
+              onClick={() => setViewMode("date")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                viewMode === "date" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Por data
+            </button>
+          </div>
+        </div>
+
+        {/* Ao vivo agora — destaque hero */}
+        {isBroadcasting && current && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative rounded-3xl overflow-hidden border border-red-500/30 bg-black cursor-pointer group"
+            onClick={() => openProgram(current)}
+            style={{ aspectRatio: "21/6" }}
+          >
+            {(current.capaUrl as string) && (
+              <img
+                src={current.capaUrl as string}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-50 transition-opacity"
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent" />
+            <div className="absolute inset-0 flex flex-col justify-center px-8 gap-2">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest">
+                  <span className="size-1.5 rounded-full bg-white animate-pulse" />
+                  Ao vivo agora
+                </span>
+              </div>
+              <h2 className="text-3xl font-black text-white">
+                {current.programa || current.titulo}
+              </h2>
+              {current.tipo && (
+                <p className="text-sm font-bold text-primary uppercase tracking-wider">{current.tipo}</p>
+              )}
+              {current.material && (
+                <p className="text-sm text-white/70">{current.material}</p>
+              )}
+              <button className="mt-2 self-start flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black text-sm font-black hover:bg-white/90 transition-colors">
+                <div className="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-l-[9px] border-l-black" />
+                Assistir agora
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {loading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="size-8 animate-spin text-primary" />
+          </div>
+        )}
+
+        {!loading && schedule.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <Radio className="size-10 text-muted-foreground" />
+            <p className="font-black uppercase tracking-widest text-sm">Sem programação cadastrada</p>
+          </div>
+        )}
+
+        {!loading && schedule.length > 0 && (
+          <div className="grid lg:grid-cols-[1fr,300px] gap-6">
+
+            {/* Conteúdo principal */}
+            <div className="space-y-8">
+
+              {/* MODO NETFLIX — por programa */}
+              {viewMode === "netflix" && (
+                Object.entries(byProgram).map(([programa, items]) => {
+                  const capa = items.find(i => i.capaUrl)?.capaUrl as string | undefined;
+                  return (
+                    <div key={programa}>
+                      <div className="flex items-center gap-3 mb-4">
+                        {capa && (
+                          <img src={capa} alt="" className="size-8 rounded-lg object-cover" />
+                        )}
+                        <h3 className="text-base font-black uppercase tracking-widest">{programa}</h3>
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-xs text-muted-foreground">{items.length} episódio{items.length > 1 ? "s" : ""}</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {items.map((p, i) => (
+                          <ProgramCard
+                            key={i}
+                            program={p}
+                            currentRowNum={current?.rowNum}
+                            onClick={() => openProgram(p)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              {/* MODO POR DATA */}
+              {viewMode === "date" && (
+                (selectedDate ? [selectedDate] : sortedDates).map(dateStr => {
+                  const items   = byDate[dateStr] || [];
+                  const label   = fmtDataLabel(dateStr);
+                  return (
+                    <div key={dateStr}>
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="flex flex-col items-center justify-center size-12 rounded-2xl bg-primary/10 border border-primary/20 shrink-0">
+                          <span className="text-[9px] font-black uppercase text-primary">{label.diaSemana}</span>
+                          <span className="text-lg font-black leading-none">{label.dia}</span>
+                        </div>
+                        <div>
+                          <p className="font-black">{label.mes} {label.dia}</p>
+                          <p className="text-xs text-muted-foreground">{items.length} programa{items.length > 1 ? "s" : ""}</p>
+                        </div>
+                        <div className="flex-1 h-px bg-border" />
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {items.map((p, i) => (
+                          <ProgramCard
+                            key={i}
+                            program={p}
+                            currentRowNum={current?.rowNum}
+                            onClick={() => openProgram(p)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Sidebar — calendário */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="size-4 text-primary" />
+                <p className="text-xs font-black uppercase tracking-widest">Calendário</p>
+              </div>
+
+              <MiniCalendar
+                schedule={schedule}
+                selectedDate={selectedDate}
+                onSelect={(d) => {
+                  setSelectedDate(prev => prev === d ? null : d);
+                  setViewMode("date");
+                }}
+              />
+
+              {/* Próximo programa */}
+              {current?.status === "upcoming" && (
+                <div className="rounded-3xl border border-border bg-card p-4 space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Próximo</p>
+                  <p className="font-black">{current.programa}</p>
+                  {current.tipo && <p className="text-xs text-primary font-bold">{current.tipo}</p>}
+                  <p className="text-xs text-muted-foreground">às {fmtTime(current.horario as string)}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function parseDataBR(str: string): Date | null {
+  const m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
 }
