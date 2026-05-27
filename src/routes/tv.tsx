@@ -307,7 +307,6 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
               onClick={() => onSelect(ep)}
               className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border bg-card hover:bg-white/5 transition-colors text-left group"
             >
-              {/* Thumbnail */}
               <div className="size-16 rounded-xl overflow-hidden bg-black/40 shrink-0 relative">
                 {capa ? (
                   <img src={capa} alt={ep.programa || ""} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -358,7 +357,6 @@ function EventRoom({ program, current, onBack }: {
   const isCurrent      = current && current.rowNum === program.rowNum;
   const isBroadcasting = isCurrent && current?.status === "broadcasting";
   const playerSrc      = buildPlayerSrc(program);
-  const topicoUrl      = (program.topicoUrl as string | undefined) || `https://t.me/${TELEGRAM_CHANNEL}`;
   const capaConvertida = driveImgUrl(program.capaUrl as string | undefined ?? "");
   const programName    = program.programa || program.titulo || "Programa";
 
@@ -446,10 +444,6 @@ function EventRoom({ program, current, onBack }: {
                 {current?.status === "upcoming" && isCurrent && (
                   <p className="text-xs text-muted-foreground -mt-2">às {fmtTime((program.horario || (program as any).horarioStr) as string)}</p>
                 )}
-                <a href={`https://t.me/${TELEGRAM_CHANNEL}`} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/20 text-primary text-xs font-bold hover:bg-primary/30 transition-colors">
-                  <Send className="size-3" /> Acompanhar no Telegram
-                </a>
               </div>
             )}
             {isBroadcasting && (
@@ -463,38 +457,29 @@ function EventRoom({ program, current, onBack }: {
           <NowPlayingBar program={program} />
         </div>
 
-        {/* Chat Telegram */}
+        {/* Chat Telegram embarcado */}
         <div className="rounded-3xl border border-border bg-card flex flex-col overflow-hidden" style={{ minHeight: 520 }}>
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageCircle className="size-4 text-primary" />
-              <p className="text-xs font-black uppercase tracking-widest">Chat ao vivo</p>
-            </div>
+          <div className="p-4 border-b border-border flex items-center gap-2">
+            <MessageCircle className="size-4 text-primary" />
+            <p className="text-xs font-black uppercase tracking-widest">Chat ao vivo</p>
           </div>
           <div className="flex-1 relative">
             {threadId ? (
-              <iframe key={threadId}
+              <iframe
+                key={threadId}
                 src={`https://t.me/${TELEGRAM_CHANNEL}/${threadId}?embed=1&discussion=${TELEGRAM_CHANNEL}&comments_limit=50&color=8B5CF6&dark=1`}
                 className="absolute inset-0 w-full h-full border-0"
-                allow="autoplay; encrypted-media" title="Chat Empire TV" />
+                allow="autoplay; encrypted-media"
+                title="Chat Empire TV"
+              />
             ) : (
               <div className="absolute inset-0 grid place-items-center">
-                <div className="text-center px-6 space-y-3">
+                <div className="text-center px-6 space-y-2">
                   <MessageCircle className="size-8 text-muted-foreground mx-auto" />
                   <p className="text-xs text-muted-foreground">O chat estará disponível quando a transmissão começar.</p>
-                  <a href={`https://t.me/${TELEGRAM_CHANNEL}`} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/20 text-primary text-xs font-bold hover:bg-primary/30 transition-colors">
-                    <Send className="size-3" /> Abrir canal no Telegram
-                  </a>
                 </div>
               </div>
             )}
-          </div>
-          <div className="p-3 border-t border-border">
-            <a href={topicoUrl} target="_blank" rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 transition-opacity">
-              <Send className="size-4" /> Comentar no Telegram
-            </a>
           </div>
         </div>
       </div>
@@ -506,8 +491,8 @@ function EventRoom({ program, current, onBack }: {
 type ViewMode = "grade" | "data";
 
 function TvPage() {
-  const [data, setData]               = useState<TvStatus | null>(null);
-  const [loading, setLoading]         = useState(true);
+  const [data, setData]                = useState<TvStatus | null>(null);
+  const [loading, setLoading]          = useState(true);
   const [selectedProgram, setSelected] = useState<TvProgram | null>(null);
   const [viewMode, setViewMode]        = useState<ViewMode>("grade");
 
@@ -519,17 +504,12 @@ function TvPage() {
     return () => { alive = false; clearInterval(id); };
   }, []);
 
-  const current      = data?.current ?? null;
-  const fullSchedule = data?.fullSchedule ?? [];
+  const current       = data?.current ?? null;
+  const fullSchedule  = data?.fullSchedule ?? [];
   const currentRowNum = current?.rowNum;
-
-  // Destaque: programa atual ou próximo
-  const featured = current ?? null;
-
-  // Grade por programa
-  const byPrograma = groupByPrograma(fullSchedule);
-  // Próximas transmissões (upcoming/not ended)
-  const upcoming = fullSchedule.filter(p => {
+  const featured      = current ?? null;
+  const byPrograma    = groupByPrograma(fullSchedule);
+  const upcoming      = fullSchedule.filter(p => {
     const s = String(p.status || "").toLowerCase();
     return s !== "finalizado" && s !== "ended";
   });
@@ -569,7 +549,6 @@ function TvPage() {
         {!loading && (
           <AnimatePresence mode="wait">
             {selectedProgram ? (
-              /* ── SALA DO EVENTO ── */
               <motion.div key="room" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <EventRoom
                   program={selectedProgram}
@@ -578,10 +557,9 @@ function TvPage() {
                 />
               </motion.div>
             ) : (
-              /* ── GRADE ── */
               <motion.div key="grid" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
 
-                {/* Banner destaque (próximo ou ao vivo) */}
+                {/* Banner destaque */}
                 {featured && (
                   <motion.div
                     className="relative rounded-3xl overflow-hidden border border-border cursor-pointer group"
@@ -589,7 +567,6 @@ function TvPage() {
                     whileHover={{ scale: 1.005 }}
                     transition={{ type: "spring", stiffness: 300 }}
                   >
-                    {/* bg capa */}
                     {driveImgUrl(featured.capaUrl as string | undefined ?? "") ? (
                       <div className="absolute inset-0">
                         <img
@@ -618,7 +595,6 @@ function TvPage() {
                       <h2 className="text-3xl md:text-4xl font-black tracking-tight text-white drop-shadow-md">
                         {featured.programa || featured.titulo || "Empire TV"}
                       </h2>
-                      {/* NowPlaying inline no banner */}
                       {(featured.material || featured.buff) && (
                         <div className="flex items-center gap-3 flex-wrap">
                           {featured.material && (
@@ -667,7 +643,6 @@ function TvPage() {
                   </button>
                 </div>
 
-                {/* Conteúdo da view selecionada */}
                 <AnimatePresence mode="wait">
                   {viewMode === "grade" ? (
                     <motion.div key="grade-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
