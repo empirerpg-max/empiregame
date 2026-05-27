@@ -53,20 +53,15 @@ export interface GifResult {
   title:   string;
 }
 
-// Agrupa o fullSchedule em entradas únicas por programa+data
-// Cada entrada representa UMA transmissão/sessão
 export interface ProgramEntry {
-  programa: string;
-  data:     string;
-  horario:  string;
-  capaUrl:  string;
+  programa:  string;
+  data:      string;
+  horario:   string;
+  capaUrl:   string;
   topicoUrl: string;
   topicoId:  string;
-  // primeiro rowNum da sessão (para detectar se está ao vivo)
   rowNums:   number[];
-  // se algum item da sessão está ao vivo
   hasLive:   boolean;
-  // referência ao item atual transmitindo dentro dessa sessão
   liveItem?: TvProgram;
 }
 
@@ -76,15 +71,15 @@ export function buildProgramEntries(
 ): ProgramEntry[] {
   const map = new Map<string, ProgramEntry>();
   for (const p of schedule) {
-    const nome   = String(p.programa || p.titulo || "Sem nome");
-    const data   = String(p.data || "");
-    const key    = `${nome}||${data}`;
+    const nome = String(p.programa || p.titulo || "Sem nome");
+    const data = String(p.data || "");
+    const key  = `${nome}||${data}`;
     if (!map.has(key)) {
       map.set(key, {
         programa:  nome,
         data,
         horario:   String(p.horario || (p as any).horarioStr || ""),
-        capaUrl:   String(p.capaUrl || ""),
+        capaUrl:   String(p.capaUrl  || ""),
         topicoUrl: String(p.topicoUrl || ""),
         topicoId:  String(p.topicoId  || ""),
         rowNums:   [],
@@ -93,11 +88,9 @@ export function buildProgramEntries(
     }
     const entry = map.get(key)!;
     if (p.rowNum !== undefined) entry.rowNums.push(p.rowNum);
-    // Herda capa/topico do primeiro que tiver
-    if (!entry.capaUrl  && p.capaUrl)   entry.capaUrl   = String(p.capaUrl);
+    if (!entry.capaUrl   && p.capaUrl)   entry.capaUrl   = String(p.capaUrl);
     if (!entry.topicoUrl && p.topicoUrl) entry.topicoUrl = String(p.topicoUrl);
     if (!entry.topicoId  && p.topicoId)  entry.topicoId  = String(p.topicoId);
-    // Marca ao vivo se algum item da sessão for o current
     if (currentRowNum !== undefined && p.rowNum === currentRowNum) {
       entry.hasLive  = true;
       entry.liveItem = p;
@@ -178,12 +171,22 @@ export async function searchGifs(query: string): Promise<GifResult[]> {
   } catch { return []; }
 }
 
-// Usa o videoUrl do current (proxy) quando disponível,
-// caso contrário cai no player do Kick
+/**
+ * Regra do player:
+ * - Transmissão ao vivo (broadcasting) → sempre embed do Kick
+ * - Arquivo pré-gravado via proxy → usa videoUrl do current
+ *   (identificado pelo driveId: se tiver driveId, é arquivo local)
+ */
 export function buildPlayerSrc(p?: TvProgram | null): string {
-  if (p?.videoUrl && String(p.videoUrl).startsWith("http")) {
+  if (!p) return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false`;
+
+  // Se tem driveId, é um arquivo do Drive sendo servido pelo proxy
+  const driveId = String(p.driveId || "").trim();
+  if (driveId && p.videoUrl && String(p.videoUrl).startsWith("http")) {
     return String(p.videoUrl);
   }
+
+  // Para tudo mais (live stream, agenda, backup), usa o Kick
   return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false`;
 }
 
