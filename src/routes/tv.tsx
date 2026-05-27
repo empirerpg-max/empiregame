@@ -173,7 +173,7 @@ function MiniCalendar({ schedule, selectedDate, onSelect }: {
 function EventRoom({ program, current, onBack }: {
   program: TvProgram;
   current: TvProgram | null;
-  onBack: () => void;
+  onBack?: () => void;
 }) {
   const { user } = useTelegramUser();
   const participacaoRegistrada = useRef<Set<string>>(new Set());
@@ -207,10 +207,13 @@ function EventRoom({ program, current, onBack }: {
 
   return (
     <div className="space-y-5">
-      <button onClick={onBack} className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
-        <ArrowLeft className="size-4" />
-        Voltar para a grade
-      </button>
+      {onBack && (
+        <button onClick={onBack} className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="size-4" />
+          Voltar para a grade
+        </button>
+      )}
+
 
       {/* Banner */}
       <motion.div initial={{ opacity:0, y:-6 }} animate={{ opacity:1, y:0 }} className="rounded-3xl border border-border bg-card overflow-hidden">
