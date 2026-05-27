@@ -365,7 +365,6 @@ function TvPage() {
           <EventRoom
             program={current ?? ({} as TvProgram)}
             current={current}
-            onBack={() => { /* sem grade — nada a fazer */ }}
           />
         )}
       </div>
