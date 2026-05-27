@@ -1,17 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Tv, Loader2, ChevronLeft, ChevronRight,
-  ArrowLeft, MessageCircle, Play, Clock,
-  ChevronDown, ChevronUp, Music2, Film, Zap, LayoutGrid, CalendarDays,
-  Trophy, Users
+  Tv, Loader2, ChevronLeft, ChevronRight, ArrowLeft,
+  MessageCircle, Play, Clock, ChevronDown, ChevronUp,
+  Music2, Film, Zap, LayoutGrid, CalendarDays, Trophy, Users
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTelegramUser } from "@/lib/telegram";
 import {
-  tvApi, groupByDate, groupByPrograma, getProgramStatus,
+  tvApi, buildProgramEntries, groupByDate, getProgramStatus,
   buildPlayerSrc, driveImgUrl,
-  type TvStatus, type TvProgram, type ParticipacaoItem
+  type TvStatus, type TvProgram, type ParticipacaoItem, type ProgramEntry
 } from "@/lib/empiretv";
 
 export const Route = createFileRoute("/tv")({
@@ -59,7 +58,7 @@ function Medal({ pos }: { pos: number }) {
   return <span className="text-xs font-black text-muted-foreground w-5 text-center">{pos}</span>;
 }
 
-// ─── RANKING DE PARTICIPAÇÃO ──────────────────────────────────────────────────
+// ─── RANKING ─────────────────────────────────────────────────────────────────
 function RankingParticipacao({ programa, currentUserId }: { programa: string; currentUserId?: string }) {
   const [items, setItems]     = useState<ParticipacaoItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,60 +70,38 @@ function RankingParticipacao({ programa, currentUserId }: { programa: string; cu
       .then(data => setItems(Array.isArray(data) ? data : []))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-
     const id = setInterval(() => {
-      tvApi.participacao(programa)
-        .then(data => setItems(Array.isArray(data) ? data : []))
-        .catch(() => {});
+      tvApi.participacao(programa).then(data => setItems(Array.isArray(data) ? data : [])).catch(() => {});
     }, 30_000);
     return () => clearInterval(id);
   }, [programa]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-6">
-        <Loader2 className="size-4 animate-spin text-primary" />
-      </div>
-    );
-  }
+  if (loading) return <div className="flex items-center justify-center py-6"><Loader2 className="size-4 animate-spin text-primary" /></div>;
 
-  if (items.length === 0) {
-    return (
-      <div className="text-center py-6 space-y-1">
-        <Users className="size-5 text-muted-foreground mx-auto" />
-        <p className="text-[11px] text-muted-foreground">Nenhuma participação ainda hoje.</p>
-      </div>
-    );
-  }
+  if (items.length === 0) return (
+    <div className="text-center py-6 space-y-1">
+      <Users className="size-5 text-muted-foreground mx-auto" />
+      <p className="text-[11px] text-muted-foreground">Nenhuma participação ainda hoje.</p>
+    </div>
+  );
 
-  // Ordenar por mensagens desc
   const sorted = [...items].sort((a, b) => (b.mensagens || 0) - (a.mensagens || 0));
   const total  = sorted.reduce((acc, i) => acc + (i.mensagens || 0), 0);
 
   return (
     <div className="space-y-1.5">
       {sorted.map((item, idx) => {
-        const pct = total > 0 ? Math.round((item.mensagens / total) * 100) : 0;
+        const pct  = total > 0 ? Math.round((item.mensagens / total) * 100) : 0;
         const isMe = currentUserId && String(item.tgId) === String(currentUserId);
         return (
-          <motion.div
-            key={item.tgId + idx}
-            initial={{ opacity: 0, x: -6 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: idx * 0.04 }}
-            className={`relative flex items-center gap-2.5 px-3 py-2 rounded-xl overflow-hidden
-              ${isMe ? "border border-primary/40 bg-primary/10" : "bg-white/5"}`}
+          <motion.div key={item.tgId + idx} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.04 }}
+            className={`relative flex items-center gap-2.5 px-3 py-2 rounded-xl overflow-hidden ${isMe ? "border border-primary/40 bg-primary/10" : "bg-white/5"}`}
           >
-            {/* barra de fundo */}
-            <div
-              className="absolute inset-y-0 left-0 rounded-xl transition-all duration-700"
-              style={{ width: `${pct}%`, background: isMe ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.04)" }}
-            />
+            <div className="absolute inset-y-0 left-0 rounded-xl transition-all duration-700"
+              style={{ width: `${pct}%`, background: isMe ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.04)" }} />
             <div className="relative flex items-center gap-2.5 w-full">
               <Medal pos={idx + 1} />
-              <p className={`flex-1 text-xs font-bold truncate ${isMe ? "text-primary" : ""}`}>
-                {item.nome}{isMe ? " (você)" : ""}
-              </p>
+              <p className={`flex-1 text-xs font-bold truncate ${isMe ? "text-primary" : ""}`}>{item.nome}{isMe ? " (você)" : ""}</p>
               <span className="text-[10px] text-muted-foreground shrink-0">{item.mensagens} msg</span>
               <span className={`text-[10px] font-black shrink-0 ${isMe ? "text-primary" : "text-white/60"}`}>{pct}%</span>
             </div>
@@ -136,41 +113,32 @@ function RankingParticipacao({ programa, currentUserId }: { programa: string; cu
 }
 
 // ─── NOW PLAYING BAR ─────────────────────────────────────────────────────────
-function NowPlayingBar({ program }: { program: TvProgram }) {
-  const isBroadcasting = String(program.status || "").toLowerCase() === "broadcasting" ||
-                         String(program.status || "").toLowerCase() === "transmitindo";
-  if (!program.tipo && !program.material) return null;
+// Mostra tipo/material/buff do item ATUAL que está transmitindo (current da API)
+function NowPlayingBar({ current }: { current: TvProgram | null }) {
+  if (!current || (!current.tipo && !current.material && !current.buff)) return null;
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
+    <motion.div key={`${current.rowNum}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-2xl border border-white/10 bg-black/40 backdrop-blur-sm"
     >
-      {isBroadcasting && (
-        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600/90 text-white text-[9px] font-black uppercase tracking-widest shrink-0">
-          <span className="size-1.5 rounded-full bg-white animate-pulse" />
-          Ao vivo
-        </span>
-      )}
-      {program.tipo && (
+      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600/90 text-white text-[9px] font-black uppercase tracking-widest shrink-0">
+        <span className="size-1.5 rounded-full bg-white animate-pulse" /> Ao vivo agora
+      </span>
+      {current.tipo && (
         <span className="flex items-center gap-1.5 text-xs font-bold text-primary uppercase tracking-wide">
-          <Film className="size-3.5 shrink-0" />
-          {program.tipo}
+          <Film className="size-3.5 shrink-0" />{current.tipo}
         </span>
       )}
-      {program.tipo && program.material && <span className="text-white/20">•</span>}
-      {program.material && (
+      {current.tipo && current.material && <span className="text-white/20">•</span>}
+      {current.material && (
         <span className="flex items-center gap-1.5 text-xs text-white/70 font-medium">
-          <Music2 className="size-3.5 shrink-0 text-white/40" />
-          {program.material}
+          <Music2 className="size-3.5 shrink-0 text-white/40" />{current.material}
         </span>
       )}
-      {program.buff && (
+      {current.buff && (
         <>
           <span className="text-white/20">•</span>
           <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 text-[9px] font-black uppercase tracking-wide">
-            <Zap className="size-3 shrink-0" />
-            {program.buff}
+            <Zap className="size-3 shrink-0" />{current.buff}
           </span>
         </>
       )}
@@ -179,112 +147,67 @@ function NowPlayingBar({ program }: { program: TvProgram }) {
 }
 
 // ─── STATUS BADGE ─────────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: "live" | "upcoming" | "ended" }) {
-  if (status === "live") return (
+function StatusBadge({ live, upcoming }: { live?: boolean; upcoming?: boolean }) {
+  if (live) return (
     <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-widest">
-      <span className="size-1.5 rounded-full bg-white animate-pulse" />
-      Ao vivo
+      <span className="size-1.5 rounded-full bg-white animate-pulse" />Ao vivo
     </span>
   );
-  if (status === "ended") return (
-    <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/50 text-[9px] font-black uppercase tracking-widest">Encerrado</span>
-  );
-  return (
+  if (upcoming) return (
     <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-[9px] font-black uppercase tracking-widest">Em breve</span>
   );
+  return null;
 }
 
-// ─── PROGRAM ROW ──────────────────────────────────────────────────────────────
-function ProgramRow({ nome, episodios, currentRowNum, onSelect }: {
-  nome: string;
-  episodios: TvProgram[];
-  currentRowNum?: number;
-  onSelect: (p: TvProgram) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const hasLive    = episodios.some(e => getProgramStatus(e, currentRowNum) === "live");
-  const capaFirst  = driveImgUrl(episodios[0]?.capaUrl as string | undefined ?? "");
-
+// ─── PROGRAM CARD (grade — uma entrada por programa+data) ─────────────────────
+function ProgramCard({ entry, onSelect }: { entry: ProgramEntry; onSelect: () => void }) {
+  const capa = driveImgUrl(entry.capaUrl);
   return (
-    <div className="rounded-2xl border border-border bg-card overflow-hidden">
-      <button
-        onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors text-left"
-      >
-        {capaFirst ? (
-          <img src={capaFirst} alt={nome} className="size-12 rounded-xl object-cover shrink-0" />
+    <motion.button
+      onClick={onSelect}
+      whileHover={{ scale: 1.01 }}
+      transition={{ type: "spring", stiffness: 300 }}
+      className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border bg-card hover:bg-white/5 transition-colors text-left group"
+    >
+      {/* Thumbnail */}
+      <div className="size-16 rounded-xl overflow-hidden bg-black/40 shrink-0 relative">
+        {capa ? (
+          <img src={capa} alt={entry.programa} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
         ) : (
-          <div className="size-12 rounded-xl bg-primary/20 grid place-items-center shrink-0">
-            <Tv className="size-5 text-primary" />
+          <div className="w-full h-full grid place-items-center bg-gradient-to-br from-primary/20 to-black">
+            <Tv className="size-5 text-primary/50" />
           </div>
         )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-black text-sm">{nome}</p>
-            {hasLive && (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-widest">
-                <span className="size-1.5 rounded-full bg-white animate-pulse" />
-                Ao vivo
-              </span>
-            )}
+        {entry.hasLive && (
+          <div className="absolute inset-0 grid place-items-center bg-black/30">
+            <Play className="size-5 text-white drop-shadow" />
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">{episodios.length} episódio{episodios.length !== 1 ? "s" : ""}</p>
-        </div>
-        {expanded ? <ChevronUp className="size-4 text-muted-foreground shrink-0" /> : <ChevronDown className="size-4 text-muted-foreground shrink-0" />}
-      </button>
+        )}
+      </div>
 
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="overflow-hidden"
-          >
-            <div className="border-t border-border divide-y divide-border">
-              {episodios.map((ep, i) => {
-                const status = getProgramStatus(ep, currentRowNum);
-                return (
-                  <button
-                    key={ep.rowNum ?? i}
-                    onClick={() => onSelect(ep)}
-                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-white/5 transition-colors text-left group"
-                  >
-                    <div className="size-8 rounded-lg bg-white/5 grid place-items-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                      <Play className="size-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-                    </div>
-                    <div className="flex-1 min-w-0 space-y-0.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-xs font-bold truncate">{ep.material || ep.tipo || `Ep. ${i + 1}`}</p>
-                        <StatusBadge status={status} />
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                        {ep.tipo && <span className="text-primary font-bold uppercase tracking-wide">{ep.tipo}</span>}
-                        {ep.tipo && ep.data && <span>•</span>}
-                        {ep.data && <span>{String(ep.data)}</span>}
-                        {(ep.horario || (ep as any).horarioStr) && <span>às {fmtTime(ep.horario || (ep as any).horarioStr)}</span>}
-                      </div>
-                    </div>
-                    {ep.buff && (
-                      <span className="px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 text-[9px] font-black shrink-0">⚡ {ep.buff}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
+      {/* Info */}
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-black text-sm truncate">{entry.programa}</p>
+          <StatusBadge live={entry.hasLive} upcoming={!entry.hasLive} />
+        </div>
+        {entry.data && (
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <Clock className="size-3" />
+            <span>{entry.data}{entry.horario ? ` às ${fmtTime(entry.horario)}` : ""}</span>
+          </div>
         )}
-      </AnimatePresence>
-    </div>
+      </div>
+
+      <ChevronDown className="size-4 text-muted-foreground shrink-0 group-hover:text-foreground transition-colors" />
+    </motion.button>
   );
 }
 
 // ─── PLANNER ──────────────────────────────────────────────────────────────────
-function PlannerView({ schedule, currentRowNum, onSelect }: {
-  schedule: TvProgram[];
-  currentRowNum?: number;
-  onSelect: (p: TvProgram) => void;
+function PlannerView({ entries, onSelect }: {
+  entries: ProgramEntry[];
+  onSelect: (e: ProgramEntry) => void;
 }) {
   const today = new Date();
   const [year, setYear]   = useState(today.getFullYear());
@@ -293,8 +216,8 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
   const firstDayOfMonth = new Date(year, month, 1).getDay();
 
   const datesWithEvents = new Set(
-    schedule.map(p => {
-      const d = parseDataBR(String(p.data || ""));
+    entries.map(e => {
+      const d = parseDataBR(e.data);
       if (!d) return null;
       return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
     }).filter(Boolean)
@@ -307,25 +230,26 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
 
   function navMonth(dir: number) {
     let m = month + dir, y = year;
-    if (m < 0)  { m = 11; y--; }
-    if (m > 11) { m = 0;  y++; }
+    if (m < 0) { m = 11; y--; }
+    if (m > 11) { m = 0; y++; }
     setMonth(m); setYear(y);
   }
 
-  const grouped     = groupByDate(schedule);
-  const dayPrograms = selectedDate ? (grouped[selectedDate] || []) : [];
+  const dayEntries = selectedDate
+    ? entries.filter(e => {
+        const d = parseDataBR(e.data);
+        if (!d) return false;
+        return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}` === selectedDate;
+      })
+    : [];
 
   return (
     <div className="grid lg:grid-cols-[280px,1fr] gap-6">
       <div className="rounded-3xl border border-border bg-card p-4 select-none h-fit">
         <div className="flex items-center justify-between mb-3">
-          <button onClick={() => navMonth(-1)} className="size-7 rounded-lg hover:bg-white/10 grid place-items-center transition-colors">
-            <ChevronLeft className="size-4" />
-          </button>
+          <button onClick={() => navMonth(-1)} className="size-7 rounded-lg hover:bg-white/10 grid place-items-center transition-colors"><ChevronLeft className="size-4" /></button>
           <p className="text-xs font-black uppercase tracking-widest">{MESES_PT[month]} {year}</p>
-          <button onClick={() => navMonth(1)} className="size-7 rounded-lg hover:bg-white/10 grid place-items-center transition-colors">
-            <ChevronRight className="size-4" />
-          </button>
+          <button onClick={() => navMonth(1)} className="size-7 rounded-lg hover:bg-white/10 grid place-items-center transition-colors"><ChevronRight className="size-4" /></button>
         </div>
         <div className="grid grid-cols-7 mb-1">
           {DIAS_PT.map(d => <div key={d} className="text-center text-[9px] font-black text-muted-foreground py-1">{d}</div>)}
@@ -333,8 +257,8 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
         <div className="grid grid-cols-7 gap-0.5">
           {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`e-${i}`} />)}
           {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day      = i + 1;
-            const dateStr  = `${String(day).padStart(2,"0")}/${String(month+1).padStart(2,"0")}/${year}`;
+            const day     = i + 1;
+            const dateStr = `${String(day).padStart(2,"0")}/${String(month+1).padStart(2,"0")}/${year}`;
             const hasEvent = datesWithEvents.has(dateStr);
             const isToday  = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
             const isSel    = selectedDate === dateStr;
@@ -344,8 +268,7 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
                   ${isSel ? "bg-primary text-primary-foreground" : ""}
                   ${isToday && !isSel ? "border border-primary text-primary" : ""}
                   ${hasEvent && !isSel ? "hover:bg-white/10" : ""}
-                  ${!hasEvent ? "text-muted-foreground/30 cursor-default" : "cursor-pointer"}
-                `}
+                  ${!hasEvent ? "text-muted-foreground/30 cursor-default" : "cursor-pointer"}`}
               >
                 {day}
                 {hasEvent && !isSel && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 size-1 rounded-full bg-primary" />}
@@ -353,190 +276,147 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
             );
           })}
         </div>
-        {selectedDate && (
-          <div className="mt-4 pt-4 border-t border-border">
-            {(() => {
-              const { diaSemana, dia, mes } = fmtDataLabel(selectedDate);
-              return (
-                <div>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">{diaSemana}</p>
-                  <p className="text-lg font-black">{dia} <span className="text-muted-foreground font-medium text-sm">{mes}</span></p>
-                  <p className="text-[10px] text-muted-foreground mt-1">{dayPrograms.length} programa{dayPrograms.length !== 1 ? "s" : ""}</p>
-                </div>
-              );
-            })()}
-          </div>
-        )}
+        {selectedDate && (() => {
+          const { diaSemana, dia, mes } = fmtDataLabel(selectedDate);
+          return (
+            <div className="mt-4 pt-4 border-t border-border">
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">{diaSemana}</p>
+              <p className="text-lg font-black">{dia} <span className="text-muted-foreground font-medium text-sm">{mes}</span></p>
+              <p className="text-[10px] text-muted-foreground mt-1">{dayEntries.length} programa{dayEntries.length !== 1 ? "s" : ""}</p>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="space-y-3">
-        {dayPrograms.length === 0 && (
+        {dayEntries.length === 0 && (
           <div className="rounded-2xl border border-border bg-card p-10 text-center text-muted-foreground">
             <CalendarDays className="size-8 mx-auto mb-2 opacity-30" />
             <p className="text-sm">Selecione uma data com programação</p>
           </div>
         )}
-        {dayPrograms.map((ep, i) => {
-          const status = getProgramStatus(ep, currentRowNum);
-          const capa   = driveImgUrl(ep.capaUrl as string | undefined ?? "");
-          return (
-            <motion.button
-              key={ep.rowNum ?? i}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.05 }}
-              onClick={() => onSelect(ep)}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border bg-card hover:bg-white/5 transition-colors text-left group"
-            >
-              <div className="size-16 rounded-xl overflow-hidden bg-black/40 shrink-0 relative">
-                {capa ? (
-                  <img src={capa} alt={ep.programa || ""} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                ) : (
-                  <div className="w-full h-full grid place-items-center bg-gradient-to-br from-primary/20 to-black">
-                    <Tv className="size-5 text-primary/50" />
-                  </div>
-                )}
-                <div className="absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-                  <Play className="size-5 text-white" />
-                </div>
-              </div>
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-black text-sm truncate">{ep.programa || ep.titulo || "Programa"}</p>
-                  <StatusBadge status={status} />
-                </div>
-                <div className="flex items-center gap-2 text-[10px] flex-wrap">
-                  {ep.tipo && <span className="text-primary font-bold uppercase tracking-wide">{ep.tipo}</span>}
-                  {ep.material && <span className="text-muted-foreground">{ep.material}</span>}
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <Clock className="size-3" />
-                  <span>{fmtTime(ep.horario || (ep as any).horarioStr)}</span>
-                </div>
-              </div>
-              {ep.buff && (
-                <span className="px-2 py-1 rounded-xl bg-yellow-500/20 text-yellow-400 text-[9px] font-black shrink-0">⚡ {ep.buff}</span>
-              )}
-            </motion.button>
-          );
-        })}
+        {dayEntries.map((entry, i) => (
+          <motion.div key={entry.programa + entry.data} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+            <ProgramCard entry={entry} onSelect={() => onSelect(entry)} />
+          </motion.div>
+        ))}
       </div>
     </div>
   );
 }
 
 // ─── SALA DO EVENTO ───────────────────────────────────────────────────────────
-function EventRoom({ program, current, onBack }: {
-  program: TvProgram;
+// Recebe a entrada da grade (ProgramEntry) e o current em tempo real da API
+function EventRoom({
+  entry, current, onBack
+}: {
+  entry: ProgramEntry;
   current: TvProgram | null;
   onBack?: () => void;
 }) {
   const { user } = useTelegramUser();
   const participacaoRegistrada = useRef<Set<string>>(new Set());
-  const isCurrent      = current && current.rowNum === program.rowNum;
-  const isBroadcasting = isCurrent && current?.status === "broadcasting";
-  const playerSrc      = buildPlayerSrc(program);
-  const capaConvertida = driveImgUrl(program.capaUrl as string | undefined ?? "");
-  const programName    = program.programa || program.titulo || "Programa";
 
-  const threadId = (() => {
-    if (!program.topicoUrl) return null;
-    const parts = String(program.topicoUrl).split("/");
+  // A sessão está ao vivo se o current pertence a essa entrada de programa
+  const isThisLive = current && current.status === "broadcasting" && entry.rowNums.includes(current.rowNum ?? -1);
+  const playerSrc  = buildPlayerSrc(isThisLive ? current : null);
+
+  // Usa a capa do current se disponível, senão a da entrada
+  const capaUrl  = driveImgUrl(isThisLive && current?.capaUrl ? String(current.capaUrl) : entry.capaUrl);
+
+  // topicoUrl: prefere o do item atual
+  const topicoUrl = (isThisLive && current?.topicoUrl ? String(current.topicoUrl) : entry.topicoUrl) || "";
+  const threadId  = (() => {
+    if (!topicoUrl) return null;
+    const parts = topicoUrl.split("/");
     const last  = parts[parts.length - 1];
     return /^\d+$/.test(last) ? last : null;
   })();
 
+  // Registra participação quando entra numa transmissão ao vivo
   useEffect(() => {
-    if (!user?.id || !isBroadcasting) return;
-    const programa = program.programa || program.titulo || "";
-    const chave    = `${user.id}_${programa}_${program.topicoId || ""}`;
+    if (!user?.id || !isThisLive || !current) return;
+    const chave = `${user.id}_${entry.programa}_${current.topicoId || ""}`;
     if (participacaoRegistrada.current.has(chave)) return;
     participacaoRegistrada.current.add(chave);
     tvApi.registrarParticipacao({
       tgId: String(user.id),
       nome: user.name || "Jogador",
-      programa,
-      tipo: String(program.tipo || ""),
-      topicoId: String(program.topicoId || ""),
-      topicoUrl: String(program.topicoUrl || ""),
+      programa: entry.programa,
+      tipo: String(current.tipo || ""),
+      topicoId: String(current.topicoId || ""),
+      topicoUrl: String(current.topicoUrl || ""),
     });
-  }, [user, isBroadcasting, program.programa, program.topicoId]);
+  }, [user, isThisLive, current?.topicoId]);
 
   return (
     <div className="space-y-4">
       {onBack && (
         <button onClick={onBack} className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="size-4" />
-          Voltar para a grade
+          <ArrowLeft className="size-4" />Voltar para a grade
         </button>
       )}
 
       <div className="grid lg:grid-cols-[1fr,380px] gap-5">
-        {/* Coluna esquerda: título + player + nowPlaying */}
+        {/* Coluna esquerda */}
         <div className="space-y-3">
-          {/* Nome do programa ACIMA do player */}
+          {/* Título acima do player */}
           <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
             <div className="flex items-center gap-3 flex-wrap">
-              {isBroadcasting && (
+              {isThisLive && (
                 <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest">
-                  <span className="size-1.5 rounded-full bg-white animate-pulse" />
-                  Ao vivo agora
+                  <span className="size-1.5 rounded-full bg-white animate-pulse" />Ao vivo agora
                 </span>
               )}
-              {program.data && <span className="text-xs text-muted-foreground">{String(program.data)}</span>}
-              {(program.horario || (program as any).horarioStr) && (
+              {entry.data && <span className="text-xs text-muted-foreground">{entry.data}</span>}
+              {entry.horario && (
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="size-3" />
-                  {fmtTime(program.horario || (program as any).horarioStr as string)}
+                  <Clock className="size-3" />{fmtTime(entry.horario)}
                 </span>
               )}
             </div>
-            <h2 className="text-2xl font-black tracking-tight">{programName}</h2>
+            <h2 className="text-2xl font-black tracking-tight">{entry.programa}</h2>
           </motion.div>
 
           {/* Player */}
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             className="relative w-full rounded-3xl overflow-hidden border border-border bg-black"
             style={{ aspectRatio: "16/9" }}
           >
-            {isBroadcasting ? (
+            {isThisLive ? (
               <iframe
                 src={playerSrc}
-                title="Empire TV — Kick"
+                title={entry.programa}
                 className="absolute inset-0 w-full h-full"
                 allow="autoplay; encrypted-media; fullscreen"
                 allowFullScreen
               />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black gap-3">
-                {capaConvertida
-                  ? <img src={capaConvertida} alt="" className="w-32 rounded-xl opacity-30" />
+                {capaUrl
+                  ? <img src={capaUrl} alt="" className="w-32 rounded-xl opacity-30" />
                   : <Tv className="size-12 text-muted-foreground" />
                 }
-                <p className="font-black uppercase tracking-widest text-sm text-white">
-                  {current?.status === "upcoming" && isCurrent ? "Transmissão em breve" : "Fora do ar"}
-                </p>
-                {current?.status === "upcoming" && isCurrent && (
-                  <p className="text-xs text-muted-foreground -mt-1">às {fmtTime((program.horario || (program as any).horarioStr) as string)}</p>
+                <p className="font-black uppercase tracking-widest text-sm text-white">Transmissão em breve</p>
+                {entry.horario && (
+                  <p className="text-xs text-muted-foreground -mt-1">às {fmtTime(entry.horario)}</p>
                 )}
               </div>
             )}
-            {isBroadcasting && (
+            {isThisLive && (
               <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1 rounded-full bg-red-600/90 text-white text-[10px] font-black uppercase tracking-widest z-10">
                 <span className="size-2 rounded-full bg-white animate-pulse" /> Ao vivo
               </div>
             )}
           </motion.div>
 
-          {/* NowPlaying — tipo, material e buff */}
-          <NowPlayingBar program={program} />
+          {/* NowPlaying — tipo/material/buff do item ATUAL, atualiza automaticamente */}
+          <NowPlayingBar current={isThisLive ? current : null} />
         </div>
 
         {/* Coluna direita: Chat + Ranking */}
         <div className="flex flex-col gap-4">
-          {/* Chat Telegram embarcado */}
           <div className="rounded-3xl border border-border bg-card flex flex-col overflow-hidden" style={{ minHeight: 420 }}>
             <div className="p-4 border-b border-border flex items-center gap-2">
               <MessageCircle className="size-4 text-primary" />
@@ -562,7 +442,6 @@ function EventRoom({ program, current, onBack }: {
             </div>
           </div>
 
-          {/* Ranking de participação */}
           <div className="rounded-3xl border border-border bg-card overflow-hidden">
             <div className="p-4 border-b border-border flex items-center gap-2">
               <Trophy className="size-4 text-yellow-400" />
@@ -570,7 +449,7 @@ function EventRoom({ program, current, onBack }: {
             </div>
             <div className="p-3">
               <RankingParticipacao
-                programa={programName}
+                programa={entry.programa}
                 currentUserId={user?.id ? String(user.id) : undefined}
               />
             </div>
@@ -586,10 +465,10 @@ type ViewMode = "grade" | "data";
 
 function TvPage() {
   const { user } = useTelegramUser();
-  const [data, setData]                = useState<TvStatus | null>(null);
-  const [loading, setLoading]          = useState(true);
-  const [selectedProgram, setSelected] = useState<TvProgram | null>(null);
-  const [viewMode, setViewMode]        = useState<ViewMode>("grade");
+  const [data, setData]                   = useState<TvStatus | null>(null);
+  const [loading, setLoading]             = useState(true);
+  const [selectedEntry, setSelectedEntry] = useState<ProgramEntry | null>(null);
+  const [viewMode, setViewMode]           = useState<ViewMode>("grade");
 
   useEffect(() => {
     let alive = true;
@@ -599,15 +478,15 @@ function TvPage() {
     return () => { alive = false; clearInterval(id); };
   }, []);
 
-  const current       = data?.current ?? null;
-  const fullSchedule  = data?.fullSchedule ?? [];
+  const current      = data?.current ?? null;
+  const fullSchedule = data?.fullSchedule ?? [];
   const currentRowNum = current?.rowNum;
-  const featured      = current ?? null;
-  const byPrograma    = groupByPrograma(fullSchedule);
-  const upcoming      = fullSchedule.filter(p => {
-    const s = String(p.status || "").toLowerCase();
-    return s !== "finalizado" && s !== "ended";
-  });
+
+  // Monta lista de entradas únicas (uma por programa+data)
+  const entries = buildProgramEntries(fullSchedule, currentRowNum);
+
+  // Banner: entrada com transmissão ao vivo, ou primeira da lista
+  const featured = entries.find(e => e.hasLive) ?? entries[0] ?? null;
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
@@ -624,13 +503,12 @@ function TvPage() {
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Transmissões agendadas · Chat ao vivo</p>
             </div>
           </div>
-          {current && !selectedProgram && (
+          {featured && featured.hasLive && !selectedEntry && (
             <button
-              onClick={() => setSelected(current)}
+              onClick={() => setSelectedEntry(featured)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-black uppercase tracking-widest hover:bg-red-500 transition-colors"
             >
-              <span className="size-1.5 rounded-full bg-white animate-pulse" />
-              Assistir ao vivo
+              <span className="size-1.5 rounded-full bg-white animate-pulse" />Assistir ao vivo
             </button>
           )}
         </div>
@@ -643,12 +521,12 @@ function TvPage() {
 
         {!loading && (
           <AnimatePresence mode="wait">
-            {selectedProgram ? (
+            {selectedEntry ? (
               <motion.div key="room" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <EventRoom
-                  program={selectedProgram}
+                  entry={selectedEntry}
                   current={current}
-                  onBack={() => setSelected(null)}
+                  onBack={() => setSelectedEntry(null)}
                 />
               </motion.div>
             ) : (
@@ -658,17 +536,13 @@ function TvPage() {
                 {featured && (
                   <motion.div
                     className="relative rounded-3xl overflow-hidden border border-border cursor-pointer group"
-                    onClick={() => setSelected(featured)}
+                    onClick={() => setSelectedEntry(featured)}
                     whileHover={{ scale: 1.005 }}
                     transition={{ type: "spring", stiffness: 300 }}
                   >
-                    {driveImgUrl(featured.capaUrl as string | undefined ?? "") ? (
+                    {driveImgUrl(featured.capaUrl) ? (
                       <div className="absolute inset-0">
-                        <img
-                          src={driveImgUrl(featured.capaUrl as string | undefined ?? "")}
-                          alt=""
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                        />
+                        <img src={driveImgUrl(featured.capaUrl)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                         <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-transparent" />
                       </div>
                     ) : (
@@ -676,60 +550,55 @@ function TvPage() {
                     )}
                     <div className="relative p-6 md:p-10 space-y-3 min-h-[200px] flex flex-col justify-end">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {String(featured.status || "").toLowerCase() === "broadcasting" ? (
+                        {featured.hasLive ? (
                           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest">
-                            <span className="size-1.5 rounded-full bg-white animate-pulse" />
-                            Ao vivo agora
+                            <span className="size-1.5 rounded-full bg-white animate-pulse" />Ao vivo agora
                           </span>
                         ) : (
                           <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest">Em breve</span>
                         )}
-                        {featured.tipo && <span className="text-xs font-bold text-white/60 uppercase">{featured.tipo}</span>}
+                        {/* tipo do current se ao vivo */}
+                        {featured.hasLive && current?.tipo && (
+                          <span className="text-xs font-bold text-white/60 uppercase">{current.tipo}</span>
+                        )}
                       </div>
-                      <h2 className="text-3xl md:text-4xl font-black tracking-tight text-white drop-shadow-md">
-                        {featured.programa || featured.titulo || "Empire TV"}
-                      </h2>
-                      {(featured.material || featured.buff) && (
+                      <h2 className="text-3xl md:text-4xl font-black tracking-tight text-white drop-shadow-md">{featured.programa}</h2>
+                      {/* material/buff do current se ao vivo */}
+                      {featured.hasLive && (current?.material || current?.buff) && (
                         <div className="flex items-center gap-3 flex-wrap">
-                          {featured.material && (
+                          {current?.material && (
                             <span className="flex items-center gap-1.5 text-sm text-white/70">
-                              <Music2 className="size-3.5" />
-                              {featured.material}
+                              <Music2 className="size-3.5" />{current.material}
                             </span>
                           )}
-                          {featured.buff && (
+                          {current?.buff && (
                             <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-500/20 text-yellow-400 text-[10px] font-black">
-                              <Zap className="size-3" />
-                              {featured.buff}
+                              <Zap className="size-3" />{current.buff}
                             </span>
                           )}
                         </div>
                       )}
                       <div className="flex items-center gap-4 pt-1">
                         <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black text-sm font-black hover:bg-white/90 transition-colors">
-                          <Play className="size-4" /> Assistir
+                          <Play className="size-4" />{featured.hasLive ? "Assistir" : "Ver programação"}
                         </button>
                         {featured.data && (
-                          <span className="text-xs text-white/50">
-                            {String(featured.data)} · {fmtTime(featured.horario || (featured as any).horarioStr)}
-                          </span>
+                          <span className="text-xs text-white/50">{featured.data}{featured.horario ? ` · ${fmtTime(featured.horario)}` : ""}</span>
                         )}
                       </div>
                     </div>
                   </motion.div>
                 )}
 
-                {/* Seletor de view */}
+                {/* Seletor Grade / Por data */}
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setViewMode("grade")}
+                  <button onClick={() => setViewMode("grade")}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-colors
                       ${viewMode === "grade" ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-white/5"}`}
                   >
                     <LayoutGrid className="size-3.5" /> Grade
                   </button>
-                  <button
-                    onClick={() => setViewMode("data")}
+                  <button onClick={() => setViewMode("data")}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-colors
                       ${viewMode === "data" ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-white/5"}`}
                   >
@@ -740,29 +609,19 @@ function TvPage() {
                 <AnimatePresence mode="wait">
                   {viewMode === "grade" ? (
                     <motion.div key="grade-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-                      {Object.keys(byPrograma).length === 0 && (
+                      {entries.length === 0 && (
                         <div className="rounded-2xl border border-border bg-card p-10 text-center text-muted-foreground">
                           <Tv className="size-8 mx-auto mb-2 opacity-30" />
                           <p className="text-sm">Nenhuma programação disponível</p>
                         </div>
                       )}
-                      {Object.entries(byPrograma).map(([nome, eps]) => (
-                        <ProgramRow
-                          key={nome}
-                          nome={nome}
-                          episodios={eps}
-                          currentRowNum={currentRowNum}
-                          onSelect={setSelected}
-                        />
+                      {entries.map(entry => (
+                        <ProgramCard key={entry.programa + entry.data} entry={entry} onSelect={() => setSelectedEntry(entry)} />
                       ))}
                     </motion.div>
                   ) : (
                     <motion.div key="data-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <PlannerView
-                        schedule={upcoming}
-                        currentRowNum={currentRowNum}
-                        onSelect={setSelected}
-                      />
+                      <PlannerView entries={entries} onSelect={setSelectedEntry} />
                     </motion.div>
                   )}
                 </AnimatePresence>

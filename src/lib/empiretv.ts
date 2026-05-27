@@ -17,6 +17,7 @@ export interface TvProgram {
   data?:           string;
   duracao?:        number;
   driveId?:        string;
+  videoUrl?:       string;
   topicoId?:       string;
   topicoUrl?:      string;
   status?:         string;
@@ -50,6 +51,59 @@ export interface GifResult {
   url:     string;
   preview: string;
   title:   string;
+}
+
+// Agrupa o fullSchedule em entradas únicas por programa+data
+// Cada entrada representa UMA transmissão/sessão
+export interface ProgramEntry {
+  programa: string;
+  data:     string;
+  horario:  string;
+  capaUrl:  string;
+  topicoUrl: string;
+  topicoId:  string;
+  // primeiro rowNum da sessão (para detectar se está ao vivo)
+  rowNums:   number[];
+  // se algum item da sessão está ao vivo
+  hasLive:   boolean;
+  // referência ao item atual transmitindo dentro dessa sessão
+  liveItem?: TvProgram;
+}
+
+export function buildProgramEntries(
+  schedule: TvProgram[],
+  currentRowNum?: number
+): ProgramEntry[] {
+  const map = new Map<string, ProgramEntry>();
+  for (const p of schedule) {
+    const nome   = String(p.programa || p.titulo || "Sem nome");
+    const data   = String(p.data || "");
+    const key    = `${nome}||${data}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        programa:  nome,
+        data,
+        horario:   String(p.horario || (p as any).horarioStr || ""),
+        capaUrl:   String(p.capaUrl || ""),
+        topicoUrl: String(p.topicoUrl || ""),
+        topicoId:  String(p.topicoId  || ""),
+        rowNums:   [],
+        hasLive:   false,
+      });
+    }
+    const entry = map.get(key)!;
+    if (p.rowNum !== undefined) entry.rowNums.push(p.rowNum);
+    // Herda capa/topico do primeiro que tiver
+    if (!entry.capaUrl  && p.capaUrl)   entry.capaUrl   = String(p.capaUrl);
+    if (!entry.topicoUrl && p.topicoUrl) entry.topicoUrl = String(p.topicoUrl);
+    if (!entry.topicoId  && p.topicoId)  entry.topicoId  = String(p.topicoId);
+    // Marca ao vivo se algum item da sessão for o current
+    if (currentRowNum !== undefined && p.rowNum === currentRowNum) {
+      entry.hasLive  = true;
+      entry.liveItem = p;
+    }
+  }
+  return Array.from(map.values());
 }
 
 // JSONP — resolve CORS do Apps Script sem precisar de proxy
@@ -99,21 +153,13 @@ export const tvApi = {
     return jsonp<ParticipacaoItem[]>(url);
   },
   registrarParticipacao(p: {
-    tgId: string;
-    nome: string;
-    programa: string;
-    tipo?: string;
-    topicoId?: string;
-    topicoUrl?: string;
+    tgId: string; nome: string; programa: string;
+    tipo?: string; topicoId?: string; topicoUrl?: string;
   }) {
     return postScript<{ ok?: boolean }>({
       acao: "tv_participacao",
-      tgId: p.tgId,
-      nome: p.nome,
-      programa: p.programa,
-      tipo: p.tipo || "",
-      topicoId: p.topicoId || "",
-      topicoUrl: p.topicoUrl || "",
+      tgId: p.tgId, nome: p.nome, programa: p.programa,
+      tipo: p.tipo || "", topicoId: p.topicoId || "", topicoUrl: p.topicoUrl || "",
     });
   },
 };
@@ -124,15 +170,20 @@ export async function searchGifs(query: string): Promise<GifResult[]> {
     const res  = await fetch(url);
     const data = await res.json();
     return (data.results || []).map((r: any) => ({
-      id:      r.id,
-      url:     r.media_formats?.gif?.url || "",
+      id: r.id,
+      url: r.media_formats?.gif?.url || "",
       preview: r.media_formats?.tinygif?.url || r.media_formats?.gif?.url || "",
-      title:   r.content_description || "",
+      title: r.content_description || "",
     }));
   } catch { return []; }
 }
 
-export function buildPlayerSrc(_p?: TvProgram | null): string {
+// Usa o videoUrl do current (proxy) quando disponível,
+// caso contrário cai no player do Kick
+export function buildPlayerSrc(p?: TvProgram | null): string {
+  if (p?.videoUrl && String(p.videoUrl).startsWith("http")) {
+    return String(p.videoUrl);
+  }
   return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false`;
 }
 
