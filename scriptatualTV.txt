@@ -57,11 +57,8 @@ function doGet(e) {
     var agendaSheet    = ss.getSheetByName("Agenda_TV");
     var agendaTimeline = agendaSheet ? buildTimelineAgenda(agendaSheet) : [];
 
-    var progSheet    = ss.getSheetByName("Programacao_RPG");
-    var progRows     = progSheet ? progSheet.getDataRange().getValues() : [];
-    var progTimeline = progRows.length > 1 ? buildTimeline(progRows) : [];
-
-    var fullSchedule = agendaTimeline.concat(progTimeline)
+    // Programacao_RPG NÃO entra mais no fullSchedule — apenas Agenda_TV.
+    var fullSchedule = agendaTimeline
       .sort(function(a, b) { return (a.inicio || 0) - (b.inicio || 0); });
 
     if (fullSchedule.length === 0) {
