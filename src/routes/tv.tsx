@@ -324,11 +324,8 @@ function EventRoom({ program, current, onBack }: {
 
 // ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
 function TvPage() {
-  const [data, setData]                 = useState<TvStatus | null>(null);
-  const [loading, setLoading]           = useState(true);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [viewMode, setViewMode]         = useState<"netflix" | "date">("netflix");
-  const [openProgram, setOpenProgram]   = useState<TvProgram | null>(null);
+  const [data, setData]       = useState<TvStatus | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
@@ -338,161 +335,35 @@ function TvPage() {
     return () => { alive = false; clearInterval(id); };
   }, []);
 
-  const current   = data?.current ?? null;
-  const schedule  = data?.fullSchedule ?? [];
-  const byDate    = groupByDate(schedule);
-  const byProgram = groupByPrograma(schedule);
-  const sortedDates = Object.keys(byDate).sort((a, b) => {
-    const da = parseDataBR(a), db = parseDataBR(b);
-    if (!da || !db) return 0;
-    return da.getTime() - db.getTime();
-  });
-  const isBroadcasting = current?.status === "broadcasting";
-
-  if (openProgram) {
-    return (
-      <div className="min-h-screen bg-background text-foreground pb-24">
-        <div className="max-w-6xl mx-auto px-4 pt-6">
-          <EventRoom program={openProgram} current={current} onBack={() => setOpenProgram(null)} />
-        </div>
-      </div>
-    );
-  }
+  const current = data?.current ?? null;
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
-      <div className="max-w-7xl mx-auto px-4 pt-6 space-y-6">
+      <div className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="size-11 rounded-2xl bg-primary text-primary-foreground grid place-items-center">
-              <Tv className="size-5" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black uppercase tracking-widest">Empire TV</h1>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Programação</p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="size-11 rounded-2xl bg-primary text-primary-foreground grid place-items-center">
+            <Tv className="size-5" />
           </div>
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border">
-            <button onClick={() => setViewMode("netflix")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${viewMode === "netflix" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-              Grade
-            </button>
-            <button onClick={() => setViewMode("date")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${viewMode === "date" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-              Por data
-            </button>
+          <div>
+            <h1 className="text-2xl font-black uppercase tracking-widest">Empire TV</h1>
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Transmissão ao vivo</p>
           </div>
         </div>
 
-        {/* Hero ao vivo */}
-        {isBroadcasting && current && (
-          <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }}
-            className="relative rounded-3xl overflow-hidden border border-red-500/30 bg-black cursor-pointer group"
-            onClick={() => setOpenProgram(current)}
-            style={{ aspectRatio: "21/6" }}
-          >
-            {driveImgUrl(current.capaUrl as string | undefined ?? "") && (
-              <img src={driveImgUrl(current.capaUrl as string | undefined ?? "")} alt=""
-                className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-50 transition-opacity" />
-            )}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent" />
-            <div className="absolute inset-0 flex flex-col justify-center px-8 gap-2">
-              <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest">
-                  <span className="size-1.5 rounded-full bg-white animate-pulse" /> Ao vivo agora
-                </span>
-              </div>
-              <h2 className="text-3xl font-black text-white">{current.programa || current.titulo}</h2>
-              {current.tipo     && <p className="text-sm font-bold text-primary uppercase tracking-wider">{current.tipo}</p>}
-              {current.material && <p className="text-sm text-white/70">{current.material}</p>}
-              <button className="mt-2 self-start flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black text-sm font-black hover:bg-white/90 transition-colors">
-                <div className="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-l-[9px] border-l-black" />
-                Assistir agora
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {loading && <div className="flex items-center justify-center py-20"><Loader2 className="size-8 animate-spin text-primary" /></div>}
-
-        {!loading && schedule.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <Radio className="size-10 text-muted-foreground" />
-            <p className="font-black uppercase tracking-widest text-sm">Sem programação cadastrada</p>
+        {loading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="size-8 animate-spin text-primary" />
           </div>
         )}
 
-        {!loading && schedule.length > 0 && (
-          <div className="grid lg:grid-cols-[1fr,300px] gap-6">
-            <div className="space-y-8">
-
-              {viewMode === "netflix" && Object.entries(byProgram).map(([programa, items]) => {
-                const capaRaw = items.find(i => i.capaUrl)?.capaUrl as string | undefined;
-                const capa = driveImgUrl(capaRaw ?? "");
-                return (
-                  <div key={programa}>
-                    <div className="flex items-center gap-3 mb-4">
-                      {capa && <img src={capa} alt="" className="size-8 rounded-lg object-cover" />}
-                      <h3 className="text-base font-black uppercase tracking-widest">{programa}</h3>
-                      <div className="flex-1 h-px bg-border" />
-                      <span className="text-xs text-muted-foreground">{items.length} episódio{items.length > 1 ? "s" : ""}</span>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {items.map((p, i) => (
-                        <ProgramCard key={i} program={p} currentRowNum={current?.rowNum} onClick={() => setOpenProgram(p)} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {viewMode === "date" && (selectedDate ? [selectedDate] : sortedDates).map(dateStr => {
-                const items = byDate[dateStr] || [];
-                const label = fmtDataLabel(dateStr);
-                return (
-                  <div key={dateStr}>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="flex flex-col items-center justify-center size-12 rounded-2xl bg-primary/10 border border-primary/20 shrink-0">
-                        <span className="text-[9px] font-black uppercase text-primary">{label.diaSemana}</span>
-                        <span className="text-lg font-black leading-none">{label.dia}</span>
-                      </div>
-                      <div>
-                        <p className="font-black">{label.mes} {label.dia}</p>
-                        <p className="text-xs text-muted-foreground">{items.length} programa{items.length > 1 ? "s" : ""}</p>
-                      </div>
-                      <div className="flex-1 h-px bg-border" />
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {items.map((p, i) => (
-                        <ProgramCard key={i} program={p} currentRowNum={current?.rowNum} onClick={() => setOpenProgram(p)} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Sidebar calendário */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Calendar className="size-4 text-primary" />
-                <p className="text-xs font-black uppercase tracking-widest">Calendário</p>
-              </div>
-              <MiniCalendar schedule={schedule} selectedDate={selectedDate}
-                onSelect={(d) => { setSelectedDate(prev => prev === d ? null : d); setViewMode("date"); }}
-              />
-              {current?.status === "upcoming" && (
-                <div className="rounded-3xl border border-border bg-card p-4 space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Próximo</p>
-                  <p className="font-black">{current.programa}</p>
-                  {current.tipo && <p className="text-xs text-primary font-bold">{current.tipo}</p>}
-                  <p className="text-xs text-muted-foreground">às {fmtTime(current.horario as string)}</p>
-                </div>
-              )}
-            </div>
-          </div>
+        {!loading && (
+          <EventRoom
+            program={current ?? ({} as TvProgram)}
+            current={current}
+            onBack={() => { /* sem grade — nada a fazer */ }}
+          />
         )}
       </div>
     </div>
