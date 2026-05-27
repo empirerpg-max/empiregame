@@ -2,14 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Tv, Loader2, ChevronLeft, ChevronRight, ArrowLeft,
-  MessageCircle, Play, Clock, ChevronDown, ChevronUp,
-  Music2, Film, Zap, LayoutGrid, CalendarDays, Trophy, Users
+  MessageCircle, Play, Clock, ChevronDown,
+  Music2, Film, Zap, LayoutGrid, CalendarDays, Trophy, Users,
+  ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTelegramUser } from "@/lib/telegram";
 import {
-  tvApi, buildProgramEntries, groupByDate, getProgramStatus,
+  tvApi, buildProgramEntries, getProgramStatus,
   buildPlayerSrc, driveImgUrl,
+  KICK_CHANNEL,
   type TvStatus, type TvProgram, type ParticipacaoItem, type ProgramEntry
 } from "@/lib/empiretv";
 
@@ -50,6 +52,27 @@ function fmtTime(v?: string | number) {
   return String(v);
 }
 
+// Verifica se o current pertence a esta entrada e está no ar
+// Aceita qualquer valor de status que indique transmissão
+function checkIsLive(current: TvProgram | null, entry: ProgramEntry): boolean {
+  if (!current) return false;
+  const s = String(current.status || "").toLowerCase();
+  const isLiveStatus = s === "broadcasting" || s === "transmitindo" || s === "live" || s === "ao vivo";
+  // Se tem rowNums, verifica se pertence; senão, assume que qualquer live pertence
+  if (entry.rowNums.length > 0) {
+    return isLiveStatus && entry.rowNums.includes(current.rowNum ?? -1);
+  }
+  return isLiveStatus;
+}
+
+// URL do embed Kick com o parâmetro parent para liberar cross-origin
+function kickEmbedUrl(): string {
+  const parent = typeof window !== "undefined"
+    ? encodeURIComponent(window.location.hostname)
+    : "empirehub.app";
+  return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false&parent=${parent}`;
+}
+
 // ─── MEDAL ───────────────────────────────────────────────────────────────────
 function Medal({ pos }: { pos: number }) {
   if (pos === 1) return <span className="text-base">🥇</span>;
@@ -77,7 +100,6 @@ function RankingParticipacao({ programa, currentUserId }: { programa: string; cu
   }, [programa]);
 
   if (loading) return <div className="flex items-center justify-center py-6"><Loader2 className="size-4 animate-spin text-primary" /></div>;
-
   if (items.length === 0) return (
     <div className="text-center py-6 space-y-1">
       <Users className="size-5 text-muted-foreground mx-auto" />
@@ -113,7 +135,6 @@ function RankingParticipacao({ programa, currentUserId }: { programa: string; cu
 }
 
 // ─── NOW PLAYING BAR ─────────────────────────────────────────────────────────
-// Mostra tipo/material/buff do item ATUAL que está transmitindo (current da API)
 function NowPlayingBar({ current }: { current: TvProgram | null }) {
   if (!current || (!current.tipo && !current.material && !current.buff)) return null;
   return (
@@ -159,7 +180,7 @@ function StatusBadge({ live, upcoming }: { live?: boolean; upcoming?: boolean })
   return null;
 }
 
-// ─── PROGRAM CARD (grade — uma entrada por programa+data) ─────────────────────
+// ─── PROGRAM CARD ─────────────────────────────────────────────────────────────
 function ProgramCard({ entry, onSelect }: { entry: ProgramEntry; onSelect: () => void }) {
   const capa = driveImgUrl(entry.capaUrl);
   return (
@@ -169,7 +190,6 @@ function ProgramCard({ entry, onSelect }: { entry: ProgramEntry; onSelect: () =>
       transition={{ type: "spring", stiffness: 300 }}
       className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border bg-card hover:bg-white/5 transition-colors text-left group"
     >
-      {/* Thumbnail */}
       <div className="size-16 rounded-xl overflow-hidden bg-black/40 shrink-0 relative">
         {capa ? (
           <img src={capa} alt={entry.programa} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -184,8 +204,6 @@ function ProgramCard({ entry, onSelect }: { entry: ProgramEntry; onSelect: () =>
           </div>
         )}
       </div>
-
-      {/* Info */}
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-black text-sm truncate">{entry.programa}</p>
@@ -198,7 +216,6 @@ function ProgramCard({ entry, onSelect }: { entry: ProgramEntry; onSelect: () =>
           </div>
         )}
       </div>
-
       <ChevronDown className="size-4 text-muted-foreground shrink-0 group-hover:text-foreground transition-colors" />
     </motion.button>
   );
@@ -287,7 +304,6 @@ function PlannerView({ entries, onSelect }: {
           );
         })()}
       </div>
-
       <div className="space-y-3">
         {dayEntries.length === 0 && (
           <div className="rounded-2xl border border-border bg-card p-10 text-center text-muted-foreground">
@@ -305,8 +321,46 @@ function PlannerView({ entries, onSelect }: {
   );
 }
 
+// ─── KICK PLAYER ─────────────────────────────────────────────────────────────
+// Tenta embed com parent; se falhar (WebView/Telegram que bloqueia), mostra botão externo
+function KickPlayer({ programa }: { programa: string }) {
+  const [failed, setFailed] = useState(false);
+  const src = kickEmbedUrl();
+
+  if (failed) {
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black gap-4">
+        <Tv className="size-10 text-primary/60" />
+        <p className="text-sm font-black text-white uppercase tracking-widest">Transmissão ao vivo</p>
+        <a
+          href={`https://kick.com/${KICK_CHANNEL}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-black hover:bg-primary/90 transition-colors"
+        >
+          <ExternalLink className="size-4" /> Abrir no Kick
+        </a>
+        <p className="text-[10px] text-white/30 max-w-[200px] text-center">
+          O embed pode ser bloqueado em alguns navegadores. Abra direto no Kick para assistir.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <iframe
+      key={src}
+      src={src}
+      title={programa}
+      className="absolute inset-0 w-full h-full border-0"
+      allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+      allowFullScreen
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 // ─── SALA DO EVENTO ───────────────────────────────────────────────────────────
-// Recebe a entrada da grade (ProgramEntry) e o current em tempo real da API
 function EventRoom({
   entry, current, onBack
 }: {
@@ -317,14 +371,9 @@ function EventRoom({
   const { user } = useTelegramUser();
   const participacaoRegistrada = useRef<Set<string>>(new Set());
 
-  // A sessão está ao vivo se o current pertence a essa entrada de programa
-  const isThisLive = current && current.status === "broadcasting" && entry.rowNums.includes(current.rowNum ?? -1);
-  const playerSrc  = buildPlayerSrc(isThisLive ? current : null);
+  const isThisLive = checkIsLive(current, entry);
+  const capaUrl    = driveImgUrl(isThisLive && current?.capaUrl ? String(current.capaUrl) : entry.capaUrl);
 
-  // Usa a capa do current se disponível, senão a da entrada
-  const capaUrl  = driveImgUrl(isThisLive && current?.capaUrl ? String(current.capaUrl) : entry.capaUrl);
-
-  // topicoUrl: prefere o do item atual
   const topicoUrl = (isThisLive && current?.topicoUrl ? String(current.topicoUrl) : entry.topicoUrl) || "";
   const threadId  = (() => {
     if (!topicoUrl) return null;
@@ -333,7 +382,6 @@ function EventRoom({
     return /^\d+$/.test(last) ? last : null;
   })();
 
-  // Registra participação quando entra numa transmissão ao vivo
   useEffect(() => {
     if (!user?.id || !isThisLive || !current) return;
     const chave = `${user.id}_${entry.programa}_${current.topicoId || ""}`;
@@ -360,7 +408,6 @@ function EventRoom({
       <div className="grid lg:grid-cols-[1fr,380px] gap-5">
         {/* Coluna esquerda */}
         <div className="space-y-3">
-          {/* Título acima do player */}
           <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
             <div className="flex items-center gap-3 flex-wrap">
               {isThisLive && (
@@ -385,13 +432,7 @@ function EventRoom({
             style={{ aspectRatio: "16/9" }}
           >
             {isThisLive ? (
-              <iframe
-                src={playerSrc}
-                title={entry.programa}
-                className="absolute inset-0 w-full h-full"
-                allow="autoplay; encrypted-media; fullscreen"
-                allowFullScreen
-              />
+              <KickPlayer programa={entry.programa} />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black gap-3">
                 {capaUrl
@@ -405,13 +446,12 @@ function EventRoom({
               </div>
             )}
             {isThisLive && (
-              <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1 rounded-full bg-red-600/90 text-white text-[10px] font-black uppercase tracking-widest z-10">
+              <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1 rounded-full bg-red-600/90 text-white text-[10px] font-black uppercase tracking-widest z-10 pointer-events-none">
                 <span className="size-2 rounded-full bg-white animate-pulse" /> Ao vivo
               </div>
             )}
           </motion.div>
 
-          {/* NowPlaying — tipo/material/buff do item ATUAL, atualiza automaticamente */}
           <NowPlayingBar current={isThisLive ? current : null} />
         </div>
 
@@ -478,14 +518,11 @@ function TvPage() {
     return () => { alive = false; clearInterval(id); };
   }, []);
 
-  const current      = data?.current ?? null;
-  const fullSchedule = data?.fullSchedule ?? [];
+  const current       = data?.current ?? null;
+  const fullSchedule  = data?.fullSchedule ?? [];
   const currentRowNum = current?.rowNum;
 
-  // Monta lista de entradas únicas (uma por programa+data)
-  const entries = buildProgramEntries(fullSchedule, currentRowNum);
-
-  // Banner: entrada com transmissão ao vivo, ou primeira da lista
+  const entries  = buildProgramEntries(fullSchedule, currentRowNum);
   const featured = entries.find(e => e.hasLive) ?? entries[0] ?? null;
 
   return (
@@ -557,13 +594,11 @@ function TvPage() {
                         ) : (
                           <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest">Em breve</span>
                         )}
-                        {/* tipo do current se ao vivo */}
                         {featured.hasLive && current?.tipo && (
                           <span className="text-xs font-bold text-white/60 uppercase">{current.tipo}</span>
                         )}
                       </div>
                       <h2 className="text-3xl md:text-4xl font-black tracking-tight text-white drop-shadow-md">{featured.programa}</h2>
-                      {/* material/buff do current se ao vivo */}
                       {featured.hasLive && (current?.material || current?.buff) && (
                         <div className="flex items-center gap-3 flex-wrap">
                           {current?.material && (
