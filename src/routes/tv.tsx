@@ -1,15 +1,17 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Tv, Loader2, Radio, Calendar, ChevronLeft, ChevronRight,
-  ArrowLeft, MessageCircle, Send, Play, Clock, Layers,
-  ChevronDown, ChevronUp, Music2, Film, Zap, LayoutGrid, CalendarDays
+  Tv, Loader2, ChevronLeft, ChevronRight,
+  ArrowLeft, MessageCircle, Play, Clock,
+  ChevronDown, ChevronUp, Music2, Film, Zap, LayoutGrid, CalendarDays,
+  Trophy, Users
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTelegramUser } from "@/lib/telegram";
 import {
   tvApi, groupByDate, groupByPrograma, getProgramStatus,
-  buildPlayerSrc, driveImgUrl, type TvStatus, type TvProgram
+  buildPlayerSrc, driveImgUrl,
+  type TvStatus, type TvProgram, type ParticipacaoItem
 } from "@/lib/empiretv";
 
 export const Route = createFileRoute("/tv")({
@@ -49,6 +51,90 @@ function fmtTime(v?: string | number) {
   return String(v);
 }
 
+// ─── MEDAL ───────────────────────────────────────────────────────────────────
+function Medal({ pos }: { pos: number }) {
+  if (pos === 1) return <span className="text-base">🥇</span>;
+  if (pos === 2) return <span className="text-base">🥈</span>;
+  if (pos === 3) return <span className="text-base">🥉</span>;
+  return <span className="text-xs font-black text-muted-foreground w-5 text-center">{pos}</span>;
+}
+
+// ─── RANKING DE PARTICIPAÇÃO ──────────────────────────────────────────────────
+function RankingParticipacao({ programa, currentUserId }: { programa: string; currentUserId?: string }) {
+  const [items, setItems]     = useState<ParticipacaoItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!programa) return;
+    setLoading(true);
+    tvApi.participacao(programa)
+      .then(data => setItems(Array.isArray(data) ? data : []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+
+    const id = setInterval(() => {
+      tvApi.participacao(programa)
+        .then(data => setItems(Array.isArray(data) ? data : []))
+        .catch(() => {});
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [programa]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-6">
+        <Loader2 className="size-4 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="text-center py-6 space-y-1">
+        <Users className="size-5 text-muted-foreground mx-auto" />
+        <p className="text-[11px] text-muted-foreground">Nenhuma participação ainda hoje.</p>
+      </div>
+    );
+  }
+
+  // Ordenar por mensagens desc
+  const sorted = [...items].sort((a, b) => (b.mensagens || 0) - (a.mensagens || 0));
+  const total  = sorted.reduce((acc, i) => acc + (i.mensagens || 0), 0);
+
+  return (
+    <div className="space-y-1.5">
+      {sorted.map((item, idx) => {
+        const pct = total > 0 ? Math.round((item.mensagens / total) * 100) : 0;
+        const isMe = currentUserId && String(item.tgId) === String(currentUserId);
+        return (
+          <motion.div
+            key={item.tgId + idx}
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: idx * 0.04 }}
+            className={`relative flex items-center gap-2.5 px-3 py-2 rounded-xl overflow-hidden
+              ${isMe ? "border border-primary/40 bg-primary/10" : "bg-white/5"}`}
+          >
+            {/* barra de fundo */}
+            <div
+              className="absolute inset-y-0 left-0 rounded-xl transition-all duration-700"
+              style={{ width: `${pct}%`, background: isMe ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.04)" }}
+            />
+            <div className="relative flex items-center gap-2.5 w-full">
+              <Medal pos={idx + 1} />
+              <p className={`flex-1 text-xs font-bold truncate ${isMe ? "text-primary" : ""}`}>
+                {item.nome}{isMe ? " (você)" : ""}
+              </p>
+              <span className="text-[10px] text-muted-foreground shrink-0">{item.mensagens} msg</span>
+              <span className={`text-[10px] font-black shrink-0 ${isMe ? "text-primary" : "text-white/60"}`}>{pct}%</span>
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── NOW PLAYING BAR ─────────────────────────────────────────────────────────
 function NowPlayingBar({ program }: { program: TvProgram }) {
   const isBroadcasting = String(program.status || "").toLowerCase() === "broadcasting" ||
@@ -72,9 +158,7 @@ function NowPlayingBar({ program }: { program: TvProgram }) {
           {program.tipo}
         </span>
       )}
-      {program.tipo && program.material && (
-        <span className="text-white/20">•</span>
-      )}
+      {program.tipo && program.material && <span className="text-white/20">•</span>}
       {program.material && (
         <span className="flex items-center gap-1.5 text-xs text-white/70 font-medium">
           <Music2 className="size-3.5 shrink-0 text-white/40" />
@@ -110,7 +194,7 @@ function StatusBadge({ status }: { status: "live" | "upcoming" | "ended" }) {
   );
 }
 
-// ─── PROGRAM ROW (grade por programa — lista de episódios) ───────────────────
+// ─── PROGRAM ROW ──────────────────────────────────────────────────────────────
 function ProgramRow({ nome, episodios, currentRowNum, onSelect }: {
   nome: string;
   episodios: TvProgram[];
@@ -118,8 +202,8 @@ function ProgramRow({ nome, episodios, currentRowNum, onSelect }: {
   onSelect: (p: TvProgram) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const hasLive = episodios.some(e => getProgramStatus(e, currentRowNum) === "live");
-  const capaFirst = driveImgUrl(episodios[0]?.capaUrl as string | undefined ?? "");
+  const hasLive    = episodios.some(e => getProgramStatus(e, currentRowNum) === "live");
+  const capaFirst  = driveImgUrl(episodios[0]?.capaUrl as string | undefined ?? "");
 
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -196,7 +280,7 @@ function ProgramRow({ nome, episodios, currentRowNum, onSelect }: {
   );
 }
 
-// ─── PLANNER (grade por data) ─────────────────────────────────────────────────
+// ─── PLANNER ──────────────────────────────────────────────────────────────────
 function PlannerView({ schedule, currentRowNum, onSelect }: {
   schedule: TvProgram[];
   currentRowNum?: number;
@@ -228,19 +312,18 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
     setMonth(m); setYear(y);
   }
 
-  const grouped = groupByDate(schedule);
+  const grouped     = groupByDate(schedule);
   const dayPrograms = selectedDate ? (grouped[selectedDate] || []) : [];
 
   return (
     <div className="grid lg:grid-cols-[280px,1fr] gap-6">
-      {/* Mini Calendário */}
       <div className="rounded-3xl border border-border bg-card p-4 select-none h-fit">
         <div className="flex items-center justify-between mb-3">
           <button onClick={() => navMonth(-1)} className="size-7 rounded-lg hover:bg-white/10 grid place-items-center transition-colors">
             <ChevronLeft className="size-4" />
           </button>
           <p className="text-xs font-black uppercase tracking-widest">{MESES_PT[month]} {year}</p>
-          <button onClick={() => navMonth(1)}  className="size-7 rounded-lg hover:bg-white/10 grid place-items-center transition-colors">
+          <button onClick={() => navMonth(1)} className="size-7 rounded-lg hover:bg-white/10 grid place-items-center transition-colors">
             <ChevronRight className="size-4" />
           </button>
         </div>
@@ -250,8 +333,8 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
         <div className="grid grid-cols-7 gap-0.5">
           {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`e-${i}`} />)}
           {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day     = i + 1;
-            const dateStr = `${String(day).padStart(2,"0")}/${String(month+1).padStart(2,"0")}/${year}`;
+            const day      = i + 1;
+            const dateStr  = `${String(day).padStart(2,"0")}/${String(month+1).padStart(2,"0")}/${year}`;
             const hasEvent = datesWithEvents.has(dateStr);
             const isToday  = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
             const isSel    = selectedDate === dateStr;
@@ -270,7 +353,6 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
             );
           })}
         </div>
-
         {selectedDate && (
           <div className="mt-4 pt-4 border-t border-border">
             {(() => {
@@ -287,7 +369,6 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
         )}
       </div>
 
-      {/* Lista do dia */}
       <div className="space-y-3">
         {dayPrograms.length === 0 && (
           <div className="rounded-2xl border border-border bg-card p-10 text-center text-muted-foreground">
@@ -319,7 +400,6 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
                   <Play className="size-5 text-white" />
                 </div>
               </div>
-
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-black text-sm truncate">{ep.programa || ep.titulo || "Programa"}</p>
@@ -334,7 +414,6 @@ function PlannerView({ schedule, currentRowNum, onSelect }: {
                   <span>{fmtTime(ep.horario || (ep as any).horarioStr)}</span>
                 </div>
               </div>
-
               {ep.buff && (
                 <span className="px-2 py-1 rounded-xl bg-yellow-500/20 text-yellow-400 text-[9px] font-black shrink-0">⚡ {ep.buff}</span>
               )}
@@ -404,9 +483,7 @@ function EventRoom({ program, current, onBack }: {
                   Ao vivo agora
                 </span>
               )}
-              {program.data && (
-                <span className="text-xs text-muted-foreground">{String(program.data)}</span>
-              )}
+              {program.data && <span className="text-xs text-muted-foreground">{String(program.data)}</span>}
               {(program.horario || (program as any).horarioStr) && (
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="size-3" />
@@ -433,7 +510,7 @@ function EventRoom({ program, current, onBack }: {
                 allowFullScreen
               />
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black gap-4">
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black gap-3">
                 {capaConvertida
                   ? <img src={capaConvertida} alt="" className="w-32 rounded-xl opacity-30" />
                   : <Tv className="size-12 text-muted-foreground" />
@@ -442,7 +519,7 @@ function EventRoom({ program, current, onBack }: {
                   {current?.status === "upcoming" && isCurrent ? "Transmissão em breve" : "Fora do ar"}
                 </p>
                 {current?.status === "upcoming" && isCurrent && (
-                  <p className="text-xs text-muted-foreground -mt-2">às {fmtTime((program.horario || (program as any).horarioStr) as string)}</p>
+                  <p className="text-xs text-muted-foreground -mt-1">às {fmtTime((program.horario || (program as any).horarioStr) as string)}</p>
                 )}
               </div>
             )}
@@ -453,33 +530,50 @@ function EventRoom({ program, current, onBack }: {
             )}
           </motion.div>
 
-          {/* NowPlaying — tipo, material e buff ABAIXO do player */}
+          {/* NowPlaying — tipo, material e buff */}
           <NowPlayingBar program={program} />
         </div>
 
-        {/* Chat Telegram embarcado */}
-        <div className="rounded-3xl border border-border bg-card flex flex-col overflow-hidden" style={{ minHeight: 520 }}>
-          <div className="p-4 border-b border-border flex items-center gap-2">
-            <MessageCircle className="size-4 text-primary" />
-            <p className="text-xs font-black uppercase tracking-widest">Chat ao vivo</p>
-          </div>
-          <div className="flex-1 relative">
-            {threadId ? (
-              <iframe
-                key={threadId}
-                src={`https://t.me/${TELEGRAM_CHANNEL}/${threadId}?embed=1&discussion=${TELEGRAM_CHANNEL}&comments_limit=50&color=8B5CF6&dark=1`}
-                className="absolute inset-0 w-full h-full border-0"
-                allow="autoplay; encrypted-media"
-                title="Chat Empire TV"
-              />
-            ) : (
-              <div className="absolute inset-0 grid place-items-center">
-                <div className="text-center px-6 space-y-2">
-                  <MessageCircle className="size-8 text-muted-foreground mx-auto" />
-                  <p className="text-xs text-muted-foreground">O chat estará disponível quando a transmissão começar.</p>
+        {/* Coluna direita: Chat + Ranking */}
+        <div className="flex flex-col gap-4">
+          {/* Chat Telegram embarcado */}
+          <div className="rounded-3xl border border-border bg-card flex flex-col overflow-hidden" style={{ minHeight: 420 }}>
+            <div className="p-4 border-b border-border flex items-center gap-2">
+              <MessageCircle className="size-4 text-primary" />
+              <p className="text-xs font-black uppercase tracking-widest">Chat ao vivo</p>
+            </div>
+            <div className="flex-1 relative">
+              {threadId ? (
+                <iframe
+                  key={threadId}
+                  src={`https://t.me/${TELEGRAM_CHANNEL}/${threadId}?embed=1&discussion=${TELEGRAM_CHANNEL}&comments_limit=50&color=8B5CF6&dark=1`}
+                  className="absolute inset-0 w-full h-full border-0"
+                  allow="autoplay; encrypted-media"
+                  title="Chat Empire TV"
+                />
+              ) : (
+                <div className="absolute inset-0 grid place-items-center">
+                  <div className="text-center px-6 space-y-2">
+                    <MessageCircle className="size-8 text-muted-foreground mx-auto" />
+                    <p className="text-xs text-muted-foreground">O chat estará disponível quando a transmissão começar.</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
+
+          {/* Ranking de participação */}
+          <div className="rounded-3xl border border-border bg-card overflow-hidden">
+            <div className="p-4 border-b border-border flex items-center gap-2">
+              <Trophy className="size-4 text-yellow-400" />
+              <p className="text-xs font-black uppercase tracking-widest">Participação de hoje</p>
+            </div>
+            <div className="p-3">
+              <RankingParticipacao
+                programa={programName}
+                currentUserId={user?.id ? String(user.id) : undefined}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -491,6 +585,7 @@ function EventRoom({ program, current, onBack }: {
 type ViewMode = "grade" | "data";
 
 function TvPage() {
+  const { user } = useTelegramUser();
   const [data, setData]                = useState<TvStatus | null>(null);
   const [loading, setLoading]          = useState(true);
   const [selectedProgram, setSelected] = useState<TvProgram | null>(null);
@@ -579,7 +674,6 @@ function TvPage() {
                     ) : (
                       <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-black" />
                     )}
-
                     <div className="relative p-6 md:p-10 space-y-3 min-h-[200px] flex flex-col justify-end">
                       <div className="flex items-center gap-2 flex-wrap">
                         {String(featured.status || "").toLowerCase() === "broadcasting" ? (

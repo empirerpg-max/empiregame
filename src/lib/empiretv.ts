@@ -35,6 +35,16 @@ export interface TvStatus {
   fullSchedule?: TvProgram[];
 }
 
+export interface ParticipacaoItem {
+  programa:    string;
+  tipo:        string;
+  nome:        string;
+  tgId:        string;
+  data:        string;
+  mensagens:   number;
+  porcentagem: string;
+}
+
 export interface GifResult {
   id:      string;
   url:     string;
@@ -83,6 +93,10 @@ async function postScript<T>(params: Record<string, unknown>): Promise<T> {
 export const tvApi = {
   status(): Promise<TvStatus> {
     return jsonp<TvStatus>(EMPIRETV_SCRIPT_URL);
+  },
+  participacao(programa: string): Promise<ParticipacaoItem[]> {
+    const url = `${EMPIRETV_SCRIPT_URL}?acao=tv_participacao_lista&programa=${encodeURIComponent(programa)}`;
+    return jsonp<ParticipacaoItem[]>(url);
   },
   registrarParticipacao(p: {
     tgId: string;
@@ -148,6 +162,7 @@ export function getProgramStatus(p: TvProgram, currentRowNum?: number): "live" |
   if (s === "finalizado") return "ended";
   return "upcoming";
 }
+
 export function driveImgUrl(url: string): string {
   if (!url) return "";
   const s = url.trim();
