@@ -12,8 +12,9 @@ import {
   tvApi, buildProgramEntries, getProgramStatus,
   buildPlayerSrc, driveImgUrl,
   KICK_CHANNEL,
-  type TvStatus, type TvProgram, type ParticipacaoItem, type ProgramEntry
+  type TvStatus, type TvProgram, type ParticipacaoItem, type ProgramEntry, type ChatMsg
 } from "@/lib/empiretv";
+import { Send } from "lucide-react";
 
 export const Route = createFileRoute("/tv")({
   head: () => ({
