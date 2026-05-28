@@ -26,7 +26,7 @@ export const Route = createFileRoute("/tv")({
   component: TvPage,
 });
 
-const TELEGRAM_CHANNEL = "empireventos1";
+
 const DIAS_PT  = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const MESES_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
