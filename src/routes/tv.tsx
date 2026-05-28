@@ -502,13 +502,6 @@ function EventRoom({
   const isThisLive = checkIsLive(current, entry);
   const capaUrl    = driveImgUrl(isThisLive && current?.capaUrl ? String(current.capaUrl) : entry.capaUrl);
 
-  const topicoUrl = (isThisLive && current?.topicoUrl ? String(current.topicoUrl) : entry.topicoUrl) || "";
-  const threadId  = (() => {
-    if (!topicoUrl) return null;
-    const parts = topicoUrl.split("/");
-    const last  = parts[parts.length - 1];
-    return /^\d+$/.test(last) ? last : null;
-  })();
 
   useEffect(() => {
     if (!user?.id || !isThisLive || !current) return;
