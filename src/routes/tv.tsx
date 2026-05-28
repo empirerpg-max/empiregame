@@ -458,30 +458,18 @@ function EventRoom({
 
         {/* Coluna direita: Chat + Ranking */}
         <div className="flex flex-col gap-4">
-          <div className="rounded-3xl border border-border bg-card flex flex-col overflow-hidden" style={{ minHeight: 420 }}>
+          <div className="rounded-3xl border border-border bg-card flex flex-col overflow-hidden" style={{ minHeight: 420, maxHeight: 560 }}>
             <div className="p-4 border-b border-border flex items-center gap-2">
               <MessageCircle className="size-4 text-primary" />
               <p className="text-xs font-black uppercase tracking-widest">Chat ao vivo</p>
             </div>
-            <div className="flex-1 relative">
-              {threadId ? (
-                <iframe
-                  key={threadId}
-                  src={`https://t.me/${TELEGRAM_CHANNEL}/${threadId}?embed=1&discussion=${TELEGRAM_CHANNEL}&comments_limit=50&color=8B5CF6&dark=1`}
-                  className="absolute inset-0 w-full h-full border-0"
-                  allow="autoplay; encrypted-media"
-                  title="Chat Empire TV"
-                />
-              ) : (
-                <div className="absolute inset-0 grid place-items-center">
-                  <div className="text-center px-6 space-y-2">
-                    <MessageCircle className="size-8 text-muted-foreground mx-auto" />
-                    <p className="text-xs text-muted-foreground">O chat estará disponível quando a transmissão começar.</p>
-                  </div>
-                </div>
-              )}
-            </div>
+            <LiveChat
+              programa={entry.programa}
+              topicoId={String(current?.topicoId || entry.topicoId || "")}
+              user={user}
+            />
           </div>
+
 
           <div className="rounded-3xl border border-border bg-card overflow-hidden">
             <div className="p-4 border-b border-border flex items-center gap-2">
