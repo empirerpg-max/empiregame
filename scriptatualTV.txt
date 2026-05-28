@@ -495,6 +495,28 @@ function handleChatSend(body) {
   sheet.appendRow([id, body.tgId, body.nome||"Anon", body.texto||"", body.tipo||"texto", body.gifUrl||"", new Date().toISOString()]);
   var total = sheet.getLastRow();
   if (total > 201) sheet.deleteRows(2, total - 201);
+
+  // Encaminha pro tópico do Telegram (se houver topicoId) usando o bot
+  try {
+    var token = getBotToken();
+    if (token && body.topicoId) {
+      var nome  = String(body.nome || "Anon").replace(/[<>&]/g, "");
+      var texto = String(body.texto || "").replace(/[<>&]/g, "");
+      var html  = "<b>" + nome + " (app):</b> " + texto;
+      var payload = {
+        chat_id: SUPERGRUPO_ID,
+        message_thread_id: Number(body.topicoId),
+        text: html,
+        parse_mode: "HTML",
+        disable_web_page_preview: true
+      };
+      UrlFetchApp.fetch("https://api.telegram.org/bot" + token + "/sendMessage", {
+        method: "post", contentType: "application/json",
+        muteHttpExceptions: true, payload: JSON.stringify(payload)
+      });
+    }
+  } catch (e) { Logger.log("forward telegram err: " + e); }
+
   return createJsonResponse({ ok: true, id: id });
 }
 

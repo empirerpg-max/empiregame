@@ -12,8 +12,9 @@ import {
   tvApi, buildProgramEntries, getProgramStatus,
   buildPlayerSrc, driveImgUrl,
   KICK_CHANNEL,
-  type TvStatus, type TvProgram, type ParticipacaoItem, type ProgramEntry
+  type TvStatus, type TvProgram, type ParticipacaoItem, type ProgramEntry, type ChatMsg
 } from "@/lib/empiretv";
+import { Send } from "lucide-react";
 
 export const Route = createFileRoute("/tv")({
   head: () => ({
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/tv")({
   component: TvPage,
 });
 
-const TELEGRAM_CHANNEL = "empireventos1";
+
 const DIAS_PT  = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const MESES_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
@@ -360,6 +361,133 @@ function KickPlayer({ programa }: { programa: string }) {
   );
 }
 
+// ─── LIVE CHAT (in-app, ligado ao Telegram via Apps Script) ──────────────────
+function LiveChat({ programa, topicoId, user }: {
+  programa: string;
+  topicoId: string;
+  user: ReturnType<typeof useTelegramUser>["user"];
+}) {
+  const [msgs, setMsgs]       = useState<ChatMsg[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [texto, setTexto]     = useState("");
+  const [sending, setSending] = useState(false);
+  const scrollRef             = useRef<HTMLDivElement>(null);
+  const lastIdRef             = useRef<string>("");
+
+  useEffect(() => {
+    let alive = true;
+    const tick = () => {
+      tvApi.chatList()
+        .then(d => {
+          if (!alive) return;
+          const arr = Array.isArray(d) ? d : [];
+          setMsgs(arr);
+          const lastId = arr[arr.length - 1]?.id || "";
+          if (lastId !== lastIdRef.current) {
+            lastIdRef.current = lastId;
+            requestAnimationFrame(() => {
+              if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+            });
+          }
+        })
+        .catch(() => {})
+        .finally(() => { if (alive) setLoading(false); });
+    };
+    tick();
+    const id = setInterval(tick, 4000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
+  async function enviar() {
+    const t = texto.trim();
+    if (!t || !user?.id || sending) return;
+    setSending(true);
+    const optimistic: ChatMsg = {
+      id: "tmp-" + Date.now(),
+      tgId: String(user.id),
+      nome: user.name || "Você",
+      texto: t,
+      tipo: "texto",
+      gifUrl: "",
+      data: new Date().toISOString(),
+    };
+    setMsgs(m => [...m, optimistic]);
+    setTexto("");
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    });
+    try {
+      await tvApi.chatSend({
+        tgId: String(user.id),
+        nome: user.name || "Jogador",
+        texto: t,
+        topicoId,
+      });
+    } catch {
+      // mantém a otimista — próximo tick reconcilia
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        {loading && (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="size-4 animate-spin text-primary" />
+          </div>
+        )}
+        {!loading && msgs.length === 0 && (
+          <div className="h-full grid place-items-center text-center px-4">
+            <div className="space-y-1.5">
+              <MessageCircle className="size-7 text-muted-foreground mx-auto" />
+              <p className="text-xs text-muted-foreground">Seja o primeiro a comentar.</p>
+            </div>
+          </div>
+        )}
+        {msgs.map((m) => {
+          const isMe = user?.id && String(m.tgId) === String(user.id);
+          return (
+            <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${isMe ? "bg-primary text-primary-foreground" : "bg-white/5 border border-white/5"}`}>
+                {!isMe && (
+                  <p className="text-[10px] font-black uppercase tracking-wider text-primary/80 mb-0.5">{m.nome || "Anon"}</p>
+                )}
+                {m.gifUrl ? (
+                  <img src={m.gifUrl} alt="" className="rounded-lg max-h-40" />
+                ) : (
+                  <p className="text-sm leading-snug whitespace-pre-wrap break-words">{m.texto}</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <form
+        onSubmit={(e) => { e.preventDefault(); enviar(); }}
+        className="p-3 border-t border-border flex items-center gap-2"
+      >
+        <input
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder={user?.id ? `Comentar como ${user.name || "você"}…` : "Entre pelo Telegram para comentar"}
+          disabled={!user?.id || sending}
+          maxLength={500}
+          className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 disabled:opacity-50"
+        />
+        <button
+          type="submit"
+          disabled={!user?.id || !texto.trim() || sending}
+          className="size-10 grid place-items-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+        >
+          {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+        </button>
+      </form>
+    </>
+  );
+}
+
 // ─── SALA DO EVENTO ───────────────────────────────────────────────────────────
 function EventRoom({
   entry, current, onBack
@@ -374,13 +502,6 @@ function EventRoom({
   const isThisLive = checkIsLive(current, entry);
   const capaUrl    = driveImgUrl(isThisLive && current?.capaUrl ? String(current.capaUrl) : entry.capaUrl);
 
-  const topicoUrl = (isThisLive && current?.topicoUrl ? String(current.topicoUrl) : entry.topicoUrl) || "";
-  const threadId  = (() => {
-    if (!topicoUrl) return null;
-    const parts = topicoUrl.split("/");
-    const last  = parts[parts.length - 1];
-    return /^\d+$/.test(last) ? last : null;
-  })();
 
   useEffect(() => {
     if (!user?.id || !isThisLive || !current) return;
@@ -457,30 +578,18 @@ function EventRoom({
 
         {/* Coluna direita: Chat + Ranking */}
         <div className="flex flex-col gap-4">
-          <div className="rounded-3xl border border-border bg-card flex flex-col overflow-hidden" style={{ minHeight: 420 }}>
+          <div className="rounded-3xl border border-border bg-card flex flex-col overflow-hidden" style={{ minHeight: 420, maxHeight: 560 }}>
             <div className="p-4 border-b border-border flex items-center gap-2">
               <MessageCircle className="size-4 text-primary" />
               <p className="text-xs font-black uppercase tracking-widest">Chat ao vivo</p>
             </div>
-            <div className="flex-1 relative">
-              {threadId ? (
-                <iframe
-                  key={threadId}
-                  src={`https://t.me/${TELEGRAM_CHANNEL}/${threadId}?embed=1&discussion=${TELEGRAM_CHANNEL}&comments_limit=50&color=8B5CF6&dark=1`}
-                  className="absolute inset-0 w-full h-full border-0"
-                  allow="autoplay; encrypted-media"
-                  title="Chat Empire TV"
-                />
-              ) : (
-                <div className="absolute inset-0 grid place-items-center">
-                  <div className="text-center px-6 space-y-2">
-                    <MessageCircle className="size-8 text-muted-foreground mx-auto" />
-                    <p className="text-xs text-muted-foreground">O chat estará disponível quando a transmissão começar.</p>
-                  </div>
-                </div>
-              )}
-            </div>
+            <LiveChat
+              programa={entry.programa}
+              topicoId={String(current?.topicoId || entry.topicoId || "")}
+              user={user}
+            />
           </div>
+
 
           <div className="rounded-3xl border border-border bg-card overflow-hidden">
             <div className="p-4 border-b border-border flex items-center gap-2">

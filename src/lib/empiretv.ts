@@ -145,6 +145,19 @@ export const tvApi = {
     const url = `${EMPIRETV_SCRIPT_URL}?acao=tv_participacao_lista&programa=${encodeURIComponent(programa)}`;
     return jsonp<ParticipacaoItem[]>(url);
   },
+  chatList(): Promise<ChatMsg[]> {
+    return jsonp<ChatMsg[]>(`${EMPIRETV_SCRIPT_URL}?acao=tv_chat_list`);
+  },
+  chatSend(p: {
+    tgId: string; nome: string; texto: string;
+    topicoId?: string; tipo?: string; gifUrl?: string;
+  }) {
+    return postScript<{ ok?: boolean; id?: string; erro?: string }>({
+      acao: "tv_chat_send",
+      tgId: p.tgId, nome: p.nome, texto: p.texto,
+      topicoId: p.topicoId || "", tipo: p.tipo || "texto", gifUrl: p.gifUrl || "",
+    });
+  },
   registrarParticipacao(p: {
     tgId: string; nome: string; programa: string;
     tipo?: string; topicoId?: string; topicoUrl?: string;
@@ -156,6 +169,16 @@ export const tvApi = {
     });
   },
 };
+
+export interface ChatMsg {
+  id:     string;
+  tgId:   string;
+  nome:   string;
+  texto:  string;
+  tipo:   string;
+  gifUrl: string;
+  data:   string;
+}
 
 export async function searchGifs(query: string): Promise<GifResult[]> {
   try {
