@@ -480,45 +480,53 @@ function getChatSheet() {
   var sheet = ss.getSheetByName("TV_Chat");
   if (!sheet) {
     sheet = ss.insertSheet("TV_Chat");
-    sheet.appendRow(["ID","tgId","Nome","Texto","Tipo","GifUrl","Data"]);
-    sheet.getRange(1,1,1,7).setBackground("#1a1a2e").setFontColor("#fff").setFontWeight("bold");
+    sheet.appendRow(["ID","tgId","Nome","Texto","Tipo","GifUrl","Data","TopicoId"]);
+    sheet.getRange(1,1,1,8).setBackground("#1a1a2e").setFontColor("#fff").setFontWeight("bold");
   }
+  // garante a coluna H caso a aba tenha sido criada antes
+  if (sheet.getLastColumn() < 8) sheet.getRange(1, 8).setValue("TopicoId");
   return sheet;
 }
 
-function handleChatListData() {
+function handleChatListData(topicoId) {
   var sheet = getChatSheet();
   var rows  = sheet.getDataRange().getValues();
   if (rows.length <= 1) return [];
-  return rows.slice(1).slice(-50).map(function(r) {
+  var tid   = topicoId ? String(topicoId) : "";
+  var data  = rows.slice(1).map(function(r) {
     return { id:String(r[0]), tgId:String(r[1]), nome:String(r[2]), texto:String(r[3]),
-             tipo:String(r[4]||"texto"), gifUrl:String(r[5]||""), data:String(r[6]) };
+             tipo:String(r[4]||"texto"), gifUrl:String(r[5]||""), data:String(r[6]),
+             topicoId:String(r[7]||"") };
   });
+  if (tid) data = data.filter(function(m) { return !m.topicoId || m.topicoId === tid; });
+  return data.slice(-50);
 }
 
 function handleChatList() {
-  return createJsonResponse(handleChatListData());
+  return createJsonResponse(handleChatListData(""));
 }
 
+// Aceita body de doPost OU params de doGet (JSONP)
 function handleChatSend(body) {
   if (!body.tgId || (!body.texto && !body.gifUrl))
-    return createJsonResponse({ ok: false, erro: "Dados incompletos" });
-  var sheet = getChatSheet();
-  var id    = Utilities.getUuid();
-  sheet.appendRow([id, body.tgId, body.nome||"Anon", body.texto||"", body.tipo||"texto", body.gifUrl||"", new Date().toISOString()]);
+    return { ok: false, erro: "Dados incompletos" };
+  var sheet    = getChatSheet();
+  var id       = Utilities.getUuid();
+  var topicoId = String(body.topicoId || "");
+  sheet.appendRow([id, body.tgId, body.nome||"Anon", body.texto||"", body.tipo||"texto", body.gifUrl||"", new Date().toISOString(), topicoId]);
   var total = sheet.getLastRow();
-  if (total > 201) sheet.deleteRows(2, total - 201);
+  if (total > 501) sheet.deleteRows(2, total - 501);
 
   // Encaminha pro tópico do Telegram (se houver topicoId) usando o bot
   try {
     var token = getBotToken();
-    if (token && body.topicoId) {
+    if (token && topicoId) {
       var nome  = String(body.nome || "Anon").replace(/[<>&]/g, "");
       var texto = String(body.texto || "").replace(/[<>&]/g, "");
       var html  = "<b>" + nome + " (app):</b> " + texto;
       var payload = {
         chat_id: SUPERGRUPO_ID,
-        message_thread_id: Number(body.topicoId),
+        message_thread_id: Number(topicoId),
         text: html,
         parse_mode: "HTML",
         disable_web_page_preview: true
@@ -530,7 +538,7 @@ function handleChatSend(body) {
     }
   } catch (e) { Logger.log("forward telegram err: " + e); }
 
-  return createJsonResponse({ ok: true, id: id });
+  return { ok: true, id: id };
 }
 
 // ============================================================
