@@ -561,6 +561,50 @@ function handleChatSend(body) {
 }
 
 // ============================================================
+// PULL TELEGRAM → planilha (chat em tempo real dos dois lados)
+// Configure um time-driven trigger (a cada 1 min) chamando pullTelegramTopicMessages.
+// ATENÇÃO: não use junto de webhook do bot — getUpdates() conflita com setWebhook.
+// ============================================================
+function pullTelegramTopicMessages() {
+  var token = getBotToken();
+  if (!token) { Logger.log("BOT_TOKEN ausente"); return; }
+  var props  = PropertiesService.getScriptProperties();
+  var offset = parseInt(props.getProperty("TG_LAST_UPDATE_ID") || "0", 10);
+  var url    = "https://api.telegram.org/bot" + token + "/getUpdates?timeout=0&limit=100"
+             + (offset ? "&offset=" + (offset + 1) : "");
+  var resp;
+  try { resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true }); }
+  catch (e) { Logger.log("pull err: " + e); return; }
+  var data = JSON.parse(resp.getContentText() || "{}");
+  if (!data.ok || !data.result || !data.result.length) return;
+
+  var sheet = getChatSheet();
+  var maxId = offset;
+  for (var i = 0; i < data.result.length; i++) {
+    var u = data.result[i];
+    if (u.update_id > maxId) maxId = u.update_id;
+    var msg = u.message;
+    if (!msg) continue;
+    if (!msg.chat || String(msg.chat.id) !== String(SUPERGRUPO_ID)) continue;
+    if (!msg.message_thread_id) continue;       // só mensagens em tópicos
+    if (msg.from && msg.from.is_bot) continue;  // ignora ecos do próprio bot
+    var texto = String(msg.text || msg.caption || "");
+    if (!texto) continue;
+    var nome  = (msg.from && (msg.from.first_name || msg.from.username)) || "Telegram";
+    var tgId  = String(msg.from && msg.from.id || "");
+    var dt    = new Date((msg.date || 0) * 1000).toISOString();
+    sheet.appendRow([
+      "tg-" + u.update_id, tgId, nome, texto, "texto", "", dt, String(msg.message_thread_id)
+    ]);
+  }
+  var total = sheet.getLastRow();
+  if (total > 501) sheet.deleteRows(2, total - 501);
+  props.setProperty("TG_LAST_UPDATE_ID", String(maxId));
+}
+
+
+
+// ============================================================
 // TIMELINE (Programacao_RPG)
 // ============================================================
 
