@@ -437,7 +437,7 @@ function getParticipacaoSheet() {
 
 function handleParticipacao(body) {
   if (!body.tgId || !body.nome || !body.programa)
-    return createJsonResponse({ ok: false, erro: "Dados incompletos" });
+    return { ok: false, erro: "Dados incompletos" };
   var sheet = getParticipacaoSheet();
   var hoje  = Utilities.formatDate(new Date(), "America/Sao_Paulo", "dd/MM/yyyy");
   var rows  = sheet.getDataRange().getValues();
@@ -447,12 +447,31 @@ function handleParticipacao(body) {
         String(rows[i][4]) === hoje) {
       sheet.getRange(i+1, 6).setValue((parseInt(rows[i][5]) || 0) + 1);
       recalcularPorcentagens(sheet, body.programa, hoje);
-      return createJsonResponse({ ok: true });
+      return { ok: true };
     }
   }
   sheet.appendRow([body.programa, body.tipo||"", body.nome, body.tgId, hoje, 1, ""]);
   recalcularPorcentagens(sheet, body.programa, hoje);
-  return createJsonResponse({ ok: true });
+  return { ok: true };
+}
+
+function handleParticipacaoLista(programa) {
+  var sheet = getParticipacaoSheet();
+  var rows  = sheet.getDataRange().getValues();
+  if (rows.length <= 1) return [];
+  var hoje  = Utilities.formatDate(new Date(), "America/Sao_Paulo", "dd/MM/yyyy");
+  var out   = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== String(programa)) continue;
+    if (String(rows[i][4]) !== hoje) continue;
+    out.push({
+      programa: String(rows[i][0]), tipo: String(rows[i][1]||""),
+      nome: String(rows[i][2]), tgId: String(rows[i][3]),
+      data: String(rows[i][4]), mensagens: parseInt(rows[i][5])||0,
+      porcentagem: String(rows[i][6]||"")
+    });
+  }
+  return out;
 }
 
 function recalcularPorcentagens(sheet, programa, data) {
