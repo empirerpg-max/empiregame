@@ -100,8 +100,8 @@ function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
     var acao = body.acao || "";
-    if (acao === "tv_chat_send")    return handleChatSend(body);
-    if (acao === "tv_participacao") return handleParticipacao(body);
+    if (acao === "tv_chat_send")    return createJsonResponse(handleChatSend(body));
+    if (acao === "tv_participacao") return createJsonResponse(handleParticipacao(body));
     if (acao === "kick_status")     return createJsonResponse(setKickStatus(body));
     return createJsonResponse({ ok: false, erro: "Ação desconhecida: " + acao });
   } catch (err) {
