@@ -46,9 +46,23 @@ function doGet(e) {
   try {
     var acao     = e && e.parameter && e.parameter.acao ? e.parameter.acao : "";
     var callback = e && e.parameter && e.parameter.callback ? e.parameter.callback : null;
+    var params   = (e && e.parameter) || {};
 
-    if (acao === "tv_chat_list") return respondJson(handleChatListData(), callback);
-    if (acao === "kick_fila")   return respondJson(getKickFila(), callback);
+    // Chat list — opcionalmente filtrado por tópico
+    if (acao === "tv_chat_list") {
+      return respondJson(handleChatListData(params.topicoId || ""), callback);
+    }
+    // Chat send via GET (JSONP) — evita CORS/preflight do Apps Script na WebView do Telegram
+    if (acao === "tv_chat_send") {
+      return respondJson(handleChatSend(params), callback);
+    }
+    if (acao === "tv_participacao") {
+      return respondJson(handleParticipacao(params), callback);
+    }
+    if (acao === "tv_participacao_lista") {
+      return respondJson(handleParticipacaoLista(params.programa || ""), callback);
+    }
+    if (acao === "kick_fila") return respondJson(getKickFila(), callback);
 
     var ss = SPREADSHEET_ID
       ? SpreadsheetApp.openById(SPREADSHEET_ID)
@@ -57,7 +71,6 @@ function doGet(e) {
     var agendaSheet    = ss.getSheetByName("Agenda_TV");
     var agendaTimeline = agendaSheet ? buildTimelineAgenda(agendaSheet) : [];
 
-    // Programacao_RPG NÃO entra mais no fullSchedule — apenas Agenda_TV.
     var fullSchedule = agendaTimeline
       .sort(function(a, b) { return (a.inicio || 0) - (b.inicio || 0); });
 
@@ -87,8 +100,8 @@ function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
     var acao = body.acao || "";
-    if (acao === "tv_chat_send")    return handleChatSend(body);
-    if (acao === "tv_participacao") return handleParticipacao(body);
+    if (acao === "tv_chat_send")    return createJsonResponse(handleChatSend(body));
+    if (acao === "tv_participacao") return createJsonResponse(handleParticipacao(body));
     if (acao === "kick_status")     return createJsonResponse(setKickStatus(body));
     return createJsonResponse({ ok: false, erro: "Ação desconhecida: " + acao });
   } catch (err) {
@@ -424,7 +437,7 @@ function getParticipacaoSheet() {
 
 function handleParticipacao(body) {
   if (!body.tgId || !body.nome || !body.programa)
-    return createJsonResponse({ ok: false, erro: "Dados incompletos" });
+    return { ok: false, erro: "Dados incompletos" };
   var sheet = getParticipacaoSheet();
   var hoje  = Utilities.formatDate(new Date(), "America/Sao_Paulo", "dd/MM/yyyy");
   var rows  = sheet.getDataRange().getValues();
@@ -434,12 +447,31 @@ function handleParticipacao(body) {
         String(rows[i][4]) === hoje) {
       sheet.getRange(i+1, 6).setValue((parseInt(rows[i][5]) || 0) + 1);
       recalcularPorcentagens(sheet, body.programa, hoje);
-      return createJsonResponse({ ok: true });
+      return { ok: true };
     }
   }
   sheet.appendRow([body.programa, body.tipo||"", body.nome, body.tgId, hoje, 1, ""]);
   recalcularPorcentagens(sheet, body.programa, hoje);
-  return createJsonResponse({ ok: true });
+  return { ok: true };
+}
+
+function handleParticipacaoLista(programa) {
+  var sheet = getParticipacaoSheet();
+  var rows  = sheet.getDataRange().getValues();
+  if (rows.length <= 1) return [];
+  var hoje  = Utilities.formatDate(new Date(), "America/Sao_Paulo", "dd/MM/yyyy");
+  var out   = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== String(programa)) continue;
+    if (String(rows[i][4]) !== hoje) continue;
+    out.push({
+      programa: String(rows[i][0]), tipo: String(rows[i][1]||""),
+      nome: String(rows[i][2]), tgId: String(rows[i][3]),
+      data: String(rows[i][4]), mensagens: parseInt(rows[i][5])||0,
+      porcentagem: String(rows[i][6]||"")
+    });
+  }
+  return out;
 }
 
 function recalcularPorcentagens(sheet, programa, data) {
@@ -467,45 +499,53 @@ function getChatSheet() {
   var sheet = ss.getSheetByName("TV_Chat");
   if (!sheet) {
     sheet = ss.insertSheet("TV_Chat");
-    sheet.appendRow(["ID","tgId","Nome","Texto","Tipo","GifUrl","Data"]);
-    sheet.getRange(1,1,1,7).setBackground("#1a1a2e").setFontColor("#fff").setFontWeight("bold");
+    sheet.appendRow(["ID","tgId","Nome","Texto","Tipo","GifUrl","Data","TopicoId"]);
+    sheet.getRange(1,1,1,8).setBackground("#1a1a2e").setFontColor("#fff").setFontWeight("bold");
   }
+  // garante a coluna H caso a aba tenha sido criada antes
+  if (sheet.getLastColumn() < 8) sheet.getRange(1, 8).setValue("TopicoId");
   return sheet;
 }
 
-function handleChatListData() {
+function handleChatListData(topicoId) {
   var sheet = getChatSheet();
   var rows  = sheet.getDataRange().getValues();
   if (rows.length <= 1) return [];
-  return rows.slice(1).slice(-50).map(function(r) {
+  var tid   = topicoId ? String(topicoId) : "";
+  var data  = rows.slice(1).map(function(r) {
     return { id:String(r[0]), tgId:String(r[1]), nome:String(r[2]), texto:String(r[3]),
-             tipo:String(r[4]||"texto"), gifUrl:String(r[5]||""), data:String(r[6]) };
+             tipo:String(r[4]||"texto"), gifUrl:String(r[5]||""), data:String(r[6]),
+             topicoId:String(r[7]||"") };
   });
+  if (tid) data = data.filter(function(m) { return !m.topicoId || m.topicoId === tid; });
+  return data.slice(-50);
 }
 
 function handleChatList() {
-  return createJsonResponse(handleChatListData());
+  return createJsonResponse(handleChatListData(""));
 }
 
+// Aceita body de doPost OU params de doGet (JSONP)
 function handleChatSend(body) {
   if (!body.tgId || (!body.texto && !body.gifUrl))
-    return createJsonResponse({ ok: false, erro: "Dados incompletos" });
-  var sheet = getChatSheet();
-  var id    = Utilities.getUuid();
-  sheet.appendRow([id, body.tgId, body.nome||"Anon", body.texto||"", body.tipo||"texto", body.gifUrl||"", new Date().toISOString()]);
+    return { ok: false, erro: "Dados incompletos" };
+  var sheet    = getChatSheet();
+  var id       = Utilities.getUuid();
+  var topicoId = String(body.topicoId || "");
+  sheet.appendRow([id, body.tgId, body.nome||"Anon", body.texto||"", body.tipo||"texto", body.gifUrl||"", new Date().toISOString(), topicoId]);
   var total = sheet.getLastRow();
-  if (total > 201) sheet.deleteRows(2, total - 201);
+  if (total > 501) sheet.deleteRows(2, total - 501);
 
   // Encaminha pro tópico do Telegram (se houver topicoId) usando o bot
   try {
     var token = getBotToken();
-    if (token && body.topicoId) {
+    if (token && topicoId) {
       var nome  = String(body.nome || "Anon").replace(/[<>&]/g, "");
       var texto = String(body.texto || "").replace(/[<>&]/g, "");
       var html  = "<b>" + nome + " (app):</b> " + texto;
       var payload = {
         chat_id: SUPERGRUPO_ID,
-        message_thread_id: Number(body.topicoId),
+        message_thread_id: Number(topicoId),
         text: html,
         parse_mode: "HTML",
         disable_web_page_preview: true
@@ -517,8 +557,52 @@ function handleChatSend(body) {
     }
   } catch (e) { Logger.log("forward telegram err: " + e); }
 
-  return createJsonResponse({ ok: true, id: id });
+  return { ok: true, id: id };
 }
+
+// ============================================================
+// PULL TELEGRAM → planilha (chat em tempo real dos dois lados)
+// Configure um time-driven trigger (a cada 1 min) chamando pullTelegramTopicMessages.
+// ATENÇÃO: não use junto de webhook do bot — getUpdates() conflita com setWebhook.
+// ============================================================
+function pullTelegramTopicMessages() {
+  var token = getBotToken();
+  if (!token) { Logger.log("BOT_TOKEN ausente"); return; }
+  var props  = PropertiesService.getScriptProperties();
+  var offset = parseInt(props.getProperty("TG_LAST_UPDATE_ID") || "0", 10);
+  var url    = "https://api.telegram.org/bot" + token + "/getUpdates?timeout=0&limit=100"
+             + (offset ? "&offset=" + (offset + 1) : "");
+  var resp;
+  try { resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true }); }
+  catch (e) { Logger.log("pull err: " + e); return; }
+  var data = JSON.parse(resp.getContentText() || "{}");
+  if (!data.ok || !data.result || !data.result.length) return;
+
+  var sheet = getChatSheet();
+  var maxId = offset;
+  for (var i = 0; i < data.result.length; i++) {
+    var u = data.result[i];
+    if (u.update_id > maxId) maxId = u.update_id;
+    var msg = u.message;
+    if (!msg) continue;
+    if (!msg.chat || String(msg.chat.id) !== String(SUPERGRUPO_ID)) continue;
+    if (!msg.message_thread_id) continue;       // só mensagens em tópicos
+    if (msg.from && msg.from.is_bot) continue;  // ignora ecos do próprio bot
+    var texto = String(msg.text || msg.caption || "");
+    if (!texto) continue;
+    var nome  = (msg.from && (msg.from.first_name || msg.from.username)) || "Telegram";
+    var tgId  = String(msg.from && msg.from.id || "");
+    var dt    = new Date((msg.date || 0) * 1000).toISOString();
+    sheet.appendRow([
+      "tg-" + u.update_id, tgId, nome, texto, "texto", "", dt, String(msg.message_thread_id)
+    ]);
+  }
+  var total = sheet.getLastRow();
+  if (total > 501) sheet.deleteRows(2, total - 501);
+  props.setProperty("TG_LAST_UPDATE_ID", String(maxId));
+}
+
+
 
 // ============================================================
 // TIMELINE (Programacao_RPG)

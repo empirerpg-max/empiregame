@@ -377,7 +377,7 @@ function LiveChat({ programa, topicoId, user }: {
   useEffect(() => {
     let alive = true;
     const tick = () => {
-      tvApi.chatList()
+      tvApi.chatList(topicoId || undefined)
         .then(d => {
           if (!alive) return;
           const arr = Array.isArray(d) ? d : [];
@@ -393,10 +393,11 @@ function LiveChat({ programa, topicoId, user }: {
         .catch(() => {})
         .finally(() => { if (alive) setLoading(false); });
     };
+    setLoading(true);
     tick();
     const id = setInterval(tick, 4000);
     return () => { alive = false; clearInterval(id); };
-  }, []);
+  }, [topicoId]);
 
   async function enviar() {
     const t = texto.trim();

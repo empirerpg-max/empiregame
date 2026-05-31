@@ -126,15 +126,14 @@ function jsonp<T>(url: string): Promise<T> {
   });
 }
 
+// Toda comunicação write usa JSONP (GET) — POST direto pro Apps Script
+// dispara redirect cross-origin que, dentro da WebView do Telegram,
+// estoura erro de rede não-capturável e derruba a tela.
 async function postScript<T>(params: Record<string, unknown>): Promise<T> {
-  const res = await fetch(EMPIRETV_SCRIPT_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify(params),
-  });
-  const text = await res.text();
-  try { return JSON.parse(text) as T; }
-  catch { return text as unknown as T; }
+  const qs = Object.entries(params)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v ?? ""))}`)
+    .join("&");
+  return jsonp<T>(`${EMPIRETV_SCRIPT_URL}?${qs}`);
 }
 
 export const tvApi = {
@@ -145,8 +144,9 @@ export const tvApi = {
     const url = `${EMPIRETV_SCRIPT_URL}?acao=tv_participacao_lista&programa=${encodeURIComponent(programa)}`;
     return jsonp<ParticipacaoItem[]>(url);
   },
-  chatList(): Promise<ChatMsg[]> {
-    return jsonp<ChatMsg[]>(`${EMPIRETV_SCRIPT_URL}?acao=tv_chat_list`);
+  chatList(topicoId?: string): Promise<ChatMsg[]> {
+    const qs = topicoId ? `&topicoId=${encodeURIComponent(topicoId)}` : "";
+    return jsonp<ChatMsg[]>(`${EMPIRETV_SCRIPT_URL}?acao=tv_chat_list${qs}`);
   },
   chatSend(p: {
     tgId: string; nome: string; texto: string;
