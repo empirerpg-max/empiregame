@@ -46,9 +46,23 @@ function doGet(e) {
   try {
     var acao     = e && e.parameter && e.parameter.acao ? e.parameter.acao : "";
     var callback = e && e.parameter && e.parameter.callback ? e.parameter.callback : null;
+    var params   = (e && e.parameter) || {};
 
-    if (acao === "tv_chat_list") return respondJson(handleChatListData(), callback);
-    if (acao === "kick_fila")   return respondJson(getKickFila(), callback);
+    // Chat list — opcionalmente filtrado por tópico
+    if (acao === "tv_chat_list") {
+      return respondJson(handleChatListData(params.topicoId || ""), callback);
+    }
+    // Chat send via GET (JSONP) — evita CORS/preflight do Apps Script na WebView do Telegram
+    if (acao === "tv_chat_send") {
+      return respondJson(handleChatSend(params), callback);
+    }
+    if (acao === "tv_participacao") {
+      return respondJson(handleParticipacao(params), callback);
+    }
+    if (acao === "tv_participacao_lista") {
+      return respondJson(handleParticipacaoLista(params.programa || ""), callback);
+    }
+    if (acao === "kick_fila") return respondJson(getKickFila(), callback);
 
     var ss = SPREADSHEET_ID
       ? SpreadsheetApp.openById(SPREADSHEET_ID)
@@ -57,7 +71,6 @@ function doGet(e) {
     var agendaSheet    = ss.getSheetByName("Agenda_TV");
     var agendaTimeline = agendaSheet ? buildTimelineAgenda(agendaSheet) : [];
 
-    // Programacao_RPG NÃO entra mais no fullSchedule — apenas Agenda_TV.
     var fullSchedule = agendaTimeline
       .sort(function(a, b) { return (a.inicio || 0) - (b.inicio || 0); });
 
