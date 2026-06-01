@@ -678,9 +678,9 @@ function TvPage() {
   const [view, setView]             = useState<"grade" | "planner">("grade");
 
   useEffect(() => {
-    tvApi.getStatus().then(s => { setStatus(s); setLoading(false); });
+    tvApi.status().then(s => { setStatus(s); setLoading(false); });
     const id = setInterval(() => {
-      tvApi.getStatus().then(s => setStatus(s)).catch(() => {});
+      tvApi.status().then(s => setStatus(s)).catch(() => {});
     }, 30_000);
     return () => clearInterval(id);
   }, []);
