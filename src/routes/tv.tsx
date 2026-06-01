@@ -362,21 +362,36 @@ function KickPlayer({ programa }: { programa: string }) {
 }
 
 // ─── LIVE CHAT (in-app, agora via backend em tempo real) ─────────────────────
+const CHAT_WS_URL   = "wss://empiretv-chat-backend.onrender.com";
+const CHAT_PING_URL = "https://empiretv-chat-backend.onrender.com/ping";
+const WS_CONNECT_TIMEOUT_MS = 12_000;
+
 function LiveChat({ programa, topicoId, user }: {
   programa: string;
   topicoId: string;
   user: ReturnType<typeof useTelegramUser>["user"];
 }) {
-  const [msgs, setMsgs]       = useState<ChatMsg[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [texto, setTexto]     = useState("");
-  const [sending, setSending] = useState(false);
-  const scrollRef             = useRef<HTMLDivElement>(null);
+  const [msgs, setMsgs]           = useState<ChatMsg[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [wsError, setWsError]     = useState(false);
+  const [texto, setTexto]         = useState("");
+  const [sending, setSending]     = useState(false);
+  const scrollRef                 = useRef<HTMLDivElement>(null);
+  const wsRef                     = useRef<WebSocket | null>(null);
 
-  // conexão WebSocket com o backend de chat (Render)
-  const wsRef                 = useRef<WebSocket | null>(null);
+  // FIX 3: guarda estado de foco do input para não conflitar com scroll durante abertura do teclado
+  const inputFocusedRef           = useRef(false);
+  // FIX 1: guarda nome em ref para não ser dependência do useEffect (evita recriar socket ao mudar nome)
+  const nomeRef                   = useRef(user?.name || "Jogador");
+
+  // atualiza o nome ref sempre que mudar, sem disparar effect
+  useEffect(() => {
+    nomeRef.current = user?.name || "Jogador";
+  });
 
   function scrollBottom() {
+    // FIX 3: não rola enquanto o teclado virtual está abrindo (evita travamento no Telegram WebApp)
+    if (inputFocusedRef.current) return;
     requestAnimationFrame(() => {
       try {
         if (scrollRef.current) {
@@ -387,7 +402,7 @@ function LiveChat({ programa, topicoId, user }: {
   }
 
   useEffect(() => {
-    // se não tiver sala ou usuário logado, não conecta
+    // sem sala ou usuário, não conecta
     if (!topicoId || !user?.id) {
       setMsgs([]);
       setLoading(false);
@@ -395,87 +410,114 @@ function LiveChat({ programa, topicoId, user }: {
     }
 
     setLoading(true);
+    setWsError(false);
     setMsgs([]);
 
     const roomId = String(topicoId);
     const userId = String(user.id);
-    const nome   = user.name || "Jogador";
+    let ws: WebSocket | null = null;
+    let connectTimeout: ReturnType<typeof setTimeout> | null = null;
+    let destroyed = false;
 
-    // ajuste a URL se seu backend estiver em outro endereço
-    const ws = new WebSocket("wss://empiretv-chat-backend.onrender.com");
+    function openSocket() {
+      if (destroyed) return;
 
-    wsRef.current = ws;
+      ws = new WebSocket(CHAT_WS_URL);
+      wsRef.current = ws;
 
-    ws.onopen = () => {
-      // avisa o backend em qual sala entrar
-      const joinPayload = {
-        type: "join",
-        roomId,
-        userId,
-        nome,
+      // FIX 2: timeout de conexão — se o Render demorar mais de 12s para acordar,
+      // exibe fallback em vez de travar silenciosamente
+      connectTimeout = setTimeout(() => {
+        if (ws && ws.readyState !== WebSocket.OPEN) {
+          ws.close();
+          if (!destroyed) {
+            setLoading(false);
+            setWsError(true);
+          }
+        }
+      }, WS_CONNECT_TIMEOUT_MS);
+
+      ws.onopen = () => {
+        if (connectTimeout) clearTimeout(connectTimeout);
+        ws!.send(JSON.stringify({
+          type: "join",
+          roomId,
+          userId,
+          nome: nomeRef.current,
+        }));
       };
-      ws.send(JSON.stringify(joinPayload));
-    };
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
 
-        // Exemplo de contratos esperados:
-        // { type: "history", roomId, messages: ChatMsg[] }
-        // { type: "message", roomId, message: ChatMsg }
+          if (data.type === "history" && Array.isArray(data.messages)) {
+            setMsgs(data.messages as ChatMsg[]);
+            setLoading(false);
+            scrollBottom();
+          }
 
-        if (data.type === "history" && Array.isArray(data.messages)) {
-          setMsgs(data.messages as ChatMsg[]);
-          setLoading(false);
-          scrollBottom();
+          if (data.type === "message" && data.message) {
+            const m = data.message as ChatMsg;
+            setMsgs((prev) => {
+              // FIX 4: remove mensagem otimista (tmp-) com mesmo texto antes de inserir a real do broadcast
+              // evita duplicata causada pelo servidor retransmitir para o próprio remetente
+              const semOtimista = prev.filter(
+                (p) => !(p.id.startsWith("tmp-") && p.tgId === m.tgId && p.texto === m.texto)
+              );
+              return [...semOtimista, m];
+            });
+            scrollBottom();
+          }
+        } catch {
+          // ignora erros de parse para não derrubar a tela
         }
+      };
 
-        if (data.type === "message" && data.message) {
-          const m = data.message as ChatMsg;
-          setMsgs((prev) => [...prev, m]);
-          scrollBottom();
-        }
-      } catch {
-        // ignora erros de parse para não derrubar a tela
-      }
-    };
+      ws.onerror = () => {
+        if (connectTimeout) clearTimeout(connectTimeout);
+        if (!destroyed) setLoading(false);
+      };
 
-    ws.onerror = () => {
-      // em caso de erro, apenas tiramos o loading; o usuário ainda vê o histórico atual (se houver)
-      setLoading(false);
-    };
+      ws.onclose = () => {
+        if (connectTimeout) clearTimeout(connectTimeout);
+        // sem reconexão automática aqui — o useEffect recria ao mudar sala/usuário
+      };
+    }
 
-    ws.onclose = () => {
-      // limpeza já é feita no return do effect; aqui não precisamos fazer nada extra
-    };
+    // FIX 2: ping HTTP primeiro para acordar o Render antes de abrir o WebSocket.
+    // O Render gratuito dorme após 15min de inatividade e pode levar 30-90s para acordar.
+    // O ping forçar o cold start via HTTP (mais tolerante) antes do WS (que trava a UI).
+    fetch(CHAT_PING_URL, { signal: AbortSignal.timeout(8_000) })
+      .catch(() => {/* ignora erro do ping; tenta o WS mesmo assim */})
+      .finally(() => openSocket());
 
     return () => {
-      try {
-        ws.close();
-      } catch {}
+      destroyed = true;
+      if (connectTimeout) clearTimeout(connectTimeout);
+      try { ws?.close(); } catch {}
       wsRef.current = null;
     };
-  }, [topicoId, user?.id, user?.name]);
+    // FIX 1: user?.name REMOVIDO das dependências — causava loop de reconexão a cada rerender
+    // O nome é acessado via nomeRef.current dentro do onopen, sempre atualizado
+  }, [topicoId, user?.id]);
 
   async function enviar() {
     const t = texto.trim();
     if (!t || !user?.id || sending) return;
 
-    // não tenta enviar se o socket não estiver pronto
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
     setSending(true);
 
     const roomId = String(topicoId);
     const userId = String(user.id);
-    const nome   = user.name || "Jogador";
 
-    // mensagem otimista local
+    // mensagem otimista local (prefixo tmp- é usado pelo filtro do onmessage acima)
     const optimistic: ChatMsg = {
       id: "tmp-" + Date.now(),
       tgId: userId,
-      nome: user.name || "Você",
+      nome: nomeRef.current,
       texto: t,
       tipo: "texto",
       gifUrl: "",
@@ -487,17 +529,15 @@ function LiveChat({ programa, topicoId, user }: {
     scrollBottom();
 
     try {
-      const payload = {
+      wsRef.current.send(JSON.stringify({
         type: "message",
         roomId,
         userId,
-        nome,
+        nome: nomeRef.current,
         texto: t,
-      };
-      wsRef.current.send(JSON.stringify(payload));
+      }));
     } catch {
-      // se der erro de rede, mantém a mensagem otimista; numa melhoria futura,
-      // dá para marcar como "falhou" ou remover
+      // mantém mensagem otimista em caso de falha de rede
     } finally {
       setSending(false);
     }
@@ -507,12 +547,56 @@ function LiveChat({ programa, topicoId, user }: {
     <>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
         {loading && (
-          <div className="flex items-center justify-center py-6">
+          <div className="flex flex-col items-center justify-center py-6 gap-2">
             <Loader2 className="size-4 animate-spin text-primary" />
+            <p className="text-[10px] text-muted-foreground">Conectando ao chat…</p>
           </div>
         )}
 
-        {!loading && msgs.length === 0 && (
+        {!loading && wsError && (
+          <div className="h-full grid place-items-center text-center px-4">
+            <div className="space-y-2">
+              <MessageCircle className="size-7 text-muted-foreground mx-auto" />
+              <p className="text-xs text-muted-foreground">Chat temporariamente indisponível.</p>
+              <button
+                onClick={() => {
+                  setWsError(false);
+                  setLoading(true);
+                  fetch(CHAT_PING_URL, { signal: AbortSignal.timeout(8_000) })
+                    .catch(() => {})
+                    .finally(() => {
+                      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+                        const roomId = String(topicoId);
+                        const userId = String(user?.id || "");
+                        const ws = new WebSocket(CHAT_WS_URL);
+                        wsRef.current = ws;
+                        ws.onopen = () => ws.send(JSON.stringify({ type: "join", roomId, userId, nome: nomeRef.current }));
+                        ws.onmessage = (event) => {
+                          try {
+                            const data = JSON.parse(event.data);
+                            if (data.type === "history" && Array.isArray(data.messages)) { setMsgs(data.messages as ChatMsg[]); setLoading(false); }
+                            if (data.type === "message" && data.message) {
+                              const m = data.message as ChatMsg;
+                              setMsgs((prev) => {
+                                const s = prev.filter((p) => !(p.id.startsWith("tmp-") && p.tgId === m.tgId && p.texto === m.texto));
+                                return [...s, m];
+                              });
+                            }
+                          } catch {}
+                        };
+                        ws.onerror = () => { setLoading(false); setWsError(true); };
+                      }
+                    });
+                }}
+                className="text-[10px] text-primary underline underline-offset-2"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!loading && !wsError && msgs.length === 0 && (
           <div className="h-full grid place-items-center text-center px-4">
             <div className="space-y-1.5">
               <MessageCircle className="size-7 text-muted-foreground mx-auto" />
@@ -551,7 +635,10 @@ function LiveChat({ programa, topicoId, user }: {
         <input
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
-          placeholder={user?.id ? `Comentar como ${user.name || "você"}…` : "Entre pelo Telegram para comentar"}
+          // FIX 3: marca foco para o guard do scrollBottom não conflitar com abertura do teclado
+          onFocus={() => { inputFocusedRef.current = true; }}
+          onBlur={() => { inputFocusedRef.current = false; }}
+          placeholder={user?.id ? `Comentar como ${nomeRef.current}…` : "Entre pelo Telegram para comentar"}
           disabled={!user?.id || sending}
           maxLength={500}
           className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 disabled:opacity-50"
