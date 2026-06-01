@@ -33,6 +33,18 @@ export interface RankingItem {
   porcentagem: number;
 }
 
+// ─── Rate limit client-side ──────────────────────────────────────────────────
+// Impede duplo-clique no botão de envio e protege contra spam.
+// Complementa o trigger de rate limit do banco (1 msg/s por telegram_id).
+const _lastSent: Record<string, number> = {};
+export function podeSendMensagem(telegramId: string | number): boolean {
+  const key   = String(telegramId);
+  const agora = Date.now();
+  if (_lastSent[key] && agora - _lastSent[key] < 1100) return false;
+  _lastSent[key] = agora;
+  return true;
+}
+
 // ─── Buscar mensagens (histórico ou incremental via afterId) ─────────────────
 export async function fetchMensagens(
   streamId: string,
@@ -43,7 +55,7 @@ export async function fetchMensagens(
     .from("mensagens")
     .select("*")
     .eq("stream_id", streamId)
-    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })   // ordena por id (usa o índice stream_id+id)
     .limit(limit);
 
   if (afterId > 0) {
@@ -55,16 +67,17 @@ export async function fetchMensagens(
   return data ?? [];
 }
 
-// ─── Inserir mensagem com timeout de 4s ──────────────────────────────────────
-// Timeout reduzido de 6s para 4s: o Telegram WebApp mostra o dialog
-// "aguardar ou sair" após ~5s de fetch pendente, travando o app.
-// Com 4s garantimos que o Promise.race resolve antes desse limiar.
-// A mensagem otimista já está visível; o polling vai buscar a real em seguida.
+// ─── Inserir mensagem com timeout de 3.5s ────────────────────────────────────
+// Timeout reduzido para 3.5s:
+//   - Telegram WebApp mostra "aguardar ou sair" após ~5s de fetch pendente.
+//   - 3.5s garante que o Promise.race resolve bem antes desse limiar.
+//   - A mensagem otimista já está visível; o polling busca a real em seguida.
+// Retorna "rate_limited" se o banco rejeitar por spam (trigger trg_rate_limit).
 export async function inserirMensagem(
   payload: Omit<MensagemDB, "id" | "created_at">
-): Promise<MensagemDB | null> {
+): Promise<MensagemDB | null | "rate_limited"> {
   const timeoutPromise = new Promise<null>((resolve) =>
-    setTimeout(() => resolve(null), 4000)
+    setTimeout(() => resolve(null), 3500)
   );
 
   const insertPromise = supabase
@@ -73,7 +86,14 @@ export async function inserirMensagem(
     .select()
     .single()
     .then(({ data, error }) => {
-      if (error) { console.error("[Supabase] inserirMensagem:", error.message); return null; }
+      if (error) {
+        // Código 23514 = violação de check constraint (trigger de rate limit)
+        if (error.code === "23514" || error.message?.includes("rate_limit")) {
+          return "rate_limited" as const;
+        }
+        console.error("[Supabase] inserirMensagem:", error.message);
+        return null;
+      }
       return data as MensagemDB;
     });
 
