@@ -43,9 +43,9 @@ export interface Projeto {
 export interface AlbumFaixa {
   numero: number;
   titulo: string;
-  artistas: string; // ex: "YAN feat. Matthew"
-  duracao?: string; // "3:24"
-  drive_url: string; // link público do Drive (mp3)
+  artistas: string;
+  duracao?: string;
+  drive_url: string;
   letra?: string;
 }
 
@@ -54,20 +54,20 @@ export interface AlbumPayload {
   artista: string;
   titulo: string;
   genero: string;
-  data: string; // YYYY-MM-DD
-  capa_url: string; // link Drive da capa
+  data: string;
+  capa_url: string;
   contracapa_url?: string;
-  encarte: string[]; // links Drive (N imagens)
+  encarte: string[];
   faixas: AlbumFaixa[];
   descricao?: string;
   telegram_id?: string;
 }
 
 export interface MarketItem {
-  categoria: string; // MARKET, IMOVEIS, CARREIRA, ...
-  item: string; // "Mansao", "Convite Met Gala"...
-  preco: number; // EC
-  efeito: string; // descrição livre
+  categoria: string;
+  item: string;
+  preco: number;
+  efeito: string;
 }
 
 export interface MuralItem {
@@ -83,9 +83,9 @@ export interface BemItem {
   artista: string;
   categoria: string;
   item: string;
-  valor: number; // valor de compra ($)
-  data: string; // ISO
-  status?: string; // Ativo / Vendido
+  valor: number;
+  data: string;
+  status?: string;
 }
 
 function qs(params: Record<string, string | number | undefined>) {
@@ -187,7 +187,6 @@ export interface CommonResponse {
 }
 
 export const api = {
-  // chamada genérica de baixo nível (mantida para compatibilidade com chamadas diretas)
   call: <T = unknown>(params: Record<string, unknown>, opts: { cache?: boolean } = {}) =>
     call<T>(params, opts),
 
@@ -256,6 +255,24 @@ export const api = {
   async registrarBem(p: Omit<BemItem, "id">): Promise<CommonResponse> {
     return call<CommonResponse>({ acao: "registrar_bem", ...p });
   },
+
+  // Ranking por fortuna total (usado em /ranking)
+  async ranking(): Promise<Artist[]> {
+    const data = await call<Record<string, unknown>[]>({ acao: "listar_todos" }, { cache: true });
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((a) => normalizeArtist(a))
+      .sort((a, b) => b.fortuna_total - a.fortuna_total);
+  },
+
+  // Ranking por prestígio (usado em /ranking → aba Prestígio)
+  async charts(): Promise<Artist[]> {
+    const data = await call<Record<string, unknown>[]>({ acao: "listar_todos" }, { cache: true });
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((a) => normalizeArtist(a))
+      .sort((a, b) => b.prestigio - a.prestigio);
+  },
 };
 
 // Utilitários de formatação
@@ -264,6 +281,9 @@ export function fmtEC(v: number): string {
   if (v >= 1_000) return `EC ${(v / 1_000).toFixed(0)}K`;
   return `EC ${v}`;
 }
+
+/** Alias de fmtEC — mantém compatibilidade com imports de fmtMoney */
+export const fmtMoney = fmtEC;
 
 export function driveImg(url: string, size = 200): string {
   if (!url) return "";
