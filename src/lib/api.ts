@@ -104,9 +104,15 @@ const CACHE_FRESH = 60_000;
 const CACHE_STALE = 5 * 60_000;
 const inflight = new Map<string, Promise<unknown>>();
 
+// Timeout global para chamadas ao Google Apps Script
+const GAS_TIMEOUT_MS = 15_000;
+
 async function rawCall<T = unknown>(params: Record<string, unknown>): Promise<T> {
   const isPost = params.payload || JSON.stringify(params).length > 1000;
-  const options: RequestInit = { method: isPost ? "POST" : "GET" };
+  const options: RequestInit = {
+    method: isPost ? "POST" : "GET",
+    signal: AbortSignal.timeout(GAS_TIMEOUT_MS),
+  };
   if (isPost) options.body = JSON.stringify(params);
   const url = isPost ? SCRIPT_URL : `${SCRIPT_URL}?${qs(params as Record<string, string | number | undefined>)}`;
   const res = await fetch(url, options);
@@ -204,450 +210,64 @@ export const api = {
     const data = await call<Projeto[]>({ acao: "projetos", nome }, { cache: true });
     return Array.isArray(data) ? data : [];
   },
-
-  async comprarTour(p: {
-    nome: string;
-    tipo: string;
-    titulo: string;
-    dataInicio: string;
-    qtd: number;
-    continente: string;
-  }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({
-      acao: "compra_unificada_tour",
-      nome: p.nome,
-      tipo: p.tipo,
-      titulo: p.titulo,
-      dataInicio: p.dataInicio,
-      qtd: p.qtd,
-      continente: p.continente,
-    });
-  },
-  async comprarCinema(p: {
-    nome: string;
-    titulo: string;
-    tipo: string;
-    genero: string;
-    dataInicio: string;
-  }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "compra_cinema", ...p });
-  },
-  async viral(nome: string, musica: string): Promise<CommonResponse> {
-    return call<CommonResponse>({ acao: "viral", artista: nome, musica });
-  },
-  async filantropia(nome: string, causa: string, valor: string): Promise<CommonResponse> {
-    return call<CommonResponse>({ acao: "filantropia", artista: nome, causa, valor });
-  },
-  async publicarLeilao(p: { nome: string; descricao: string; lanceMini: number }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "publicar_leilao", ...p });
-  },
-  async darLance(p: { nome: string; itemId: string | number; valor: number }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "lance_leilao", ...p });
-  },
-  async listarLeiloes(): Promise<unknown[]> {
-    const r = await call<unknown[]>({ acao: "leilao" }, { cache: true });
-    return Array.isArray(r) ? r : [];
-  },
-  async payola(p: { nome: string; musica: string; valor: number }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "payola", ...p });
-  },
-  async rescisao(p: { nome: string; destino: string }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "rescisao", ...p });
-  },
-  async venderComposicao(p: { nome: string; titulo: string; preco: number }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "vender_composicao", ...p });
-  },
-  async comprarImovel(p: { nome: string; tipo: string; cidade: string }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "comprar_imovel", ...p });
-  },
-
-  // ---- Empire Market ----
-  async listarCategoriasMarket(): Promise<string[]> {
-    const r = await call<unknown>({ acao: "listar_categorias_market" }, { cache: true });
-    if (Array.isArray(r)) return r.map((x) => String(x || "").trim()).filter(Boolean);
-    return [];
+  async getArtist(nome: string): Promise<Artist | null> {
+    const data = await call<Record<string, unknown>>({ acao: "get_artist", nome }, { cache: true });
+    return data && typeof data === "object" && !Array.isArray(data) ? normalizeArtist(data) : null;
   },
   async listarMarket(): Promise<MarketItem[]> {
-    const r = await call<Record<string, unknown>[]>({ acao: "listar_market" }, { cache: true });
-    return Array.isArray(r)
-      ? r.map((x) => ({
-          categoria: String(x.categoria || ""),
-          item: String(x.item || ""),
-          preco: Number(x.preco || 0),
-          efeito: String(x.efeito || ""),
-        }))
-      : [];
+    const data = await call<MarketItem[]>({ acao: "listar_market" }, { cache: true });
+    return Array.isArray(data) ? data : [];
   },
   async listarMural(): Promise<MuralItem[]> {
-    const r = await call<MuralItem[]>({ acao: "mural" }, { cache: true });
-    return Array.isArray(r) ? r : [];
+    const data = await call<MuralItem[]>({ acao: "listar_mural" }, { cache: true });
+    return Array.isArray(data) ? data : [];
+  },
+  async listarCategoriasMarket(): Promise<string[]> {
+    const data = await call<string[]>({ acao: "listar_categorias_market" }, { cache: true });
+    return Array.isArray(data) ? data : [];
   },
   async comprarMarket(p: { nome: string; categoria: string; item: string }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "comprar_market", nome: p.nome, categoria: p.categoria, item: p.item });
+    return call<CommonResponse>({ acao: "comprar_market", ...p });
   },
   async comprarMural(p: { nome: string; id: string }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "comprar_item", nome: p.nome, id: p.id });
+    return call<CommonResponse>({ acao: "comprar_mural", ...p });
   },
-  async meusBens(nome: string): Promise<BemItem[]> {
-    const r = await call<BemItem[]>({ acao: "meus_bens", nome }, { cache: true });
-    return Array.isArray(r) ? r : [];
+  async venderComposicao(p: { nome: string; titulo: string; preco: number }): Promise<CommonResponse> {
+    return call<CommonResponse>({ acao: "vender_composicao", ...p });
   },
-  async venderBem(p: { nome: string; id: string }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "vender_bem", nome: p.nome, id: p.id });
-  },
-
-  // ---- Álbuns ----
-  async lancarAlbum(payload: AlbumPayload): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "lancar_album", payload: JSON.stringify(payload) });
-  },
-  async getAlbum(id: string): Promise<AlbumPayload | null> {
-    const r = await call<AlbumPayload & { error?: string }>({ acao: "get_album", id }, { cache: true });
-    if (!r || r.error) return null;
-    return r;
-  },
-  async listarAlbuns(nome?: string): Promise<AlbumPayload[]> {
-    const r = await call<AlbumPayload[]>({ acao: "listar_albuns", nome: nome || "" }, { cache: true });
-    return Array.isArray(r) ? r : [];
-  },
-  async editarAlbum(payload: AlbumPayload): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "editar_album", payload: JSON.stringify(payload) });
-  },
-  async editarFaixaAlbum(payload: { album_id: string; numero: number; [key: string]: any }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "editar_faixa_album", payload: JSON.stringify(payload) });
-  },
-  async excluirAlbum(id: string, telegramId?: string): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "excluir_album", id, telegram_id: telegramId || "" });
-  },
-
-  // ---- Playlists ----
-  async listarPlaylists(telegramId?: string): Promise<PlaylistPayload[]> {
-    const r = await call<PlaylistPayload[]>(
-      { acao: "listar_playlists", telegram_id: telegramId || "" },
-      { cache: true },
-    );
-    return Array.isArray(r) ? r : [];
-  },
-  async getPlaylist(id: string): Promise<PlaylistPayload | null> {
-    const r = await call<PlaylistPayload & { error?: string }>({ acao: "get_playlist", id }, { cache: true });
-    if (!r || r.error) return null;
-    return r;
-  },
-  async salvarPlaylist(payload: PlaylistPayload, telegramId?: string): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({
-      acao: "salvar_playlist",
-      payload: JSON.stringify(payload),
-      telegram_id: telegramId || payload.telegram_id || "",
-    });
-  },
-  async listarFaixasCatalogo(): Promise<any[]> {
-    const r = await call<any[]>({ acao: "listar_faixas_catalogo" }, { cache: true });
-    return Array.isArray(r) ? r : [];
-  },
-  async excluirPlaylist(id: string, telegramId?: string): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "excluir_playlist", id, telegram_id: telegramId || "" });
-  },
-
-  // ---- Bet ----
-  async getMusicasBet(): Promise<{ semana: string; musicas: unknown[] } | null> {
-    const acoes = ["musicas_bet", "get_musicas_bet", "musicas_charts", "get_musicas_charts"];
-    for (const acao of acoes) {
-      const r = await call<{ semana: string; musicas: unknown[]; erro?: string }>({ acao }, { cache: true });
-      if (r && !r.erro && Array.isArray(r.musicas) && r.musicas.length > 0) return r;
-    }
-    return null;
-  },
-  async bet(p: { nome: string; valor: number; semana: string; previsoes: string }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "bet", ...p });
-  },
-  async listTours(): Promise<any[]> {
-    const acoes = ["listar_todas_tours", "tours", "controle_tours", "listar_tours"];
-    for (const acao of acoes) {
-      const r = await call<any[]>({ acao }, { cache: true });
-      if (Array.isArray(r) && r.length > 0) return r;
-    }
-    return [];
-  },
-  async ranking(): Promise<Artist[]> {
-    const data = await call<Record<string, unknown>[]>({ acao: "ranking" }, { cache: true });
-    return Array.isArray(data) ? data.map((a) => normalizeArtist(a)) : [];
-  },
-  async charts(): Promise<Artist[]> {
-    const data = await call<Record<string, unknown>[]>({ acao: "charts" }, { cache: true });
-    return Array.isArray(data) ? data.map((a) => normalizeArtist(a)) : [];
-  },
-  async getAgendaTour(nome: string): Promise<any> {
-    return call<any>({ acao: "agenda_tour", nome }, { cache: true });
-  },
-  async vincularImagemTour(nome: string, url: string): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "vincular_imagem_tour", nome, url });
+  async getMusicasBet(): Promise<{ semana: string; musicas: any[] } | null> {
+    const data = await call<{ semana: string; musicas: any[] } | null>({ acao: "get_musicas_bet" }, { cache: true });
+    return data || null;
   },
   async searchSongs(query: string): Promise<any[]> {
-    const r = await call<any[]>({ acao: "buscar_musicas", q: query }, { cache: true });
-    return Array.isArray(r) ? r : [];
+    const data = await call<any[]>({ acao: "search_songs", query });
+    return Array.isArray(data) ? data : [];
   },
-  async getArtistasSemId(): Promise<Artist[]> {
-    const data = await call<Record<string, unknown>[]>({ acao: "artistas_sem_id" }, { cache: true });
-    return Array.isArray(data) ? data.map((a) => normalizeArtist(a)) : [];
+  async bet(p: { nome: string; valor: number; semana: string; previsoes: string }): Promise<CommonResponse> {
+    return call<CommonResponse>({ acao: "bet", ...p });
   },
-  async vincularArtista(nome: string, telegramId: string): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "vincular_artista", nome, telegram_id: telegramId });
+  async listarBems(nome: string): Promise<BemItem[]> {
+    const data = await call<BemItem[]>({ acao: "listar_bems", nome }, { cache: true });
+    return Array.isArray(data) ? data : [];
   },
-  async criarArtista(payload: {
-    nome: string;
-    foto: string;
-    gravadora: string;
-    telegram_id: string;
-  }): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({
-      acao: "criar_artista",
-      nome: payload.nome,
-      foto: payload.foto,
-      gravadora: payload.gravadora,
-      telegram_id: payload.telegram_id,
-    });
+  async venderBem(p: { id: string; nome: string }): Promise<CommonResponse> {
+    return call<CommonResponse>({ acao: "vender_bem", ...p });
   },
-  async topCharts(): Promise<Record<string, ChartData>> {
-    const data = await call<Record<string, ChartData>>({ acao: "top_charts" }, { cache: true });
-    return data || {};
-  },
-
-  // ---- Social ----
-  async listarPostsSocial(): Promise<any[]> {
-    const r = await call<any[]>({ acao: "listarPostsSocial" }, { cache: false });
-    return Array.isArray(r) ? r : [];
-  },
-  async salvarPostSocial(payload: any, tgId: string): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "salvarPostSocial", payload: JSON.stringify(payload), tgId });
-  },
-  async listarPerfisSocial(tgId?: string): Promise<any[]> {
-    const r = await call<any[]>({ acao: "listarPerfisSocial", tgId }, { cache: false });
-    return Array.isArray(r) ? r : [];
-  },
-  async salvarPerfilSocial(payload: any, tgId: string): Promise<CommonResponse> {
-    invalidateCache();
-    return call<CommonResponse>({ acao: "salvarPerfilSocial", payload: JSON.stringify(payload), tgId });
-  },
-  async curtirPostSocial(postId: string, tgId: string): Promise<any> {
-    return call<any>({ acao: "curtirPostSocial", postId, tgId });
-  },
-  async comentarPostSocial(payload: any, tgId: string): Promise<any> {
-    return call<any>({ acao: "comentarPostSocial", payload: JSON.stringify(payload), tgId });
-  },
-  async listarComentariosSocial(postId: string): Promise<any[]> {
-    const r = await call<any[]>({ acao: "listarComentariosSocial", postId }, { cache: false });
-    return Array.isArray(r) ? r : [];
-  },
-  async salvarNewsSocial(payload: any, tgId: string): Promise<any> {
-    return call<any>({ acao: "salvarNewsSocial", payload: JSON.stringify(payload), tgId });
-  },
-  async listarNewsSocial(): Promise<any[]> {
-    const r = await call<any[]>({ acao: "listarNewsSocial" }, { cache: false });
-    return Array.isArray(r) ? r : [];
-  },
-
-  // ---- Games & Economy ----
-  async syncGameCoins(
-    tgId: string,
-    wager: number,
-    won: number,
-    gameContext?: string,
-    artistName?: string,
-  ): Promise<CommonResponse & { novoSaldo?: number }> {
-    invalidateCache();
-    return call<CommonResponse & { novoSaldo?: number }>({
-      acao: "sync_game_coins",
-      telegram_id: tgId,
-      wager,
-      won,
-      gameContext,
-      artistName,
-    });
-  },
-  async savePetState(tgId: string, payload: string): Promise<CommonResponse> {
-    return call<CommonResponse>({ acao: "save_pet_state", telegram_id: tgId, payload });
-  },
-  async getPetState(tgId: string): Promise<CommonResponse & { payload?: string; lastUpdate?: number }> {
-    return call<CommonResponse & { payload?: string; lastUpdate?: number }>({
-      acao: "get_pet_state",
-      telegram_id: tgId,
-    });
-  },
-
-  // ---- Queridômetro ----
-  async getQueridometroStatus(tgId: string): Promise<
-    CommonResponse & {
-      meuPerfil?: any;
-      artistas?: any[];
-      artistasAlvos?: any[];
-      meusArtistas?: any[];
-      ranking?: any[];
-      votosRestantes?: number;
-      reacoesRecebidas?: any[];
-      reacoesPublicas?: Array<{ para?: string; fotoPara?: string; emoji?: string; data?: string }>;
-      configEmojis?: any[];
-      semana?: string;
-    }
-  > {
-    return call({ acao: "queridometro_status", tgId });
-  },
-  async postQueridometroVoto(
-    tgId: string,
-    de: string,
-    para: string,
-    emoji: string,
-  ): Promise<CommonResponse & { msg?: string }> {
-    return call({ acao: "queridometro_votar", tgId, de, para, emoji });
-  },
-
-  // ---- PONTO (pontos + playlists por planilha externa) ----
-  async getJogador(tgId: string): Promise<{ nomeOff?: string; artistas?: string[]; erro?: string }> {
-    return call({ acao: "ponto_get_jogador", tgId });
-  },
-  async listarPontosJogador(tgId: string): Promise<{
-    colunas?: string[];
-    editaveis?: string[];
-    linhas?: Array<{ linha: number; artista: string; valores: Record<string, any> }>;
-    erro?: string;
-  }> {
-    return call({ acao: "ponto_listar_pontos", tgId });
-  },
-  async salvarCelulaPontos(p: { tgId: string; linha: number; coluna: string; valor: any }): Promise<CommonResponse> {
-    invalidateCache();
-    return call({ acao: "ponto_salvar_celula", tgId: p.tgId, linha: p.linha, coluna: p.coluna, valor: p.valor });
-  },
-  async distribuirPontosAleatorio(tgId: string): Promise<CommonResponse> {
-    invalidateCache();
-    return call({ acao: "ponto_distribuir_aleatorio", tgId });
-  },
-  async listarPlaylistsJogador(tgId: string): Promise<{
-    colunas?: string[];
-    editaveis?: string[];
-    linhas?: Array<{ linha: number; artista: string; valores: Record<string, any> }>;
-    erro?: string;
-  }> {
-    return call({ acao: "ponto_listar_playlists", tgId });
-  },
-  async salvarCelulaPlaylist(p: { tgId: string; linha: number; coluna: string; valor: any }): Promise<CommonResponse> {
-    invalidateCache();
-    return call({
-      acao: "ponto_salvar_playlist_celula",
-      tgId: p.tgId,
-      linha: p.linha,
-      coluna: p.coluna,
-      valor: p.valor,
-    });
-  },
-  async distribuirPlaylistsAuto(tgId: string): Promise<CommonResponse & { resumo?: string }> {
-    invalidateCache();
-    return call({ acao: "ponto_distribuir_playlists_auto", tgId });
-  },
-
-  // ---- PONTO Playlists ECOIN ----
-  async listarMusicasEdicao(tgId: string): Promise<{
-    musicas?: Array<{ linha: number; musica: string; artista: string }>;
-    erro?: string;
-  }> {
-    return call({ acao: "ponto_listar_musicas_edicao", tgId });
-  },
-  async saldoEcoin(tgId: string): Promise<{
-    saldos?: Record<string, any>;
-    erro?: string;
-  }> {
-    return call({ acao: "ponto_saldo_ecoin", tgId });
-  },
-  async salvarPlaylistEcoin(p: {
-    tgId: string;
-    musica: string;
-    artista: string;
-    plataforma: string;
-    playlist: string;
-  }): Promise<CommonResponse & { saldo?: any; linha?: number }> {
-    invalidateCache();
-    return call({ acao: "ponto_salvar_playlist_ecoin", ...p });
+  async registrarBem(p: Omit<BemItem, "id">): Promise<CommonResponse> {
+    return call<CommonResponse>({ acao: "registrar_bem", ...p });
   },
 };
 
-export interface ChartData {
-  musica: string;
-  artista: string;
-  foto: string;
-  data: string;
-  url: string;
-  erro?: string;
+// Utilitários de formatação
+export function fmtEC(v: number): string {
+  if (v >= 1_000_000) return `EC ${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `EC ${(v / 1_000).toFixed(0)}K`;
+  return `EC ${v}`;
 }
 
-export interface PlaylistTrack {
-  album_id: string;
-  faixa_numero: number;
-  titulo: string;
-  artistas: string;
-  drive_url: string;
-  capa_url?: string;
-  duracao?: string;
-}
-
-export interface PlaylistPayload {
-  id?: string;
-  titulo: string;
-  descricao?: string;
-  capa_url?: string;
-  owner: string;
-  telegram_id?: string;
-  tracks: PlaylistTrack[];
-  data?: string;
-}
-
-export function fmtEC(n: number) {
-  return `E$C ${(n || 0).toLocaleString("pt-BR")}`;
-}
-
-export function fmtMoney(n: number) {
-  return `$${(n || 0).toLocaleString("pt-BR")}`;
-}
-
-export function driveImg(url: string | undefined | null, size: number = 400): string | undefined {
-  if (!url) return undefined;
-  if (url.includes("lh3.googleusercontent.com")) {
-    if (!url.includes("=")) return `${url}=w${size}-h${size}-p`;
-    return url;
-  }
-  const m = String(url).match(/[-\w]{25,}/);
-  if (!m) return url;
-  return `https://lh3.googleusercontent.com/d/${m[0]}=w${size}-h${size}-p`;
-}
-
-export function driveAudioSrc(url: string | undefined | null): string | undefined {
-  if (!url) return undefined;
-  const m = String(url).match(/[-\w]{25,}/);
-  if (!m) return undefined;
-  return `https://drive.google.com/file/d/${m[0]}/preview`;
-}
-
-export function driveDirectAudio(url: string | undefined | null): string | undefined {
-  if (!url) return undefined;
-  const m = String(url).match(/[-\w]{25,}/);
-  if (!m) return undefined;
-  return `https://drive.google.com/uc?export=download&id=${m[0]}`;
+export function driveImg(url: string, size = 200): string {
+  if (!url) return "";
+  const m = url.match(/\/d\/([^/]+)/);
+  if (m) return `https://lh3.googleusercontent.com/d/${m[1]}=s${size}`;
+  return url;
 }

@@ -78,18 +78,16 @@ function MarketPage() {
   const [isSelling, setIsSelling] = useState(false);
 
   useEffect(() => {
-    api.listarMarket().then(setItems);
-    api.listarMural().then(setMural);
+    api.listarMarket().then(setItems).catch(() => setItems([]));
+    api.listarMural().then(setMural).catch(() => setMural([]));
     api.listarCategoriasMarket().then(setCatOrder).catch(() => setCatOrder([]));
   }, []);
 
   useEffect(() => {
     if (!ready || !user) return;
-    api.meusArtistas(user.id).then(setArtists);
+    api.meusArtistas(user.id).then(setArtists).catch(() => setArtists([]));
   }, [ready, user]);
 
-  // Categorias ordenadas pelo CONFIG_SISTEMA. Categorias presentes nos itens
-  // mas não listadas no config aparecem ao final, em ordem alfabética.
   const cats = useMemo(() => {
     if (!items) return [];
     const presentes = new Set(items.map((i) => i.categoria).filter(Boolean));
@@ -100,7 +98,6 @@ function MarketPage() {
     return [...oficiais, ...extras];
   }, [items, catOrder]);
 
-  // Garante que a categoria selecionada ainda existe após o reload
   useEffect(() => {
     if (cat !== "ALL" && cats.length && !cats.includes(cat)) setCat("ALL");
   }, [cats, cat]);
@@ -133,7 +130,7 @@ function MarketPage() {
             </div>
           </div>
           {tab === "mural" && (
-             <button 
+             <button
                 onClick={() => setIsSelling(true)}
                 className="size-12 rounded-2xl bg-white/5 border border-white/10 grid place-items-center active:scale-95 transition-all text-primary"
              >
@@ -275,7 +272,7 @@ function MarketPage() {
                         <p className="text-xs text-muted-foreground font-medium mb-4 italic">"{m.teaser || "Uma obra prima aguardando sua voz..."}"</p>
                         <div className="flex items-center gap-2 pt-4 border-t border-white/5">
                            <div className="size-6 rounded-full bg-secondary overflow-hidden">
-                              <img src="https://images.unsplash.com/photo-1514525253361-bee8718a300c?w=100&h=100&fit=crop" className="w-full h-full object-cover"  loading="lazy" decoding="async"/>
+                              <img src="https://images.unsplash.com/photo-1514525253361-bee8718a300c?w=100&h=100&fit=crop" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                            </div>
                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Vendedor: {m.vendedor}</span>
                         </div>
@@ -300,9 +297,9 @@ function MarketPage() {
       )}
 
       {isSelling && (
-        <SellModal 
-          artists={artists} 
-          onClose={() => setIsSelling(false)} 
+        <SellModal
+          artists={artists}
+          onClose={() => setIsSelling(false)}
           onSuccess={() => {
             setIsSelling(false);
             api.listarMural().then(setMural);
@@ -324,12 +321,17 @@ function BuyModal({ buying, artists, onClose, onSuccess }: any) {
 
   const go = async () => {
     setSubmitting(true);
-    const r = buying.kind === "market" 
-      ? await api.comprarMarket({ nome, categoria: it.categoria, item: it.item })
-      : await api.comprarMural({ nome, id: it.id });
-    notify(r, { successFallback: "Transação Imperial confirmada!" });
-    setSubmitting(false);
-    if (!r.erro) onSuccess();
+    try {
+      const r = buying.kind === "market"
+        ? await api.comprarMarket({ nome, categoria: it.categoria, item: it.item })
+        : await api.comprarMural({ nome, id: it.id });
+      notify(r, { successFallback: "Transação Imperial confirmada!" });
+      if (!r.erro) onSuccess();
+    } catch {
+      notify({ erro: "Erro de conexão. Tente novamente." });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -353,7 +355,7 @@ function BuyModal({ buying, artists, onClose, onSuccess }: any) {
          <div className="space-y-4">
             <div>
                <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2 block px-1">Comprar com</label>
-               <select 
+               <select
                  value={nome}
                  onChange={e => setNome(e.target.value)}
                  className="w-full bg-background border border-white/10 rounded-2xl px-4 py-3.5 text-xs font-black outline-none focus:border-primary transition-all"
@@ -390,10 +392,15 @@ function SellModal({ artists, onClose, onSuccess }: any) {
   const go = async (e: any) => {
     e.preventDefault();
     setSubmitting(true);
-    const r = await api.venderComposicao({ nome, titulo, preco: parseFloat(preco) });
-    notify(r, { successFallback: "Obra publicada no mural!" });
-    setSubmitting(false);
-    if (!r.erro) onSuccess();
+    try {
+      const r = await api.venderComposicao({ nome, titulo, preco: parseFloat(preco) });
+      notify(r, { successFallback: "Obra publicada no mural!" });
+      if (!r.erro) onSuccess();
+    } catch {
+      notify({ erro: "Erro de conexão. Tente novamente." });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -409,7 +416,7 @@ function SellModal({ artists, onClose, onSuccess }: any) {
          <div className="space-y-4">
             <div>
                <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2 block px-1">Artista Vendedor</label>
-               <select 
+               <select
                  value={nome}
                  onChange={e => setNome(e.target.value)}
                  className="w-full bg-background border border-white/10 rounded-2xl px-4 py-3.5 text-xs font-black outline-none"
@@ -421,7 +428,7 @@ function SellModal({ artists, onClose, onSuccess }: any) {
             </div>
             <div>
                <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2 block px-1">Título da Obra</label>
-               <input 
+               <input
                  type="text"
                  required
                  value={titulo}
@@ -432,7 +439,7 @@ function SellModal({ artists, onClose, onSuccess }: any) {
             </div>
             <div>
                <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2 block px-1">Preço Sugerido (EC)</label>
-               <input 
+               <input
                  type="number"
                  required
                  value={preco}

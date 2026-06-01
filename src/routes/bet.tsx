@@ -39,40 +39,48 @@ function BetPage() {
   useEffect(() => {
     if (!ready || !user) return;
     setLoading(true);
-    Promise.all([api.meusArtistas(user.id), api.getMusicasBet()]).then(([a, b]) => {
-      setArtists(a);
-      if (a.length > 0) setSelectedArtist(a[0].nome);
-      
-      if (b && Array.isArray(b.musicas)) {
-        // Normaliza as músicas vindas do Sheets (especialmente da aba EDIÇÃO CHARTS)
-        const musicasNormalizadas = b.musicas.map((m: any) => {
-          if (typeof m === "string") return { musica: m, artista: "Vários", capa: "" };
-          return {
-            musica: m.musica || m.Musica || m.Música || m.B || m[1] || "",
-            artista: m.artista || m.Artista || m.A || m[0] || "Empire Artist",
-            capa: m.capa || m.Capa || m.foto || m.capa_url || ""
-          };
-        }).filter(m => m.musica);
-        
-        setBetData({ ...b, musicas: musicasNormalizadas as any });
-      } else if (b) {
-        setBetData(b as any);
-      }
-      
-      setLoading(false);
-    });
+    Promise.all([api.meusArtistas(user.id), api.getMusicasBet()])
+      .then(([a, b]) => {
+        setArtists(a);
+        if (a.length > 0) setSelectedArtist(a[0].nome);
+
+        if (b && Array.isArray(b.musicas)) {
+          const musicasNormalizadas = b.musicas.map((m: any) => {
+            if (typeof m === "string") return { musica: m, artista: "Vários", capa: "" };
+            return {
+              musica: m.musica || m.Musica || m.Música || m.B || m[1] || "",
+              artista: m.artista || m.Artista || m.A || m[0] || "Empire Artist",
+              capa: m.capa || m.Capa || m.foto || m.capa_url || ""
+            };
+          }).filter((m: any) => m.musica);
+
+          setBetData({ ...b, musicas: musicasNormalizadas as any });
+        } else if (b) {
+          setBetData(b as any);
+        }
+      })
+      .catch(() => {
+        // GAS timeout ou erro de rede — exibe tela vazia em vez de loading eterno
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [ready, user]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
-    const r = await api.searchSongs(searchQuery);
-    setSearchResults(r);
-    setSearching(false);
+    try {
+      const r = await api.searchSongs(searchQuery);
+      setSearchResults(r);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
   };
 
   const addSongToBet = (m: any) => {
-    // Adiciona ao betData local se não estiver lá
     setBetData(prev => {
       if (!prev) return { semana: "Atual", musicas: [m] };
       if (prev.musicas.some(x => x.musica === m.musica)) return prev;
@@ -91,15 +99,20 @@ function BetPage() {
       return;
     }
     setSubmitting(true);
-    const r = await api.bet({
-      nome: selectedArtist,
-      valor: parseFloat(valor),
-      semana: betData.semana,
-      previsoes: JSON.stringify(bets),
-    });
-    notify(r, { successFallback: "Aposta registrada no Empire Bet!" });
-    if (!r.erro) setBets({});
-    setSubmitting(false);
+    try {
+      const r = await api.bet({
+        nome: selectedArtist,
+        valor: parseFloat(valor),
+        semana: betData.semana,
+        previsoes: JSON.stringify(bets),
+      });
+      notify(r, { successFallback: "Aposta registrada no Empire Bet!" });
+      if (!r.erro) setBets({});
+    } catch {
+      notify({ erro: "Erro de conexão. Tente novamente." });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const updBet = (musica: string, pos: string) => {
@@ -162,9 +175,9 @@ function BetPage() {
 
         {/* Busca de Músicas */}
         <div className="p-4 rounded-3xl bg-white/[0.03] border border-white/5">
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 px-1">Buscar múscia no sistema para apostar</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 px-1">Buscar música no sistema para apostar</p>
           <div className="flex gap-2">
-            <input 
+            <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -172,7 +185,7 @@ function BetPage() {
               placeholder="Nome da música ou artista..."
               className="flex-1 bg-background border border-white/10 rounded-xl px-4 py-3 text-xs outline-none focus:border-primary"
             />
-            <button 
+            <button
               type="button"
               onClick={handleSearch}
               disabled={searching}
@@ -181,7 +194,7 @@ function BetPage() {
               {searching ? "..." : "Buscar"}
             </button>
           </div>
-          
+
           {searchResults.length > 0 && (
             <div className="mt-4 space-y-1 max-h-40 overflow-y-auto pr-1">
               {searchResults.map((m, i) => (
@@ -191,7 +204,7 @@ function BetPage() {
                   onClick={() => addSongToBet(m)}
                   className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 text-left transition-colors group"
                 >
-                  <img src={driveImg(m.capa, 40)} className="size-8 rounded object-cover border border-white/10"  loading="lazy" decoding="async"/>
+                  <img src={driveImg(m.capa, 40)} className="size-8 rounded object-cover border border-white/10" loading="lazy" decoding="async" />
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-black leading-none mb-1">{m.musica}</p>
                     <p className="text-[11px] text-muted-foreground font-bold">{m.artista}</p>
@@ -230,7 +243,8 @@ function BetPage() {
                       src={driveImg(m.capa, 100)}
                       alt=""
                       className="size-12 rounded-xl object-cover bg-secondary p-0.5 border border-white/10"
-                     loading="lazy" decoding="async"/>
+                      loading="lazy" decoding="async"
+                    />
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-black truncate">{m.musica}</p>
