@@ -16,7 +16,7 @@ import {
 } from "@/lib/empiretv";
 import { Send } from "lucide-react";
 import {
-  fetchMensagens, inserirMensagem, getRanking,
+  fetchMensagens, inserirMensagem, getRanking, podeSendMensagem,
   type MensagemDB, type RankingItem
 } from "@/lib/supabase";
 
@@ -362,17 +362,23 @@ function KickPlayer({ programa }: { programa: string }) {
 //
 // CORREÇÕES APLICADAS:
 // 1. Input NÃO fica disabled durante envio — apenas o botão mostra spinner.
-//    Motivo: disabled=true no input durante um fetch pendente congela o foco
-//    no Telegram WebApp, dando aparência de travamento total do app.
 // 2. scrollBottom usa bottomRef + scrollIntoView (single RAF) para não brigar
-//    com o teclado virtual ao rolar. Usa inputFocusedRef para bloquear scroll
-//    enquanto o teclado está abrindo.
-// 3. enviar() usa try/finally: setSending(false) SEMPRE executa, mesmo em
-//    erros inesperados, evitando que o botão trave permanentemente.
-// 4. inserirMensagem usa AbortController: cancela o fetch subjacente após
-//    3.5s, impedindo atualizações de estado após timeout.
+//    com o teclado virtual ao rolar.
+// 3. enviar() usa try/finally: setSending(false) SEMPRE executa.
+// 4. inserirMensagem usa AbortController: cancela o fetch após 3.5s.
+// 5. FIX: usuário "guest" (fallback quando fora do Telegram) é bloqueado de enviar
+//    com mensagem clara — Number("guest") = NaN e causava falha silenciosa no banco.
+// 6. FIX: podeSendMensagem importado explicitamente e chamado antes do insert.
 
 const POLL_INTERVAL = 3000;
+
+// Detecta se o usuário é válido (não é o fallback "guest" sem Telegram real)
+function isValidTelegramUser(user: { id: string; isTest?: boolean } | null): boolean {
+  if (!user) return false;
+  if (user.id === "guest") return false;
+  const numId = Number(user.id);
+  return !isNaN(numId) && numId > 0;
+}
 
 function LiveChat({ streamId, user }: {
   streamId: string;
@@ -389,19 +395,17 @@ function LiveChat({ streamId, user }: {
   const lastIdRef                 = useRef(0);
   useEffect(() => { nomeRef.current = user?.name || "Jogador"; });
 
+  const userValido = isValidTelegramUser(user);
+
   function scrollBottom() {
-    // Não força scroll enquanto o teclado virtual está abrindo —
-    // forçar scroll durante o resize do layout congela o foco no WebView.
     if (inputFocusedRef.current) return;
     requestAnimationFrame(() => {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     });
   }
 
-  // Dependências: apenas streamId e user.id.
-  // user.name é lido via nomeRef para não recriar o ciclo de polling.
   useEffect(() => {
-    if (!streamId || !user?.id) {
+    if (!streamId || !userValido) {
       setMsgs([]);
       setLoading(false);
       return;
@@ -449,7 +453,10 @@ function LiveChat({ streamId, user }: {
 
   async function enviar() {
     const t = texto.trim();
-    if (!t || !user?.id || sending || !streamId) return;
+    if (!t || !userValido || sending || !streamId) return;
+
+    // Verifica rate limit client-side antes de qualquer coisa
+    if (!podeSendMensagem(user!.id)) return;
 
     setSending(true);
     setTexto("");
@@ -460,8 +467,8 @@ function LiveChat({ streamId, user }: {
       id: optimisticId as unknown as number,
       created_at: new Date().toISOString(),
       stream_id: streamId,
-      telegram_id: Number(user.id),
-      username: user.username || null,
+      telegram_id: Number(user!.id),
+      username: user!.username || null,
       nome: nomeRef.current,
       texto: t,
       reply_to_id: replyTo?.id ?? null,
@@ -472,8 +479,8 @@ function LiveChat({ streamId, user }: {
     try {
       await inserirMensagem({
         stream_id: streamId,
-        telegram_id: Number(user.id),
-        username: user.username || null,
+        telegram_id: Number(user!.id),
+        username: user!.username || null,
         nome: nomeRef.current,
         texto: t,
         reply_to_id: replyTo?.id ?? null,
@@ -485,6 +492,19 @@ function LiveChat({ streamId, user }: {
       // SEMPRE libera o botão, mesmo em erro ou timeout
       setSending(false);
     }
+  }
+
+  // Usuário não identificado (fora do Telegram ou guest)
+  if (!userValido) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 py-8 text-center">
+        <MessageCircle className="size-8 text-muted-foreground" />
+        <p className="text-sm font-bold text-foreground">Chat disponível no Telegram</p>
+        <p className="text-xs text-muted-foreground max-w-[220px]">
+          Abra este app pelo bot do Telegram para participar do chat ao vivo.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -555,11 +575,6 @@ function LiveChat({ streamId, user }: {
         </div>
       )}
 
-      {/* CORREÇÃO PRINCIPAL:
-          O input NÃO tem `disabled` atrelado ao `sending`.
-          Desabilitar o input enquanto um fetch está pendente faz o Telegram WebApp
-          perder o foco e congelar a tela — dando aparência de crash.
-          Apenas o botão de envio fica desabilitado/com spinner durante o envio. */}
       <form
         onSubmit={(e) => { e.preventDefault(); enviar(); }}
         className="p-3 border-t border-border flex items-center gap-2"
@@ -569,17 +584,15 @@ function LiveChat({ streamId, user }: {
           onChange={(e) => setTexto(e.target.value)}
           onFocus={() => { inputFocusedRef.current = true; }}
           onBlur={() => {
-            // Pequeno delay para o scroll não disputar com o fechamento do teclado
             setTimeout(() => { inputFocusedRef.current = false; }, 300);
           }}
-          placeholder={user?.id ? `Comentar como ${nomeRef.current}…` : "Entre pelo Telegram para comentar"}
-          disabled={!user?.id}
+          placeholder={`Comentar como ${nomeRef.current}…`}
           maxLength={500}
-          className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 disabled:opacity-50"
+          className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary/60"
         />
         <button
           type="submit"
-          disabled={!user?.id || !texto.trim() || sending}
+          disabled={!texto.trim() || sending}
           className="size-10 grid place-items-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
         >
           {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
@@ -618,7 +631,12 @@ function EventRoom({
     });
   }, [user, isThisLive, current?.topicoId]);
 
-  const streamId = (isThisLive && current?.topicoId) ? String(current.topicoId) : entry.topicoId || "";
+  // FIX: streamId usa topicoId do current (ao vivo) ou do entry, mas nunca string vazia.
+  // Se ambos forem vazios, o chat não é renderizado e mostra aviso claro.
+  const streamId = (isThisLive && current?.topicoId)
+    ? String(current.topicoId)
+    : (entry.topicoId || "");
+
   const tabs = ["Chat", "Ranking"] as const;
   const [tab, setTab] = useState<typeof tabs[number]>("Chat");
 
@@ -656,7 +674,7 @@ function EventRoom({
         {isThisLive && current && <NowPlayingBar current={current} />}
       </div>
 
-      {streamId && (
+      {streamId ? (
         <div className="rounded-2xl border border-border bg-card overflow-hidden flex flex-col" style={{ height: 420 }}>
           <div className="flex border-b border-border shrink-0">
             {tabs.map((t) => (
@@ -676,6 +694,14 @@ function EventRoom({
               <RankingParticipacao streamId={streamId} currentUserId={user?.id ? String(user.id) : undefined} />
             </div>
           )}
+        </div>
+      ) : (
+        // FIX: se streamId estiver vazio, mostra aviso claro em vez de sumir silenciosamente
+        <div className="rounded-2xl border border-border bg-card p-6 text-center space-y-2">
+          <MessageCircle className="size-6 text-muted-foreground mx-auto" />
+          <p className="text-xs text-muted-foreground">
+            O chat será liberado quando a transmissão estiver ao vivo.
+          </p>
         </div>
       )}
     </div>
