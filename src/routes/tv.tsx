@@ -376,27 +376,27 @@ function LiveChat({ programa, topicoId, user }: {
 
   useEffect(() => {
     let alive = true;
-    const tick = () => {
-      tvApi.chatList(topicoId || undefined)
-        .then(d => {
-          if (!alive) return;
-          const arr = Array.isArray(d) ? d : [];
-          setMsgs(arr);
-          const lastId = arr[arr.length - 1]?.id || "";
-          if (lastId !== lastIdRef.current) {
-            lastIdRef.current = lastId;
-            requestAnimationFrame(() => {
-              if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-            });
-          }
-        })
-        .catch(() => {})
-        .finally(() => { if (alive) setLoading(false); });
-    };
     setLoading(true);
-    tick();
-    const id = setInterval(tick, 4000);
-    return () => { alive = false; clearInterval(id); };
+
+    tvApi.chatList(topicoId || undefined)
+      .then(d => {
+        if (!alive) return;
+        const arr = Array.isArray(d) ? d : [];
+        setMsgs(arr);
+        const lastId = arr[arr.length - 1]?.id || "";
+        lastIdRef.current = lastId;
+        requestAnimationFrame(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+
+    return () => { alive = false; };
   }, [topicoId]);
 
   async function enviar() {
@@ -425,7 +425,7 @@ function LiveChat({ programa, topicoId, user }: {
         topicoId,
       });
     } catch {
-      // mantém a otimista — próximo tick reconcilia
+      // mantém a otimista — próximo carregamento reconcilia
     } finally {
       setSending(false);
     }
