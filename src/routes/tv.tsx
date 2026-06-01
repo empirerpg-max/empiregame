@@ -359,8 +359,17 @@ function KickPlayer({ programa }: { programa: string }) {
 // Chat em tempo real via polling incremental ao Supabase.
 // NÃO usa Supabase Realtime (WebSocket) pois causa crash no Telegram Mini App WebView.
 // Estratégia: busca histórico inicial → polling a cada 3s buscando apenas msgs novas (afterId).
+//
+// CORREÇÕES APLICADAS:
+// 1. Input NÃO fica disabled durante envio — apenas o botão mostra spinner.
+//    Motivo: disabled=true no input durante um fetch pendente congela o foco
+//    no Telegram WebApp, dando aparência de travamento total do app.
+// 2. scrollBottom usa double-RAF e guarda inputFocusedRef para não brigar
+//    com o teclado virtual ao rolar.
+// 3. Timeout do insert reduzido para 4s (abaixo do limiar de ~5s do Telegram
+//    que dispara o dialog "aguardar ou sair").
 
-const POLL_INTERVAL = 3000; // 3 segundos
+const POLL_INTERVAL = 3000;
 
 function LiveChat({ streamId, user }: {
   streamId: string;
@@ -372,15 +381,15 @@ function LiveChat({ streamId, user }: {
   const [sending, setSending]     = useState(false);
   const [replyTo, setReplyTo]     = useState<MensagemDB | null>(null);
   const scrollRef                 = useRef<HTMLDivElement>(null);
-  // Evita scroll automático enquanto o teclado virtual está aberto no mobile/Telegram WebApp.
   const inputFocusedRef           = useRef(false);
   const nomeRef                   = useRef(user?.name || "Jogador");
   const lastIdRef                 = useRef(0);
   useEffect(() => { nomeRef.current = user?.name || "Jogador"; });
 
   function scrollBottom() {
+    // Não força scroll enquanto o teclado virtual está abrindo —
+    // forçar scrollTop durante o resize do layout congela o foco no WebView.
     if (inputFocusedRef.current) return;
-    // Double RAF: espera 2 frames para o layout do teclado virtual estabilizar
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         try {
@@ -391,9 +400,8 @@ function LiveChat({ streamId, user }: {
     });
   }
 
-  // ─── Carregamento inicial + polling incremental ───────────────────────────
   // Dependências: apenas streamId e user.id.
-  // Sem WebSocket/Realtime — polling simples e seguro para WebView do Telegram.
+  // user.name é lido via nomeRef para não recriar o ciclo de polling.
   useEffect(() => {
     if (!streamId || !user?.id) {
       setMsgs([]);
@@ -406,7 +414,6 @@ function LiveChat({ streamId, user }: {
     setReplyTo(null);
     lastIdRef.current = 0;
 
-    // 1) Histórico inicial
     fetchMensagens(streamId, 60, 0).then(data => {
       setMsgs(data);
       if (data.length > 0) lastIdRef.current = data[data.length - 1].id;
@@ -414,14 +421,12 @@ function LiveChat({ streamId, user }: {
       scrollBottom();
     });
 
-    // 2) Polling incremental: busca só mensagens novas (afterId = último id visto)
     const timer = setInterval(async () => {
       try {
         const novas = await fetchMensagens(streamId, 20, lastIdRef.current);
         if (novas.length === 0) return;
         lastIdRef.current = novas[novas.length - 1].id;
         setMsgs(prev => {
-          // Remove mensagens otimistas correspondentes e adiciona as reais
           const merged = [...prev];
           novas.forEach(nova => {
             const idxOtimista = merged.findIndex(
@@ -430,7 +435,7 @@ function LiveChat({ streamId, user }: {
                    String(p.telegram_id) === String(nova.telegram_id)
             );
             if (idxOtimista >= 0) {
-              merged[idxOtimista] = nova; // substitui otimista pelo real
+              merged[idxOtimista] = nova;
             } else if (!merged.some(p => p.id === nova.id)) {
               merged.push(nova);
             }
@@ -444,7 +449,6 @@ function LiveChat({ streamId, user }: {
     return () => clearInterval(timer);
   }, [streamId, user?.id]);
 
-  // ─── Envio de mensagem ────────────────────────────────────────────────────
   async function enviar() {
     const t = texto.trim();
     if (!t || !user?.id || sending || !streamId) return;
@@ -452,7 +456,6 @@ function LiveChat({ streamId, user }: {
     setTexto("");
     setReplyTo(null);
 
-    // Mensagem otimista: id = timestamp em ms (> 1.7T, distinguível de ids reais do Supabase)
     const optimistic: MensagemDB = {
       id: Date.now() as unknown as number,
       created_at: new Date().toISOString(),
@@ -466,7 +469,6 @@ function LiveChat({ streamId, user }: {
     setMsgs(prev => [...prev, optimistic]);
     scrollBottom();
 
-    // inserirMensagem já tem timeout de 6s internamente — não trava o WebView.
     await inserirMensagem({
       stream_id: streamId,
       telegram_id: Number(user.id),
@@ -475,7 +477,6 @@ function LiveChat({ streamId, user }: {
       texto: t,
       reply_to_id: replyTo?.id ?? null,
     });
-    // O polling vai buscar a mensagem real e substituir a otimista.
 
     setSending(false);
   }
@@ -533,7 +534,6 @@ function LiveChat({ streamId, user }: {
         })}
       </div>
 
-      {/* Preview de reply */}
       {replyTo && (
         <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border-t border-border text-xs">
           <CornerUpLeft className="size-3.5 text-primary shrink-0" />
@@ -546,6 +546,11 @@ function LiveChat({ streamId, user }: {
         </div>
       )}
 
+      {/* CORREÇÃO PRINCIPAL:
+          O input NÃO tem `disabled` atrelado ao `sending`.
+          Desabilitar o input enquanto um fetch está pendente faz o Telegram WebApp
+          perder o foco e congelar a tela — dando aparência de crash.
+          Apenas o botão de envio fica desabilitado/com spinner durante o envio. */}
       <form
         onSubmit={(e) => { e.preventDefault(); enviar(); }}
         className="p-3 border-t border-border flex items-center gap-2"
@@ -554,9 +559,12 @@ function LiveChat({ streamId, user }: {
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           onFocus={() => { inputFocusedRef.current = true; }}
-          onBlur={() => { inputFocusedRef.current = false; }}
+          onBlur={() => {
+            // Pequeno delay para o scroll não disputar com o fechamento do teclado
+            setTimeout(() => { inputFocusedRef.current = false; }, 300);
+          }}
           placeholder={user?.id ? `Comentar como ${nomeRef.current}…` : "Entre pelo Telegram para comentar"}
-          disabled={!user?.id || sending}
+          disabled={!user?.id}
           maxLength={500}
           className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 disabled:opacity-50"
         />
@@ -601,7 +609,6 @@ function EventRoom({
     });
   }, [user, isThisLive, current?.topicoId]);
 
-  // O streamId é o topicoId da transmissão (identificador único da sala de chat)
   const streamId = (isThisLive && current?.topicoId) ? String(current.topicoId) : entry.topicoId || "";
   const tabs = ["Chat", "Ranking"] as const;
   const [tab, setTab] = useState<typeof tabs[number]>("Chat");
@@ -614,7 +621,6 @@ function EventRoom({
         </button>
       )}
 
-      {/* Capa / Player */}
       <div className="relative w-full rounded-2xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
         {isThisLive ? (
           <KickPlayer programa={entry.programa} />
@@ -627,7 +633,6 @@ function EventRoom({
         )}
       </div>
 
-      {/* Info do programa */}
       <div className="space-y-2">
         <div className="flex items-start gap-3 flex-wrap">
           <h2 className="font-black text-xl flex-1">{entry.programa}</h2>
@@ -642,7 +647,6 @@ function EventRoom({
         {isThisLive && current && <NowPlayingBar current={current} />}
       </div>
 
-      {/* Chat / Ranking */}
       {streamId && (
         <div className="rounded-2xl border border-border bg-card overflow-hidden flex flex-col" style={{ height: 420 }}>
           <div className="flex border-b border-border shrink-0">
@@ -709,7 +713,6 @@ function TvPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-      {/* Header */}
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <Tv className="size-5 text-primary" />
@@ -718,7 +721,6 @@ function TvPage() {
         <p className="text-xs text-muted-foreground">Programação completa do canal</p>
       </div>
 
-      {/* Now Playing */}
       {current && getProgramStatus(current) === "broadcasting" && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3"
@@ -742,7 +744,6 @@ function TvPage() {
         </motion.div>
       )}
 
-      {/* View Toggle */}
       <div className="flex gap-2">
         {(["grade", "planner"] as const).map(v => (
           <button key={v} onClick={() => setView(v)}
@@ -754,24 +755,23 @@ function TvPage() {
         ))}
       </div>
 
-      {/* Content */}
-      {view === "grade" ? (
-        <div className="space-y-3">
-          {entries.length === 0 && (
-            <div className="rounded-2xl border border-border bg-card p-10 text-center text-muted-foreground">
-              <Tv className="size-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Nenhuma programação disponível.</p>
-            </div>
-          )}
-          {entries.map((entry, i) => (
+      <div className="space-y-3">
+        {entries.length === 0 && (
+          <div className="rounded-2xl border border-border bg-card p-10 text-center text-muted-foreground">
+            <Tv className="size-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">Nenhuma programação disponível.</p>
+          </div>
+        )}
+        {view === "grade" ? (
+          entries.map((entry, i) => (
             <motion.div key={entry.programa + entry.data} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
               <ProgramCard entry={entry} onSelect={() => setSelectedEntry(entry)} />
             </motion.div>
-          ))}
-        </div>
-      ) : (
-        <PlannerView entries={entries} onSelect={setSelectedEntry} />
-      )}
+          ))
+        ) : (
+          <PlannerView entries={entries} onSelect={setSelectedEntry} />
+        )}
+      </div>
     </div>
   );
 }

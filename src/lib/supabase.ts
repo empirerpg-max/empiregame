@@ -55,14 +55,16 @@ export async function fetchMensagens(
   return data ?? [];
 }
 
-// ─── Inserir mensagem com timeout de 6s ──────────────────────────────────────
-// Sem timeout, uma rede lenta faz o fetch pendurar por 10s+,
-// o que dispara o dialog "aguardar ou sair" no Telegram WebApp.
+// ─── Inserir mensagem com timeout de 4s ──────────────────────────────────────
+// Timeout reduzido de 6s para 4s: o Telegram WebApp mostra o dialog
+// "aguardar ou sair" após ~5s de fetch pendente, travando o app.
+// Com 4s garantimos que o Promise.race resolve antes desse limiar.
+// A mensagem otimista já está visível; o polling vai buscar a real em seguida.
 export async function inserirMensagem(
   payload: Omit<MensagemDB, "id" | "created_at">
 ): Promise<MensagemDB | null> {
   const timeoutPromise = new Promise<null>((resolve) =>
-    setTimeout(() => resolve(null), 6000)
+    setTimeout(() => resolve(null), 4000)
   );
 
   const insertPromise = supabase
@@ -75,8 +77,6 @@ export async function inserirMensagem(
       return data as MensagemDB;
     });
 
-  // Se o insert demorar mais de 6s, retorna null silenciosamente.
-  // A mensagem otimista já está visível; o polling vai buscar a real em seguida.
   return Promise.race([insertPromise, timeoutPromise]);
 }
 
