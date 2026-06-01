@@ -627,19 +627,94 @@ function EventRoom({
   );
 }
 
-// ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
-type ViewMode = "grade" | "data";
+// ─── COVER CARD (estilo poster Netflix) ──────────────────────────────────────
+function CoverCard({ entry, variant, onSelect }: {
+  entry: ProgramEntry;
+  variant: "live" | "upcoming" | "past";
+  onSelect: () => void;
+}) {
+  const capa = driveImgUrl(entry.capaUrl);
+  return (
+    <motion.button
+      onClick={onSelect}
+      whileHover={{ scale: 1.03 }}
+      transition={{ type: "spring", stiffness: 280 }}
+      className="shrink-0 w-[160px] md:w-[180px] text-left group focus:outline-none"
+    >
+      <div className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-border bg-black/40">
+        {capa ? (
+          <img
+            src={capa}
+            alt={entry.programa}
+            className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${variant === "past" ? "grayscale-[40%] opacity-80" : ""}`}
+          />
+        ) : (
+          <div className="w-full h-full grid place-items-center bg-gradient-to-br from-primary/20 to-black">
+            <Tv className="size-7 text-primary/50" />
+          </div>
+        )}
+        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
+        {variant === "live" && (
+          <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-widest">
+            <span className="size-1.5 rounded-full bg-white animate-pulse" />Ao vivo
+          </span>
+        )}
+        {variant === "past" && (
+          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur text-white/80 text-[9px] font-black uppercase tracking-widest">
+            Arquivo
+          </span>
+        )}
+        <div className="absolute inset-x-0 bottom-0 p-2.5 space-y-0.5">
+          <p className="text-xs font-black text-white truncate drop-shadow">{entry.programa}</p>
+          {entry.data && (
+            <p className="text-[10px] text-white/60 truncate">
+              {entry.data}{entry.horario ? ` · ${fmtTime(entry.horario)}` : ""}
+            </p>
+          )}
+        </div>
+      </div>
+    </motion.button>
+  );
+}
 
+// ─── RAIL (trilha horizontal estilo Netflix) ─────────────────────────────────
+function Rail({ title, accent, items, variant, onSelect }: {
+  title: string;
+  accent?: string;
+  items: ProgramEntry[];
+  variant: "live" | "upcoming" | "past";
+  onSelect: (e: ProgramEntry) => void;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline gap-3 px-1">
+        <h3 className="text-sm font-black uppercase tracking-widest">{title}</h3>
+        {accent && <span className="text-[10px] text-muted-foreground">{accent}</span>}
+        <span className="text-[10px] text-muted-foreground ml-auto">{items.length}</span>
+      </div>
+      <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x">
+        {items.map(entry => (
+          <div key={entry.programa + entry.data + variant} className="snap-start">
+            <CoverCard entry={entry} variant={variant} onSelect={() => onSelect(entry)} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
 function TvPage() {
-  const { user } = useTelegramUser();
+  const { user: _user } = useTelegramUser();
   const [data, setData]                   = useState<TvStatus | null>(null);
   const [loading, setLoading]             = useState(true);
   const [selectedEntry, setSelectedEntry] = useState<ProgramEntry | null>(null);
-  const [viewMode, setViewMode]           = useState<ViewMode>("grade");
+  const [showCalendar, setShowCalendar]   = useState(false);
 
   useEffect(() => {
     let alive = true;
-    const tick = () => tvApi.status().then(r => { if (alive) setData(r); }).finally(() => { if (alive) setLoading(false); });
+    const tick = () => tvApi.status().then(r => { if (alive) setData(r); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
     tick();
     const id = setInterval(tick, 30_000);
     return () => { alive = false; clearInterval(id); };
@@ -650,29 +725,50 @@ function TvPage() {
   const currentRowNum = current?.rowNum;
 
   const entries  = buildProgramEntries(fullSchedule, currentRowNum);
-  const featured = entries.find(e => e.hasLive) ?? entries[0] ?? null;
+
+  // Classificação Ao vivo / Em breve / Arquivo
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const liveItems: ProgramEntry[]     = [];
+  const upcomingItems: ProgramEntry[] = [];
+  const pastItems: ProgramEntry[]     = [];
+
+  for (const e of entries) {
+    if (e.hasLive) { liveItems.push(e); continue; }
+    const d = parseDataBR(e.data);
+    if (d) {
+      const dd = new Date(d); dd.setHours(0, 0, 0, 0);
+      if (dd.getTime() < today.getTime()) { pastItems.push(e); continue; }
+    }
+    upcomingItems.push(e);
+  }
+
+  upcomingItems.sort((a, b) => (parseDataBR(a.data)?.getTime() ?? 0) - (parseDataBR(b.data)?.getTime() ?? 0));
+  pastItems.sort((a, b)     => (parseDataBR(b.data)?.getTime() ?? 0) - (parseDataBR(a.data)?.getTime() ?? 0));
+
+  const featured = liveItems[0] ?? upcomingItems[0] ?? null;
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-24">
       <div className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        {/* Header enxuto */}
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="size-11 rounded-2xl bg-primary text-primary-foreground grid place-items-center">
               <Tv className="size-5" />
             </div>
             <div>
               <h1 className="text-2xl font-black uppercase tracking-widest">Empire TV</h1>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Transmissões agendadas · Chat ao vivo</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Catálogo · Chat ao vivo</p>
             </div>
           </div>
-          {featured && featured.hasLive && !selectedEntry && (
+          {!selectedEntry && (
             <button
-              onClick={() => setSelectedEntry(featured)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-black uppercase tracking-widest hover:bg-red-500 transition-colors"
+              onClick={() => setShowCalendar(v => !v)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors
+                ${showCalendar ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-white/5"}`}
             >
-              <span className="size-1.5 rounded-full bg-white animate-pulse" />Assistir ao vivo
+              <CalendarDays className="size-3.5" /> Calendário
             </button>
           )}
         </div>
@@ -693,10 +789,13 @@ function TvPage() {
                   onBack={() => setSelectedEntry(null)}
                 />
               </motion.div>
+            ) : showCalendar ? (
+              <motion.div key="cal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <PlannerView entries={entries} onSelect={setSelectedEntry} />
+              </motion.div>
             ) : (
-              <motion.div key="grid" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+              <motion.div key="catalog" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-8">
 
-                {/* Banner destaque */}
                 {featured && (
                   <motion.div
                     className="relative rounded-3xl overflow-hidden border border-border cursor-pointer group"
@@ -719,74 +818,32 @@ function TvPage() {
                             <span className="size-1.5 rounded-full bg-white animate-pulse" />Ao vivo agora
                           </span>
                         ) : (
-                          <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest">Em breve</span>
-                        )}
-                        {featured.hasLive && current?.tipo && (
-                          <span className="text-xs font-bold text-white/60 uppercase">{current.tipo}</span>
+                          <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest">Próxima atração</span>
                         )}
                       </div>
                       <h2 className="text-3xl md:text-4xl font-black tracking-tight text-white drop-shadow-md">{featured.programa}</h2>
-                      {featured.hasLive && (current?.material || current?.buff) && (
-                        <div className="flex items-center gap-3 flex-wrap">
-                          {current?.material && (
-                            <span className="flex items-center gap-1.5 text-sm text-white/70">
-                              <Music2 className="size-3.5" />{current.material}
-                            </span>
-                          )}
-                          {current?.buff && (
-                            <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-500/20 text-yellow-400 text-[10px] font-black">
-                              <Zap className="size-3" />{current.buff}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-4 pt-1">
+                      <div className="flex items-center gap-4 pt-1 flex-wrap">
                         <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black text-sm font-black hover:bg-white/90 transition-colors">
-                          <Play className="size-4" />{featured.hasLive ? "Assistir" : "Ver programação"}
+                          <Play className="size-4" />{featured.hasLive ? "Assistir" : "Ver detalhes"}
                         </button>
                         {featured.data && (
-                          <span className="text-xs text-white/50">{featured.data}{featured.horario ? ` · ${fmtTime(featured.horario)}` : ""}</span>
+                          <span className="text-xs text-white/60">{featured.data}{featured.horario ? ` · ${fmtTime(featured.horario)}` : ""}</span>
                         )}
                       </div>
                     </div>
                   </motion.div>
                 )}
 
-                {/* Seletor Grade / Por data */}
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setViewMode("grade")}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-colors
-                      ${viewMode === "grade" ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-white/5"}`}
-                  >
-                    <LayoutGrid className="size-3.5" /> Grade
-                  </button>
-                  <button onClick={() => setViewMode("data")}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-colors
-                      ${viewMode === "data" ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-white/5"}`}
-                  >
-                    <CalendarDays className="size-3.5" /> Por data
-                  </button>
-                </div>
+                <Rail title="Ao vivo agora" items={liveItems} variant="live" onSelect={setSelectedEntry} />
+                <Rail title="Em breve" accent="próximas transmissões" items={upcomingItems} variant="upcoming" onSelect={setSelectedEntry} />
+                <Rail title="Arquivo" accent="já transmitido" items={pastItems} variant="past" onSelect={setSelectedEntry} />
 
-                <AnimatePresence mode="wait">
-                  {viewMode === "grade" ? (
-                    <motion.div key="grade-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-                      {entries.length === 0 && (
-                        <div className="rounded-2xl border border-border bg-card p-10 text-center text-muted-foreground">
-                          <Tv className="size-8 mx-auto mb-2 opacity-30" />
-                          <p className="text-sm">Nenhuma programação disponível</p>
-                        </div>
-                      )}
-                      {entries.map(entry => (
-                        <ProgramCard key={entry.programa + entry.data} entry={entry} onSelect={() => setSelectedEntry(entry)} />
-                      ))}
-                    </motion.div>
-                  ) : (
-                    <motion.div key="data-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <PlannerView entries={entries} onSelect={setSelectedEntry} />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {liveItems.length === 0 && upcomingItems.length === 0 && pastItems.length === 0 && (
+                  <div className="rounded-2xl border border-border bg-card p-10 text-center text-muted-foreground">
+                    <Tv className="size-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">Nenhuma programação disponível</p>
+                  </div>
+                )}
 
               </motion.div>
             )}
