@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ListMusic, Loader2, Plus, Trash2, Search, GripVertical } from "lucide-react";
+import { toast } from "sonner";
 import {
   api,
   driveImg,
@@ -8,12 +9,69 @@ import {
   type PlaylistPayload,
   type PlaylistTrack,
 } from "@/lib/api";
-import { useTelegramUser } from "@/lib/telegram";
-import { notify } from "@/lib/notify";
+
+// ---------- helpers locais (evita imports que o Rollup do Lovable pode eliminar) ----------
+function safeLocalGet(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function notifyResult(result: unknown, opts: { successFallback?: string } = {}) {
+  let msg = "";
+  if (typeof result === "string") {
+    msg = result;
+  } else if (result && typeof result === "object") {
+    const res = result as Record<string, unknown>;
+    if (res.erro)          msg = "\u274C " + String(res.erro);
+    else if (res.message)  msg = String(res.message);
+    else if (res.msg)      msg = String(res.msg);
+    else if (res.ok === true)  msg = "\u2705 " + (opts.successFallback || "Feito!");
+    else if (res.ok === false) msg = "\u274C " + (String(res.msg) || "Falhou.");
+    else msg = opts.successFallback || "Feito!";
+  }
+  const clean = msg.replace(/\b[a-f0-9]{8}\b/gi, "").trim();
+  const lines = clean.split(/\n+/).filter(Boolean);
+  const title = lines[0] || "Feito";
+  const description = lines.slice(1).join("\n") || undefined;
+  if (title.startsWith("\u274C")) {
+    toast.error(title.replace(/^\u274C\s*/, ""), { description });
+  } else if (title.startsWith("\u26A0\uFE0F")) {
+    toast.warning(title.replace(/^\u26A0\uFE0F\s*/, ""), { description });
+  } else if (title.startsWith("\u2705")) {
+    toast.success(title.replace(/^\u2705\s*/, ""), { description });
+  } else {
+    toast(title, { description });
+  }
+  return { ok: title.startsWith("\u2705"), title, description };
+}
 
 export function PlaylistEditor({ existing }: { existing?: PlaylistPayload }) {
-  const { user } = useTelegramUser();
   const navigate = useNavigate();
+
+  // Lê usuário do Telegram diretamente do localStorage/URL sem depender do hook
+  const [tgId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    return (
+      params.get("id") ||
+      params.get("tg_id") ||
+      params.get("user_id") ||
+      safeLocalGet("empire_tg_id") ||
+      safeLocalGet("tg_user_id") ||
+      null
+    );
+  });
+
+  const [tgName] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    return (
+      params.get("name") ||
+      params.get("first_name") ||
+      safeLocalGet("tg_user_name") ||
+      "Player"
+    );
+  });
+
   const [titulo, setTitulo] = useState(existing?.titulo || "");
   const [descricao, setDescricao] = useState(existing?.descricao || "");
   const [capa, setCapa] = useState(existing?.capa_url || "");
@@ -36,10 +94,9 @@ export function PlaylistEditor({ existing }: { existing?: PlaylistPayload }) {
     if (!q.trim()) return;
     try {
       const results = await api.searchSongs(q);
-      // Mesclar resultados da busca no catálogo local se não existirem
       setCatalog(prev => {
         const existingIds = new Set((prev || []).map(t => `${t.album_id}-${t.numero}`));
-        const newOnes = results.filter(r => !existingIds.has(`${r.album_id}-${r.numero}`));
+        const newOnes = results.filter((r: any) => !existingIds.has(`${r.album_id}-${r.numero}`));
         return [...(prev || []), ...newOnes];
       });
     } catch (e) {
@@ -75,8 +132,8 @@ export function PlaylistEditor({ existing }: { existing?: PlaylistPayload }) {
     if (!catalog) return [];
     const term = q.toLowerCase();
     return catalog
-      .filter((t) => 
-        String(t.titulo).toLowerCase().includes(term) || 
+      .filter((t) =>
+        String(t.titulo).toLowerCase().includes(term) ||
         String(t.artistas).toLowerCase().includes(term)
       )
       .slice(0, 100);
@@ -85,26 +142,29 @@ export function PlaylistEditor({ existing }: { existing?: PlaylistPayload }) {
   async function salvar() {
     if (!titulo || tracks.length === 0) return;
     setSubmitting(true);
-    const localTgId = typeof window !== "undefined" ? localStorage.getItem("empire_tg_id") : null;
-    const payload: PlaylistPayload = {
-      id: existing?.id,
-      titulo,
-      descricao,
-      capa_url: capa,
-      owner: owner || user?.name || "Player",
-      telegram_id: localTgId || user?.id,
-      tracks,
-      data: existing?.data || new Date().toISOString().slice(0, 10),
-    };
-    const r = await api.salvarPlaylist(payload, localTgId || user?.id);
-    setSubmitting(false);
-    const { ok } = notify(r as Record<string, unknown>, {
-      successFallback: existing ? "Playlist atualizada!" : "Playlist criada!",
-    });
-    if (ok) {
-      const id = ((r as Record<string, unknown>)?.id as string | undefined) || existing?.id;
-      if (id) navigate({ to: "/playlists/$id", params: { id } });
-      else navigate({ to: "/playlists" });
+    try {
+      const localTgId = safeLocalGet("empire_tg_id") || tgId;
+      const payload: PlaylistPayload = {
+        id: existing?.id,
+        titulo,
+        descricao,
+        capa_url: capa,
+        owner: owner || tgName || "Player",
+        telegram_id: localTgId,
+        tracks,
+        data: existing?.data || new Date().toISOString().slice(0, 10),
+      };
+      const r = await api.salvarPlaylist(payload, localTgId);
+      const { ok } = notifyResult(r as Record<string, unknown>, {
+        successFallback: existing ? "Playlist atualizada!" : "Playlist criada!",
+      });
+      if (ok) {
+        const id = ((r as Record<string, unknown>)?.id as string | undefined) || existing?.id;
+        if (id) navigate({ to: "/playlists/$id", params: { id } });
+        else navigate({ to: "/playlists" });
+      }
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -161,26 +221,16 @@ export function PlaylistEditor({ existing }: { existing?: PlaylistPayload }) {
           {tracks.map((t, i) => (
             <li key={i} className="flex items-center gap-2 p-2 rounded-lg bg-card">
               <GripVertical className="size-4 text-muted-foreground" />
-              <button
-                type="button"
-                onClick={() => move(i, -1)}
-                className="text-xs text-muted-foreground"
-              >
-                ▲
-              </button>
-              <button
-                type="button"
-                onClick={() => move(i, 1)}
-                className="text-xs text-muted-foreground"
-              >
-                ▼
-              </button>
+              <button type="button" onClick={() => move(i, -1)} className="text-xs text-muted-foreground">▲</button>
+              <button type="button" onClick={() => move(i, 1)} className="text-xs text-muted-foreground">▼</button>
               {t.capa_url && (
                 <img
                   src={driveImg(t.capa_url, 80)}
                   alt=""
                   className="size-8 rounded object-cover"
-                 loading="lazy" decoding="async"/>
+                  loading="lazy"
+                  decoding="async"
+                />
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold truncate">{t.titulo}</p>
@@ -204,12 +254,12 @@ export function PlaylistEditor({ existing }: { existing?: PlaylistPayload }) {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               placeholder="Buscar faixa ou artista"
               className="w-full bg-card border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm"
             />
           </div>
-          <button 
+          <button
             onClick={handleSearch}
             className="px-4 py-2.5 bg-secondary text-foreground rounded-xl text-xs font-bold active:scale-95 transition-transform"
           >
