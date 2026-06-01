@@ -365,10 +365,13 @@ function KickPlayer({ programa }: { programa: string }) {
 // 2. scrollBottom usa bottomRef + scrollIntoView (single RAF) para não brigar
 //    com o teclado virtual ao rolar.
 // 3. enviar() usa try/finally: setSending(false) SEMPRE executa.
-// 4. inserirMensagem usa AbortController: cancela o fetch após 3.5s.
+// 4. inserirMensagem usa AbortSignal.timeout(3500): cancela o fetch automaticamente.
 // 5. FIX: usuário "guest" (fallback quando fora do Telegram) é bloqueado de enviar
 //    com mensagem clara — Number("guest") = NaN e causava falha silenciosa no banco.
-// 6. FIX: podeSendMensagem importado explicitamente e chamado antes do insert.
+// 6. FIX: fetchMensagens inicial usa .finally() para garantir setLoading(false)
+//    mesmo em caso de falha inesperada.
+// 7. FIX: enviar() mostra alerta toast quando chamado fora do Telegram (guest),
+//    em vez de sair silenciosamente.
 
 const POLL_INTERVAL = 3000;
 
@@ -389,6 +392,7 @@ function LiveChat({ streamId, user }: {
   const [texto, setTexto]         = useState("");
   const [sending, setSending]     = useState(false);
   const [replyTo, setReplyTo]     = useState<MensagemDB | null>(null);
+  const [toast, setToast]         = useState<string | null>(null);
   const bottomRef                 = useRef<HTMLDivElement>(null);
   const inputFocusedRef           = useRef(false);
   const nomeRef                   = useRef(user?.name || "Jogador");
@@ -396,6 +400,11 @@ function LiveChat({ streamId, user }: {
   useEffect(() => { nomeRef.current = user?.name || "Jogador"; });
 
   const userValido = isValidTelegramUser(user);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
 
   function scrollBottom() {
     if (inputFocusedRef.current) return;
@@ -416,12 +425,15 @@ function LiveChat({ streamId, user }: {
     setReplyTo(null);
     lastIdRef.current = 0;
 
-    fetchMensagens(streamId, 60, 0).then(data => {
-      setMsgs(data);
-      if (data.length > 0) lastIdRef.current = data[data.length - 1].id;
-      setLoading(false);
-      scrollBottom();
-    });
+    // FIX: .finally() garante que setLoading(false) SEMPRE executa,
+    // mesmo se fetchMensagens lançar erro inesperado fora do try/catch interno.
+    fetchMensagens(streamId, 60, 0)
+      .then(data => {
+        setMsgs(data);
+        if (data.length > 0) lastIdRef.current = data[data.length - 1].id;
+        scrollBottom();
+      })
+      .finally(() => setLoading(false));
 
     const timer = setInterval(async () => {
       try {
@@ -453,10 +465,19 @@ function LiveChat({ streamId, user }: {
 
   async function enviar() {
     const t = texto.trim();
-    if (!t || !userValido || sending || !streamId) return;
+    if (!t || sending || !streamId) return;
+
+    // FIX: mostra toast explicativo em vez de sair silenciosamente
+    if (!userValido) {
+      showToast("Abra pelo Telegram para comentar.");
+      return;
+    }
 
     // Verifica rate limit client-side antes de qualquer coisa
-    if (!podeSendMensagem(user!.id)) return;
+    if (!podeSendMensagem(user!.id)) {
+      showToast("Aguarde um momento antes de enviar outra mensagem.");
+      return;
+    }
 
     setSending(true);
     setTexto("");
@@ -477,7 +498,7 @@ function LiveChat({ streamId, user }: {
     scrollBottom();
 
     try {
-      await inserirMensagem({
+      const result = await inserirMensagem({
         stream_id: streamId,
         telegram_id: Number(user!.id),
         username: user!.username || null,
@@ -485,16 +506,21 @@ function LiveChat({ streamId, user }: {
         texto: t,
         reply_to_id: replyTo?.id ?? null,
       });
+      if (result === "rate_limited") {
+        showToast("Você está enviando mensagens muito rápido.");
+        setMsgs(prev => prev.filter(m => m.id !== optimisticId));
+      }
     } catch {
       // Remove mensagem otimista se houve falha total não tratada
       setMsgs(prev => prev.filter(m => m.id !== optimisticId));
+      showToast("Erro ao enviar. Tente novamente.");
     } finally {
       // SEMPRE libera o botão, mesmo em erro ou timeout
       setSending(false);
     }
   }
 
-  // Usuário não identificado (fora do Telegram ou guest)
+  // Usuário não identificado (fora do Telegram ou guest) — mostra input bloqueado
   if (!userValido) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 py-8 text-center">
@@ -509,7 +535,22 @@ function LiveChat({ streamId, user }: {
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 relative">
+        {/* Toast de feedback */}
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              key="toast"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="sticky top-2 z-10 mx-auto w-fit px-4 py-2 rounded-xl bg-black/80 border border-white/10 text-xs text-white backdrop-blur-sm shadow-lg"
+            >
+              {toast}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {loading && (
           <div className="flex flex-col items-center justify-center py-6 gap-2">
             <Loader2 className="size-4 animate-spin text-primary" />
