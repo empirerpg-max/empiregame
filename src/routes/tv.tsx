@@ -53,20 +53,16 @@ function fmtTime(v?: string | number) {
   return String(v);
 }
 
-// Verifica se o current pertence a esta entrada e está no ar
-// Aceita qualquer valor de status que indique transmissão
 function checkIsLive(current: TvProgram | null, entry: ProgramEntry): boolean {
   if (!current) return false;
   const s = String(current.status || "").toLowerCase();
   const isLiveStatus = s === "broadcasting" || s === "transmitindo" || s === "live" || s === "ao vivo";
-  // Se tem rowNums, verifica se pertence; senão, assume que qualquer live pertence
   if (entry.rowNums.length > 0) {
     return isLiveStatus && entry.rowNums.includes(current.rowNum ?? -1);
   }
   return isLiveStatus;
 }
 
-// URL do embed Kick com o parâmetro parent para liberar cross-origin
 function kickEmbedUrl(): string {
   const parent = typeof window !== "undefined"
     ? encodeURIComponent(window.location.hostname)
@@ -323,7 +319,6 @@ function PlannerView({ entries, onSelect }: {
 }
 
 // ─── KICK PLAYER ─────────────────────────────────────────────────────────────
-// Tenta embed com parent; se falhar (WebView/Telegram que bloqueia), mostra botão externo
 function KickPlayer({ programa }: { programa: string }) {
   const [failed, setFailed] = useState(false);
   const src = kickEmbedUrl();
@@ -361,7 +356,7 @@ function KickPlayer({ programa }: { programa: string }) {
   );
 }
 
-// ─── LIVE CHAT (in-app, agora via backend em tempo real) ─────────────────────
+// ─── LIVE CHAT ────────────────────────────────────────────────────────────────
 const CHAT_WS_URL   = "wss://empiretv-chat-backend.onrender.com";
 const CHAT_PING_URL = "https://empiretv-chat-backend.onrender.com/ping";
 const WS_CONNECT_TIMEOUT_MS = 12_000;
@@ -371,38 +366,105 @@ function LiveChat({ programa, topicoId, user }: {
   topicoId: string;
   user: ReturnType<typeof useTelegramUser>["user"];
 }) {
-  const [msgs, setMsgs]           = useState<ChatMsg[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [wsError, setWsError]     = useState(false);
-  const [texto, setTexto]         = useState("");
-  const [sending, setSending]     = useState(false);
-  const scrollRef                 = useRef<HTMLDivElement>(null);
-  const wsRef                     = useRef<WebSocket | null>(null);
+  const [msgs, setMsgs]         = useState<ChatMsg[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [wsError, setWsError]   = useState(false);
+  const [texto, setTexto]       = useState("");
+  const [sending, setSending]   = useState(false);
+  const scrollRef               = useRef<HTMLDivElement>(null);
+  const wsRef                   = useRef<WebSocket | null>(null);
 
-  // FIX 3: guarda estado de foco do input para não conflitar com scroll durante abertura do teclado
-  const inputFocusedRef           = useRef(false);
-  // FIX 1: guarda nome em ref para não ser dependência do useEffect (evita recriar socket ao mudar nome)
-  const nomeRef                   = useRef(user?.name || "Jogador");
+  // FIX 3: guard — não rola durante abertura do teclado no Telegram WebApp
+  const inputFocusedRef         = useRef(false);
 
-  // atualiza o nome ref sempre que mudar, sem disparar effect
-  useEffect(() => {
-    nomeRef.current = user?.name || "Jogador";
-  });
+  // FIX 1: nome em ref para não ser dependência do useEffect
+  // Evita recriar o socket toda vez que useTelegramUser() re-renderiza com novo objeto user
+  const nomeRef                 = useRef(user?.name || "Jogador");
+  useEffect(() => { nomeRef.current = user?.name || "Jogador"; });
 
   function scrollBottom() {
-    // FIX 3: não rola enquanto o teclado virtual está abrindo (evita travamento no Telegram WebApp)
+    // FIX 3: não rola enquanto o teclado virtual está abrindo
     if (inputFocusedRef.current) return;
     requestAnimationFrame(() => {
       try {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       } catch {}
     });
   }
 
+  function buildSocket(roomId: string, userId: string, onReady?: () => void) {
+    const ws = new WebSocket(CHAT_WS_URL);
+    wsRef.current = ws;
+    let destroyed = false;
+
+    const connectTimeout = setTimeout(() => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        ws.close();
+        if (!destroyed) { setLoading(false); setWsError(true); }
+      }
+    }, WS_CONNECT_TIMEOUT_MS);
+
+    ws.onopen = () => {
+      clearTimeout(connectTimeout);
+      ws.send(JSON.stringify({ type: "join", roomId, userId, nome: nomeRef.current }));
+      onReady?.();
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "history" && Array.isArray(data.messages)) {
+          setMsgs(data.messages as ChatMsg[]);
+          setLoading(false);
+          scrollBottom();
+        }
+
+        if (data.type === "message" && data.message) {
+          const m = data.message as ChatMsg;
+          setMsgs((prev) => {
+            // remove otimista duplicado de outros usuários (não do remetente — o ACK cuida disso)
+            return [...prev, m];
+          });
+          scrollBottom();
+        }
+
+        // FIX 4: trata message_ack — substitui mensagem otimista (tmp-) pelo id real do servidor
+        // O backend envia ack só para o remetente; broadcast vai para os outros.
+        // Sem isso, a mensagem otimista ficava presa com id "tmp-XXX" para sempre.
+        if (data.type === "message_ack" && data.message) {
+          const m = data.message as ChatMsg;
+          setMsgs((prev) =>
+            prev.map((p) =>
+              p.id.startsWith("tmp-") && p.tgId === m.tgId && p.texto === m.texto
+                ? m
+                : p
+            )
+          );
+        }
+      } catch {
+        // ignora erros de parse
+      }
+    };
+
+    ws.onerror = () => {
+      clearTimeout(connectTimeout);
+      if (!destroyed) setLoading(false);
+    };
+
+    ws.onclose = () => {
+      clearTimeout(connectTimeout);
+      destroyed = true;
+    };
+
+    return () => {
+      destroyed = true;
+      clearTimeout(connectTimeout);
+      try { ws.close(); } catch {}
+    };
+  }
+
   useEffect(() => {
-    // sem sala ou usuário, não conecta
     if (!topicoId || !user?.id) {
       setMsgs([]);
       setLoading(false);
@@ -415,105 +477,33 @@ function LiveChat({ programa, topicoId, user }: {
 
     const roomId = String(topicoId);
     const userId = String(user.id);
-    let ws: WebSocket | null = null;
-    let connectTimeout: ReturnType<typeof setTimeout> | null = null;
-    let destroyed = false;
+    let cleanup: (() => void) | undefined;
 
-    function openSocket() {
-      if (destroyed) return;
-
-      ws = new WebSocket(CHAT_WS_URL);
-      wsRef.current = ws;
-
-      // FIX 2: timeout de conexão — se o Render demorar mais de 12s para acordar,
-      // exibe fallback em vez de travar silenciosamente
-      connectTimeout = setTimeout(() => {
-        if (ws && ws.readyState !== WebSocket.OPEN) {
-          ws.close();
-          if (!destroyed) {
-            setLoading(false);
-            setWsError(true);
-          }
-        }
-      }, WS_CONNECT_TIMEOUT_MS);
-
-      ws.onopen = () => {
-        if (connectTimeout) clearTimeout(connectTimeout);
-        ws!.send(JSON.stringify({
-          type: "join",
-          roomId,
-          userId,
-          nome: nomeRef.current,
-        }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.type === "history" && Array.isArray(data.messages)) {
-            setMsgs(data.messages as ChatMsg[]);
-            setLoading(false);
-            scrollBottom();
-          }
-
-          if (data.type === "message" && data.message) {
-            const m = data.message as ChatMsg;
-            setMsgs((prev) => {
-              // FIX 4: remove mensagem otimista (tmp-) com mesmo texto antes de inserir a real do broadcast
-              // evita duplicata causada pelo servidor retransmitir para o próprio remetente
-              const semOtimista = prev.filter(
-                (p) => !(p.id.startsWith("tmp-") && p.tgId === m.tgId && p.texto === m.texto)
-              );
-              return [...semOtimista, m];
-            });
-            scrollBottom();
-          }
-        } catch {
-          // ignora erros de parse para não derrubar a tela
-        }
-      };
-
-      ws.onerror = () => {
-        if (connectTimeout) clearTimeout(connectTimeout);
-        if (!destroyed) setLoading(false);
-      };
-
-      ws.onclose = () => {
-        if (connectTimeout) clearTimeout(connectTimeout);
-        // sem reconexão automática aqui — o useEffect recria ao mudar sala/usuário
-      };
-    }
-
-    // FIX 2: ping HTTP primeiro para acordar o Render antes de abrir o WebSocket.
-    // O Render gratuito dorme após 15min de inatividade e pode levar 30-90s para acordar.
-    // O ping forçar o cold start via HTTP (mais tolerante) antes do WS (que trava a UI).
+    // FIX 2: ping HTTP antes do WebSocket — acorda o Render Free (cold start)
+    // O Render dorme após 15min e pode travar o handshake WS por 30-90s no Telegram WebApp.
+    // O ping HTTP é mais tolerante ao cold start; só abrimos o WS depois que ele responder.
     fetch(CHAT_PING_URL, { signal: AbortSignal.timeout(8_000) })
-      .catch(() => {/* ignora erro do ping; tenta o WS mesmo assim */})
-      .finally(() => openSocket());
+      .catch(() => {/* ignora — tenta o WS mesmo sem resposta do ping */})
+      .finally(() => { cleanup = buildSocket(roomId, userId); });
 
-    return () => {
-      destroyed = true;
-      if (connectTimeout) clearTimeout(connectTimeout);
-      try { ws?.close(); } catch {}
-      wsRef.current = null;
-    };
-    // FIX 1: user?.name REMOVIDO das dependências — causava loop de reconexão a cada rerender
-    // O nome é acessado via nomeRef.current dentro do onopen, sempre atualizado
+    return () => { cleanup?.(); wsRef.current = null; };
+
+    // FIX 1: user?.name REMOVIDO das dependências
+    // Era a causa principal do travamento: qualquer rerender do useTelegramUser()
+    // com novo objeto user recriava o socket, disparava setLoading(true) + setMsgs([])
+    // enquanto o usuário tentava digitar, bloqueando o input.
   }, [topicoId, user?.id]);
 
   async function enviar() {
     const t = texto.trim();
     if (!t || !user?.id || sending) return;
-
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
     setSending(true);
-
     const roomId = String(topicoId);
     const userId = String(user.id);
 
-    // mensagem otimista local (prefixo tmp- é usado pelo filtro do onmessage acima)
+    // mensagem otimista — substituída pelo message_ack (FIX 4)
     const optimistic: ChatMsg = {
       id: "tmp-" + Date.now(),
       tgId: userId,
@@ -530,17 +520,24 @@ function LiveChat({ programa, topicoId, user }: {
 
     try {
       wsRef.current.send(JSON.stringify({
-        type: "message",
-        roomId,
-        userId,
-        nome: nomeRef.current,
-        texto: t,
+        type: "message", roomId, userId, nome: nomeRef.current, texto: t,
       }));
     } catch {
-      // mantém mensagem otimista em caso de falha de rede
+      // mantém otimista em caso de falha
     } finally {
       setSending(false);
     }
+  }
+
+  function handleRetry() {
+    if (!user?.id || !topicoId) return;
+    setWsError(false);
+    setLoading(true);
+    const roomId = String(topicoId);
+    const userId = String(user.id);
+    fetch(CHAT_PING_URL, { signal: AbortSignal.timeout(8_000) })
+      .catch(() => {})
+      .finally(() => { buildSocket(roomId, userId); });
   }
 
   return (
@@ -558,38 +555,7 @@ function LiveChat({ programa, topicoId, user }: {
             <div className="space-y-2">
               <MessageCircle className="size-7 text-muted-foreground mx-auto" />
               <p className="text-xs text-muted-foreground">Chat temporariamente indisponível.</p>
-              <button
-                onClick={() => {
-                  setWsError(false);
-                  setLoading(true);
-                  fetch(CHAT_PING_URL, { signal: AbortSignal.timeout(8_000) })
-                    .catch(() => {})
-                    .finally(() => {
-                      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
-                        const roomId = String(topicoId);
-                        const userId = String(user?.id || "");
-                        const ws = new WebSocket(CHAT_WS_URL);
-                        wsRef.current = ws;
-                        ws.onopen = () => ws.send(JSON.stringify({ type: "join", roomId, userId, nome: nomeRef.current }));
-                        ws.onmessage = (event) => {
-                          try {
-                            const data = JSON.parse(event.data);
-                            if (data.type === "history" && Array.isArray(data.messages)) { setMsgs(data.messages as ChatMsg[]); setLoading(false); }
-                            if (data.type === "message" && data.message) {
-                              const m = data.message as ChatMsg;
-                              setMsgs((prev) => {
-                                const s = prev.filter((p) => !(p.id.startsWith("tmp-") && p.tgId === m.tgId && p.texto === m.texto));
-                                return [...s, m];
-                              });
-                            }
-                          } catch {}
-                        };
-                        ws.onerror = () => { setLoading(false); setWsError(true); };
-                      }
-                    });
-                }}
-                className="text-[10px] text-primary underline underline-offset-2"
-              >
+              <button onClick={handleRetry} className="text-[10px] text-primary underline underline-offset-2">
                 Tentar novamente
               </button>
             </div>
@@ -635,7 +601,7 @@ function LiveChat({ programa, topicoId, user }: {
         <input
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
-          // FIX 3: marca foco para o guard do scrollBottom não conflitar com abertura do teclado
+          // FIX 3: guard de foco para não conflitar scrollBottom com abertura do teclado
           onFocus={() => { inputFocusedRef.current = true; }}
           onBlur={() => { inputFocusedRef.current = false; }}
           placeholder={user?.id ? `Comentar como ${nomeRef.current}…` : "Entre pelo Telegram para comentar"}
@@ -654,6 +620,7 @@ function LiveChat({ programa, topicoId, user }: {
     </>
   );
 }
+
 // ─── SALA DO EVENTO ───────────────────────────────────────────────────────────
 function EventRoom({
   entry, current, onBack
@@ -667,7 +634,6 @@ function EventRoom({
 
   const isThisLive = checkIsLive(current, entry);
   const capaUrl    = driveImgUrl(isThisLive && current?.capaUrl ? String(current.capaUrl) : entry.capaUrl);
-
 
   useEffect(() => {
     if (!user?.id || !isThisLive || !current) return;
@@ -684,320 +650,182 @@ function EventRoom({
     });
   }, [user, isThisLive, current?.topicoId]);
 
+  const topicoId = (isThisLive && current?.topicoId) ? String(current.topicoId) : entry.topicoId || "";
+  const tabs = ["Chat", "Ranking"] as const;
+  const [tab, setTab] = useState<typeof tabs[number]>("Chat");
+
   return (
     <div className="space-y-4">
       {onBack && (
         <button onClick={onBack} className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="size-4" />Voltar para a grade
+          <ArrowLeft className="size-4" /> Voltar
         </button>
       )}
 
-      <div className="grid lg:grid-cols-[1fr,380px] gap-5">
-        {/* Coluna esquerda */}
-        <div className="space-y-3">
-          <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
-            <div className="flex items-center gap-3 flex-wrap">
-              {isThisLive && (
-                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest">
-                  <span className="size-1.5 rounded-full bg-white animate-pulse" />Ao vivo agora
-                </span>
-              )}
-              {entry.data && <span className="text-xs text-muted-foreground">{entry.data}</span>}
-              {entry.horario && (
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="size-3" />{fmtTime(entry.horario)}
-                </span>
-              )}
-            </div>
-            <h2 className="text-2xl font-black tracking-tight">{entry.programa}</h2>
-          </motion.div>
-
-          {/* Player */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            className="relative w-full rounded-3xl overflow-hidden border border-border bg-black"
-            style={{ aspectRatio: "16/9" }}
-          >
-            {isThisLive ? (
-              <KickPlayer programa={entry.programa} />
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black gap-3">
-                {capaUrl
-                  ? <img src={capaUrl} alt="" className="w-32 rounded-xl opacity-30" />
-                  : <Tv className="size-12 text-muted-foreground" />
-                }
-                <p className="font-black uppercase tracking-widest text-sm text-white">Transmissão em breve</p>
-                {entry.horario && (
-                  <p className="text-xs text-muted-foreground -mt-1">às {fmtTime(entry.horario)}</p>
-                )}
-              </div>
-            )}
-            {isThisLive && (
-              <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1 rounded-full bg-red-600/90 text-white text-[10px] font-black uppercase tracking-widest z-10 pointer-events-none">
-                <span className="size-2 rounded-full bg-white animate-pulse" /> Ao vivo
-              </div>
-            )}
-          </motion.div>
-
-          <NowPlayingBar current={isThisLive ? current : null} />
-        </div>
-
-        {/* Coluna direita: Chat + Ranking */}
-        <div className="flex flex-col gap-4">
-          <div className="rounded-3xl border border-border bg-card flex flex-col overflow-hidden" style={{ minHeight: 420, maxHeight: 560 }}>
-            <div className="p-4 border-b border-border flex items-center gap-2">
-              <MessageCircle className="size-4 text-primary" />
-              <p className="text-xs font-black uppercase tracking-widest">Chat ao vivo</p>
-            </div>
-            <LiveChat
-              programa={entry.programa}
-              topicoId={String(current?.topicoId || entry.topicoId || "")}
-              user={user}
-            />
+      {/* Capa / Player */}
+      <div className="relative w-full rounded-2xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+        {isThisLive ? (
+          <KickPlayer programa={entry.programa} />
+        ) : capaUrl ? (
+          <img src={capaUrl} alt={entry.programa} className="w-full h-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-primary/20 to-black">
+            <Tv className="size-12 text-primary/40" />
           </div>
-
-
-          <div className="rounded-3xl border border-border bg-card overflow-hidden">
-            <div className="p-4 border-b border-border flex items-center gap-2">
-              <Trophy className="size-4 text-yellow-400" />
-              <p className="text-xs font-black uppercase tracking-widest">Participação de hoje</p>
-            </div>
-            <div className="p-3">
-              <RankingParticipacao
-                programa={entry.programa}
-                currentUserId={user?.id ? String(user.id) : undefined}
-              />
-            </div>
-          </div>
-        </div>
+        )}
       </div>
+
+      {/* Info do programa */}
+      <div className="space-y-2">
+        <div className="flex items-start gap-3 flex-wrap">
+          <h2 className="font-black text-xl flex-1">{entry.programa}</h2>
+          {isThisLive && <StatusBadge live />}
+        </div>
+        {entry.data && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="size-3.5" />
+            <span>{entry.data}{entry.horario ? ` às ${fmtTime(entry.horario)}` : ""}</span>
+          </div>
+        )}
+        {isThisLive && current && <NowPlayingBar current={current} />}
+      </div>
+
+      {/* Chat / Ranking */}
+      {topicoId && (
+        <div className="rounded-2xl border border-border bg-card overflow-hidden flex flex-col" style={{ height: 420 }}>
+          <div className="flex border-b border-border shrink-0">
+            {tabs.map((t) => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest transition-colors
+                  ${tab === t ? "text-primary border-b-2 border-primary -mb-px" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {t === "Chat" ? <><MessageCircle className="size-3.5 inline mr-1" />Chat</> : <><Trophy className="size-3.5 inline mr-1" />Ranking</>}
+              </button>
+            ))}
+          </div>
+
+          {tab === "Chat" ? (
+            <LiveChat programa={entry.programa} topicoId={topicoId} user={user} />
+          ) : (
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              <RankingParticipacao programa={entry.programa} currentUserId={user?.id ? String(user.id) : undefined} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── COVER CARD (estilo poster Netflix) ──────────────────────────────────────
-function CoverCard({ entry, variant, onSelect }: {
-  entry: ProgramEntry;
-  variant: "live" | "upcoming" | "past";
-  onSelect: () => void;
-}) {
-  const capa = driveImgUrl(entry.capaUrl);
-  return (
-    <motion.button
-      onClick={onSelect}
-      whileHover={{ scale: 1.03 }}
-      transition={{ type: "spring", stiffness: 280 }}
-      className="shrink-0 w-[160px] md:w-[180px] text-left group focus:outline-none"
-    >
-      <div className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-border bg-black/40">
-        {capa ? (
-          <img
-            src={capa}
-            alt={entry.programa}
-            className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${variant === "past" ? "grayscale-[40%] opacity-80" : ""}`}
-          />
-        ) : (
-          <div className="w-full h-full grid place-items-center bg-gradient-to-br from-primary/20 to-black">
-            <Tv className="size-7 text-primary/50" />
-          </div>
-        )}
-        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
-        {variant === "live" && (
-          <span className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-widest">
-            <span className="size-1.5 rounded-full bg-white animate-pulse" />Ao vivo
-          </span>
-        )}
-        {variant === "past" && (
-          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur text-white/80 text-[9px] font-black uppercase tracking-widest">
-            Arquivo
-          </span>
-        )}
-        <div className="absolute inset-x-0 bottom-0 p-2.5 space-y-0.5">
-          <p className="text-xs font-black text-white truncate drop-shadow">{entry.programa}</p>
-          {entry.data && (
-            <p className="text-[10px] text-white/60 truncate">
-              {entry.data}{entry.horario ? ` · ${fmtTime(entry.horario)}` : ""}
-            </p>
-          )}
-        </div>
-      </div>
-    </motion.button>
-  );
-}
-
-// ─── RAIL (trilha horizontal estilo Netflix) ─────────────────────────────────
-function Rail({ title, accent, items, variant, onSelect }: {
-  title: string;
-  accent?: string;
-  items: ProgramEntry[];
-  variant: "live" | "upcoming" | "past";
-  onSelect: (e: ProgramEntry) => void;
-}) {
-  if (items.length === 0) return null;
-  return (
-    <section className="space-y-3">
-      <div className="flex items-baseline gap-3 px-1">
-        <h3 className="text-sm font-black uppercase tracking-widest">{title}</h3>
-        {accent && <span className="text-[10px] text-muted-foreground">{accent}</span>}
-        <span className="text-[10px] text-muted-foreground ml-auto">{items.length}</span>
-      </div>
-      <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x">
-        {items.map(entry => (
-          <div key={entry.programa + entry.data + variant} className="snap-start">
-            <CoverCard entry={entry} variant={variant} onSelect={() => onSelect(entry)} />
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
+// ─── TV PAGE ──────────────────────────────────────────────────────────────────
 function TvPage() {
-  const { user: _user } = useTelegramUser();
-  const [data, setData]                   = useState<TvStatus | null>(null);
-  const [loading, setLoading]             = useState(true);
+  const { user } = useTelegramUser();
+  const [status, setStatus]       = useState<TvStatus | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [view, setView]           = useState<"grid" | "planner">("grid");
   const [selectedEntry, setSelectedEntry] = useState<ProgramEntry | null>(null);
-  const [showCalendar, setShowCalendar]   = useState(false);
 
   useEffect(() => {
-    let alive = true;
-    const tick = () => tvApi.status().then(r => { if (alive) setData(r); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
-    tick();
-    const id = setInterval(tick, 30_000);
-    return () => { alive = false; clearInterval(id); };
+    let cancelled = false;
+    async function load() {
+      try {
+        const data = await tvApi.status();
+        if (!cancelled) setStatus(data);
+      } catch {
+        /* ignora */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    const id = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
-  const current       = data?.current ?? null;
-  const fullSchedule  = data?.fullSchedule ?? [];
-  const currentRowNum = current?.rowNum;
+  const entries = status ? buildProgramEntries(status) : [];
+  const current = status?.current ?? null;
 
-  const entries  = buildProgramEntries(fullSchedule, currentRowNum);
+  // abre automaticamente o programa ao vivo
+  useEffect(() => {
+    if (!entries.length || selectedEntry) return;
+    const live = entries.find(e => e.hasLive);
+    if (live) setSelectedEntry(live);
+  }, [entries.length]);
 
-  // Classificação Ao vivo / Em breve / Arquivo
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const liveItems: ProgramEntry[]     = [];
-  const upcomingItems: ProgramEntry[] = [];
-  const pastItems: ProgramEntry[]     = [];
+  if (loading) return (
+    <div className="min-h-screen grid place-items-center">
+      <Loader2 className="size-6 animate-spin text-primary" />
+    </div>
+  );
 
-  for (const e of entries) {
-    if (e.hasLive) { liveItems.push(e); continue; }
-    const d = parseDataBR(e.data);
-    if (d) {
-      const dd = new Date(d); dd.setHours(0, 0, 0, 0);
-      if (dd.getTime() < today.getTime()) { pastItems.push(e); continue; }
-    }
-    upcomingItems.push(e);
+  if (selectedEntry) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        <EventRoom entry={selectedEntry} current={current} onBack={() => setSelectedEntry(null)} />
+      </div>
+    );
   }
 
-  upcomingItems.sort((a, b) => (parseDataBR(a.data)?.getTime() ?? 0) - (parseDataBR(b.data)?.getTime() ?? 0));
-  pastItems.sort((a, b)     => (parseDataBR(b.data)?.getTime() ?? 0) - (parseDataBR(a.data)?.getTime() ?? 0));
-
-  const featured = liveItems[0] ?? upcomingItems[0] ?? null;
-
   return (
-    <div className="min-h-screen bg-background text-foreground pb-24">
-      <div className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
-
-        {/* Header enxuto */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="size-11 rounded-2xl bg-primary text-primary-foreground grid place-items-center">
-              <Tv className="size-5" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black uppercase tracking-widest">Empire TV</h1>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Catálogo · Chat ao vivo</p>
-            </div>
-          </div>
-          {!selectedEntry && (
-            <button
-              onClick={() => setShowCalendar(v => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors
-                ${showCalendar ? "bg-primary text-primary-foreground" : "bg-card border border-border hover:bg-white/5"}`}
-            >
-              <CalendarDays className="size-3.5" /> Calendário
-            </button>
-          )}
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-black text-2xl">Empire TV</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Grade de programação</p>
         </div>
-
-        {loading && (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="size-8 animate-spin text-primary" />
-          </div>
-        )}
-
-        {!loading && (
-          <AnimatePresence mode="wait">
-            {selectedEntry ? (
-              <motion.div key="room" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                <EventRoom
-                  entry={selectedEntry}
-                  current={current}
-                  onBack={() => setSelectedEntry(null)}
-                />
-              </motion.div>
-            ) : showCalendar ? (
-              <motion.div key="cal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <PlannerView entries={entries} onSelect={setSelectedEntry} />
-              </motion.div>
-            ) : (
-              <motion.div key="catalog" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-8">
-
-                {featured && (
-                  <motion.div
-                    className="relative rounded-3xl overflow-hidden border border-border cursor-pointer group"
-                    onClick={() => setSelectedEntry(featured)}
-                    whileHover={{ scale: 1.005 }}
-                    transition={{ type: "spring", stiffness: 300 }}
-                  >
-                    {driveImgUrl(featured.capaUrl) ? (
-                      <div className="absolute inset-0">
-                        <img src={driveImgUrl(featured.capaUrl)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-transparent" />
-                      </div>
-                    ) : (
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-black" />
-                    )}
-                    <div className="relative p-6 md:p-10 space-y-3 min-h-[200px] flex flex-col justify-end">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {featured.hasLive ? (
-                          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest">
-                            <span className="size-1.5 rounded-full bg-white animate-pulse" />Ao vivo agora
-                          </span>
-                        ) : (
-                          <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest">Próxima atração</span>
-                        )}
-                      </div>
-                      <h2 className="text-3xl md:text-4xl font-black tracking-tight text-white drop-shadow-md">{featured.programa}</h2>
-                      <div className="flex items-center gap-4 pt-1 flex-wrap">
-                        <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black text-sm font-black hover:bg-white/90 transition-colors">
-                          <Play className="size-4" />{featured.hasLive ? "Assistir" : "Ver detalhes"}
-                        </button>
-                        {featured.data && (
-                          <span className="text-xs text-white/60">{featured.data}{featured.horario ? ` · ${fmtTime(featured.horario)}` : ""}</span>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                <Rail title="Ao vivo agora" items={liveItems} variant="live" onSelect={setSelectedEntry} />
-                <Rail title="Em breve" accent="próximas transmissões" items={upcomingItems} variant="upcoming" onSelect={setSelectedEntry} />
-                <Rail title="Arquivo" accent="já transmitido" items={pastItems} variant="past" onSelect={setSelectedEntry} />
-
-                {liveItems.length === 0 && upcomingItems.length === 0 && pastItems.length === 0 && (
-                  <div className="rounded-2xl border border-border bg-card p-10 text-center text-muted-foreground">
-                    <Tv className="size-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">Nenhuma programação disponível</p>
-                  </div>
-                )}
-
-              </motion.div>
-            )}
-          </AnimatePresence>
-        )}
+        <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-border">
+          <button onClick={() => setView("grid")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors
+              ${view === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          ><LayoutGrid className="size-3.5" /> Grade</button>
+          <button onClick={() => setView("planner")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors
+              ${view === "planner" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          ><CalendarDays className="size-3.5" /> Agenda</button>
+        </div>
       </div>
+
+      {/* Status atual */}
+      {current && getProgramStatus(current) === "live" && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-2xl bg-red-600/10 border border-red-600/20 flex items-center gap-3"
+        >
+          <span className="size-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-black text-red-400 uppercase tracking-widest">Ao vivo agora</p>
+            <p className="font-bold text-sm truncate">{current.programa}</p>
+          </div>
+          <button onClick={() => {
+            const live = entries.find(e => e.hasLive);
+            if (live) setSelectedEntry(live);
+          }} className="px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-black hover:bg-red-500 transition-colors shrink-0">
+            Assistir
+          </button>
+        </motion.div>
+      )}
+
+      {/* Conteúdo */}
+      <AnimatePresence mode="wait">
+        {view === "grid" ? (
+          <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+            {entries.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-card p-10 text-center">
+                <Tv className="size-8 mx-auto mb-3 text-muted-foreground opacity-30" />
+                <p className="text-sm text-muted-foreground">Nenhuma programação disponível.</p>
+              </div>
+            ) : entries.map((entry, i) => (
+              <motion.div key={entry.programa + entry.data} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                <ProgramCard entry={entry} onSelect={() => setSelectedEntry(entry)} />
+              </motion.div>
+            ))}
+          </motion.div>
+        ) : (
+          <motion.div key="planner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <PlannerView entries={entries} onSelect={setSelectedEntry} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
