@@ -361,7 +361,7 @@ function KickPlayer({ programa }: { programa: string }) {
   );
 }
 
-// ─── LIVE CHAT (in-app, ligado ao Telegram via Apps Script) ──────────────────
+// ─── LIVE CHAT (in-app, agora via backend em tempo real) ─────────────────────
 function LiveChat({ programa, topicoId, user }: {
   programa: string;
   topicoId: string;
@@ -372,77 +372,132 @@ function LiveChat({ programa, topicoId, user }: {
   const [texto, setTexto]     = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef             = useRef<HTMLDivElement>(null);
-  const lastIdRef             = useRef<string>("");
 
-  // merge defensivo: ignora erros, dedupe por id, mantém otimistas pendentes
-  function mergeMsgs(prev: ChatMsg[], incoming: ChatMsg[]): ChatMsg[] {
-    const ids = new Set(incoming.map(m => m.id));
-    const pendentes = prev.filter(m => m.id.startsWith("tmp-") && !ids.has(m.id));
-    const merged = [...incoming, ...pendentes];
-    return merged;
-  }
+  // conexão WebSocket com o backend de chat (Render)
+  const wsRef                 = useRef<WebSocket | null>(null);
 
   function scrollBottom() {
     requestAnimationFrame(() => {
       try {
-        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
       } catch {}
     });
   }
 
   useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setMsgs([]);
-    lastIdRef.current = "";
-
-    async function pull(initial = false) {
-      try {
-        const d = await tvApi.chatList(topicoId || undefined);
-        if (!alive) return;
-        const arr = Array.isArray(d) ? d : [];
-        setMsgs(prev => mergeMsgs(prev, arr));
-        const lastId = arr[arr.length - 1]?.id || "";
-        const isNew = lastId && lastId !== lastIdRef.current;
-        lastIdRef.current = lastId;
-        if (initial || isNew) scrollBottom();
-      } catch {
-        // silencia: rede instável no WebView do Telegram não pode derrubar a tela
-      } finally {
-        if (alive && initial) setLoading(false);
-      }
+    // se não tiver sala ou usuário logado, não conecta
+    if (!topicoId || !user?.id) {
+      setMsgs([]);
+      setLoading(false);
+      return;
     }
 
-    pull(true);
-    const id = setInterval(() => pull(false), 4000);
-    return () => { alive = false; clearInterval(id); };
-  }, [topicoId]);
+    setLoading(true);
+    setMsgs([]);
+
+    const roomId = String(topicoId);
+    const userId = String(user.id);
+    const nome   = user.name || "Jogador";
+
+    // ajuste a URL se seu backend estiver em outro endereço
+    const ws = new WebSocket("wss://empiretv-chat-backend.onrender.com");
+
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      // avisa o backend em qual sala entrar
+      const joinPayload = {
+        type: "join",
+        roomId,
+        userId,
+        nome,
+      };
+      ws.send(JSON.stringify(joinPayload));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        // Exemplo de contratos esperados:
+        // { type: "history", roomId, messages: ChatMsg[] }
+        // { type: "message", roomId, message: ChatMsg }
+
+        if (data.type === "history" && Array.isArray(data.messages)) {
+          setMsgs(data.messages as ChatMsg[]);
+          setLoading(false);
+          scrollBottom();
+        }
+
+        if (data.type === "message" && data.message) {
+          const m = data.message as ChatMsg;
+          setMsgs((prev) => [...prev, m]);
+          scrollBottom();
+        }
+      } catch {
+        // ignora erros de parse para não derrubar a tela
+      }
+    };
+
+    ws.onerror = () => {
+      // em caso de erro, apenas tiramos o loading; o usuário ainda vê o histórico atual (se houver)
+      setLoading(false);
+    };
+
+    ws.onclose = () => {
+      // limpeza já é feita no return do effect; aqui não precisamos fazer nada extra
+    };
+
+    return () => {
+      try {
+        ws.close();
+      } catch {}
+      wsRef.current = null;
+    };
+  }, [topicoId, user?.id, user?.name]);
 
   async function enviar() {
     const t = texto.trim();
     if (!t || !user?.id || sending) return;
+
+    // não tenta enviar se o socket não estiver pronto
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
     setSending(true);
+
+    const roomId = String(topicoId);
+    const userId = String(user.id);
+    const nome   = user.name || "Jogador";
+
+    // mensagem otimista local
     const optimistic: ChatMsg = {
       id: "tmp-" + Date.now(),
-      tgId: String(user.id),
+      tgId: userId,
       nome: user.name || "Você",
       texto: t,
       tipo: "texto",
       gifUrl: "",
       data: new Date().toISOString(),
     };
-    setMsgs(m => [...m, optimistic]);
+
+    setMsgs((m) => [...m, optimistic]);
     setTexto("");
     scrollBottom();
+
     try {
-      await tvApi.chatSend({
-        tgId: String(user.id),
-        nome: user.name || "Jogador",
+      const payload = {
+        type: "message",
+        roomId,
+        userId,
+        nome,
         texto: t,
-        topicoId,
-      });
+      };
+      wsRef.current.send(JSON.stringify(payload));
     } catch {
-      // mantém a otimista — próximo poll reconcilia
+      // se der erro de rede, mantém a mensagem otimista; numa melhoria futura,
+      // dá para marcar como "falhou" ou remover
     } finally {
       setSending(false);
     }
@@ -456,6 +511,7 @@ function LiveChat({ programa, topicoId, user }: {
             <Loader2 className="size-4 animate-spin text-primary" />
           </div>
         )}
+
         {!loading && msgs.length === 0 && (
           <div className="h-full grid place-items-center text-center px-4">
             <div className="space-y-1.5">
@@ -464,24 +520,30 @@ function LiveChat({ programa, topicoId, user }: {
             </div>
           </div>
         )}
+
         {msgs.map((m) => {
           const isMe = user?.id && String(m.tgId) === String(user.id);
           return (
             <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${isMe ? "bg-primary text-primary-foreground" : "bg-white/5 border border-white/5"}`}>
                 {!isMe && (
-                  <p className="text-[10px] font-black uppercase tracking-wider text-primary/80 mb-0.5">{m.nome || "Anon"}</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-primary/80 mb-0.5">
+                    {m.nome || "Anon"}
+                  </p>
                 )}
                 {m.gifUrl ? (
                   <img src={m.gifUrl} alt="" className="rounded-lg max-h-40" />
                 ) : (
-                  <p className="text-sm leading-snug whitespace-pre-wrap break-words">{m.texto}</p>
+                  <p className="text-sm leading-snug whitespace-pre-wrap break-words">
+                    {m.texto}
+                  </p>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+
       <form
         onSubmit={(e) => { e.preventDefault(); enviar(); }}
         className="p-3 border-t border-border flex items-center gap-2"
@@ -505,7 +567,6 @@ function LiveChat({ programa, topicoId, user }: {
     </>
   );
 }
-
 // ─── SALA DO EVENTO ───────────────────────────────────────────────────────────
 function EventRoom({
   entry, current, onBack
