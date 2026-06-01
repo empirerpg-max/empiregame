@@ -67,37 +67,45 @@ export async function fetchMensagens(
   return data ?? [];
 }
 
-// ─── Inserir mensagem com timeout de 3.5s ────────────────────────────────────
-// Timeout reduzido para 3.5s:
+// ─── Inserir mensagem com abort em 3.5s ──────────────────────────────────────
+// Usa AbortController para CANCELAR o fetch subjacente após 3.5s,
+// impedindo que a promise continue rodando em background e atualize
+// estado do React após o componente já ter recebido o "timeout" visual.
+//
+// Motivos do timeout de 3.5s:
 //   - Telegram WebApp mostra "aguardar ou sair" após ~5s de fetch pendente.
-//   - 3.5s garante que o Promise.race resolve bem antes desse limiar.
-//   - A mensagem otimista já está visível; o polling busca a real em seguida.
+//   - 3.5s garante resolução bem antes desse limiar.
+//   - A mensagem otimista já está visível; o polling confirma a real em seguida.
+//
 // Retorna "rate_limited" se o banco rejeitar por spam (trigger trg_rate_limit).
 export async function inserirMensagem(
   payload: Omit<MensagemDB, "id" | "created_at">
 ): Promise<MensagemDB | null | "rate_limited"> {
-  const timeoutPromise = new Promise<null>((resolve) =>
-    setTimeout(() => resolve(null), 3500)
-  );
+  const controller = new AbortController();
+  const timeoutId  = setTimeout(() => controller.abort(), 3500);
 
-  const insertPromise = supabase
-    .from("mensagens")
-    .insert(payload)
-    .select()
-    .single()
-    .then(({ data, error }) => {
-      if (error) {
-        // Código 23514 = violação de check constraint (trigger de rate limit)
-        if (error.code === "23514" || error.message?.includes("rate_limit")) {
-          return "rate_limited" as const;
-        }
-        console.error("[Supabase] inserirMensagem:", error.message);
-        return null;
+  try {
+    const { data, error } = await supabase
+      .from("mensagens")
+      .insert(payload)
+      .select()
+      .single()
+      .abortSignal(controller.signal);
+
+    clearTimeout(timeoutId);
+
+    if (error) {
+      if (error.code === "23514" || error.message?.includes("rate_limit")) {
+        return "rate_limited";
       }
-      return data as MensagemDB;
-    });
-
-  return Promise.race([insertPromise, timeoutPromise]);
+      console.error("[Supabase] inserirMensagem:", error.message);
+      return null;
+    }
+    return data as MensagemDB;
+  } catch {
+    clearTimeout(timeoutId);
+    return null; // abortado ou erro de rede
+  }
 }
 
 // ─── Ranking de participação (via RPC) ────────────────────────────────────────
