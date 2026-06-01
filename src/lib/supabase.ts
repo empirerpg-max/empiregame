@@ -8,8 +8,8 @@ const SUPABASE_ANON =
   (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjZnp6aHVjdnNxZXFkbGZveG1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMzg2MTQsImV4cCI6MjA5NTkxNDYxNH0.U9SL1CDN2jNpv2H0BSwP-lw2hA045cKtrPbccFWV1BQ";
 
-// Cliente único — sem Realtime habilitado para não abrir WebSocket persistente
-// que causa crash na WebView do Telegram Mini App.
+// Cliente sem Realtime — WebSocket causa crash no Telegram Mini App WebView.
+// O chat usa polling incremental (fetchMensagens com afterId) em vez de subscribe.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
   realtime: { params: { eventsPerSecond: 0 } },
 });
@@ -33,7 +33,7 @@ export interface RankingItem {
   porcentagem: number;
 }
 
-// ─── Buscar mensagens a partir de um ID (polling incremental) ────────────────
+// ─── Buscar mensagens (histórico ou incremental via afterId) ─────────────────
 export async function fetchMensagens(
   streamId: string,
   limit = 60,
@@ -55,18 +55,29 @@ export async function fetchMensagens(
   return data ?? [];
 }
 
-// ─── Inserir mensagem ─────────────────────────────────────────────────────────
+// ─── Inserir mensagem com timeout de 6s ──────────────────────────────────────
+// Sem timeout, uma rede lenta faz o fetch pendurar por 10s+,
+// o que dispara o dialog "aguardar ou sair" no Telegram WebApp.
 export async function inserirMensagem(
   payload: Omit<MensagemDB, "id" | "created_at">
 ): Promise<MensagemDB | null> {
-  const { data, error } = await supabase
+  const timeoutPromise = new Promise<null>((resolve) =>
+    setTimeout(() => resolve(null), 6000)
+  );
+
+  const insertPromise = supabase
     .from("mensagens")
     .insert(payload)
     .select()
-    .single();
+    .single()
+    .then(({ data, error }) => {
+      if (error) { console.error("[Supabase] inserirMensagem:", error.message); return null; }
+      return data as MensagemDB;
+    });
 
-  if (error) { console.error("[Supabase] inserirMensagem:", error.message); return null; }
-  return data;
+  // Se o insert demorar mais de 6s, retorna null silenciosamente.
+  // A mensagem otimista já está visível; o polling vai buscar a real em seguida.
+  return Promise.race([insertPromise, timeoutPromise]);
 }
 
 // ─── Ranking de participação (via RPC) ────────────────────────────────────────

@@ -16,7 +16,6 @@ import {
 } from "@/lib/empiretv";
 import { Send } from "lucide-react";
 import {
-  supabase,
   fetchMensagens, inserirMensagem, getRanking,
   type MensagemDB, type RankingItem
 } from "@/lib/supabase";
@@ -357,9 +356,11 @@ function KickPlayer({ programa }: { programa: string }) {
 }
 
 // ─── LIVE CHAT ────────────────────────────────────────────────────────────────
-// Chat em tempo real via Supabase Realtime.
-// Não há WebSocket próprio, polling, nem dependência do Render.
-// A conexão é gerenciada pelo SDK do Supabase e reconecta automaticamente.
+// Chat em tempo real via polling incremental ao Supabase.
+// NÃO usa Supabase Realtime (WebSocket) pois causa crash no Telegram Mini App WebView.
+// Estratégia: busca histórico inicial → polling a cada 3s buscando apenas msgs novas (afterId).
+
+const POLL_INTERVAL = 3000; // 3 segundos
 
 function LiveChat({ streamId, user }: {
   streamId: string;
@@ -374,20 +375,25 @@ function LiveChat({ streamId, user }: {
   // Evita scroll automático enquanto o teclado virtual está aberto no mobile/Telegram WebApp.
   const inputFocusedRef           = useRef(false);
   const nomeRef                   = useRef(user?.name || "Jogador");
+  const lastIdRef                 = useRef(0);
   useEffect(() => { nomeRef.current = user?.name || "Jogador"; });
 
   function scrollBottom() {
     if (inputFocusedRef.current) return;
+    // Double RAF: espera 2 frames para o layout do teclado virtual estabilizar
     requestAnimationFrame(() => {
-      try {
-        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      } catch {}
+      requestAnimationFrame(() => {
+        try {
+          if (scrollRef.current)
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        } catch {}
+      });
     });
   }
 
-  // ─── Conexão Supabase Realtime ────────────────────────────────────────────
+  // ─── Carregamento inicial + polling incremental ───────────────────────────
   // Dependências: apenas streamId e user.id.
-  // user.name é lido via nomeRef para evitar reconexões desnecessárias.
+  // Sem WebSocket/Realtime — polling simples e seguro para WebView do Telegram.
   useEffect(() => {
     if (!streamId || !user?.id) {
       setMsgs([]);
@@ -398,55 +404,56 @@ function LiveChat({ streamId, user }: {
     setLoading(true);
     setMsgs([]);
     setReplyTo(null);
+    lastIdRef.current = 0;
 
-    // 1) Busca histórico inicial
-    fetchMensagens(streamId).then(data => {
+    // 1) Histórico inicial
+    fetchMensagens(streamId, 60, 0).then(data => {
       setMsgs(data);
+      if (data.length > 0) lastIdRef.current = data[data.length - 1].id;
       setLoading(false);
       scrollBottom();
     });
 
-    // 2) Subscribe em tempo real — filtra apenas pelo stream atual
-    const channel = supabase
-      .channel(`chat:${streamId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "mensagens",
-          filter: `stream_id=eq.${streamId}`,
-        },
-        (payload) => {
-          const nova = payload.new as MensagemDB;
-          setMsgs(prev => {
-            // Evita duplicata: substitui mensagem otimista pelo registro real
-            const semOtimista = prev.filter(
-              p => !(typeof p.id === "string" && (p as unknown as { id: string }).id.startsWith("tmp-") && p.texto === nova.texto && String(p.telegram_id) === String(nova.telegram_id))
+    // 2) Polling incremental: busca só mensagens novas (afterId = último id visto)
+    const timer = setInterval(async () => {
+      try {
+        const novas = await fetchMensagens(streamId, 20, lastIdRef.current);
+        if (novas.length === 0) return;
+        lastIdRef.current = novas[novas.length - 1].id;
+        setMsgs(prev => {
+          // Remove mensagens otimistas correspondentes e adiciona as reais
+          const merged = [...prev];
+          novas.forEach(nova => {
+            const idxOtimista = merged.findIndex(
+              p => typeof p.id === "number" && p.id > 1_700_000_000_000 &&
+                   p.texto === nova.texto &&
+                   String(p.telegram_id) === String(nova.telegram_id)
             );
-            if (semOtimista.some(p => p.id === nova.id)) return semOtimista;
-            return [...semOtimista, nova];
+            if (idxOtimista >= 0) {
+              merged[idxOtimista] = nova; // substitui otimista pelo real
+            } else if (!merged.some(p => p.id === nova.id)) {
+              merged.push(nova);
+            }
           });
-          scrollBottom();
-        }
-      )
-      .subscribe();
+          return merged;
+        });
+        scrollBottom();
+      } catch {}
+    }, POLL_INTERVAL);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => clearInterval(timer);
   }, [streamId, user?.id]);
 
   // ─── Envio de mensagem ────────────────────────────────────────────────────
   async function enviar() {
     const t = texto.trim();
-    if (!t || !user?.id || sending) return;
+    if (!t || !user?.id || sending || !streamId) return;
     setSending(true);
     setTexto("");
     setReplyTo(null);
 
-    // Mensagem otimista (aparece instantaneamente)
-    const optimistic = {
+    // Mensagem otimista: id = timestamp em ms (> 1.7T, distinguível de ids reais do Supabase)
+    const optimistic: MensagemDB = {
       id: Date.now() as unknown as number,
       created_at: new Date().toISOString(),
       stream_id: streamId,
@@ -455,10 +462,11 @@ function LiveChat({ streamId, user }: {
       nome: nomeRef.current,
       texto: t,
       reply_to_id: replyTo?.id ?? null,
-    } satisfies MensagemDB;
+    };
     setMsgs(prev => [...prev, optimistic]);
     scrollBottom();
 
+    // inserirMensagem já tem timeout de 6s internamente — não trava o WebView.
     await inserirMensagem({
       stream_id: streamId,
       telegram_id: Number(user.id),
@@ -467,7 +475,7 @@ function LiveChat({ streamId, user }: {
       texto: t,
       reply_to_id: replyTo?.id ?? null,
     });
-    // O Realtime vai trazer a mensagem real e substituir a otimista via setMsgs acima.
+    // O polling vai buscar a mensagem real e substituir a otimista.
 
     setSending(false);
   }
@@ -664,47 +672,32 @@ function EventRoom({
 // ─── TV PAGE ──────────────────────────────────────────────────────────────────
 function TvPage() {
   const { user } = useTelegramUser();
-  const [status, setStatus]       = useState<TvStatus | null>(null);
-  const [loading, setLoading]     = useState(true);
-  const [view, setView]           = useState<"grid" | "planner">("grid");
+  const [status, setStatus]         = useState<TvStatus | null>(null);
+  const [loading, setLoading]       = useState(true);
   const [selectedEntry, setSelectedEntry] = useState<ProgramEntry | null>(null);
-  const autoOpenedRef = useRef(false);
+  const [view, setView]             = useState<"grade" | "planner">("grade");
 
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const data = await tvApi.status();
-        if (!cancelled) setStatus(data);
-      } catch {
-        /* ignora */
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    const id = setInterval(load, 60_000);
-    return () => { cancelled = true; clearInterval(id); };
+    tvApi.getStatus().then(s => { setStatus(s); setLoading(false); });
+    const id = setInterval(() => {
+      tvApi.getStatus().then(s => setStatus(s)).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(id);
   }, []);
 
-  const entries = status ? buildProgramEntries(status) : [];
+  const entries: ProgramEntry[] = status ? buildProgramEntries(status) : [];
   const current = status?.current ?? null;
 
-  useEffect(() => {
-    if (!status || autoOpenedRef.current || selectedEntry) return;
-    const entriesNow = buildProgramEntries(status);
-    const live = entriesNow.find(e => e.hasLive);
-    if (live) {
-      autoOpenedRef.current = true;
-      setSelectedEntry(live);
-    }
-  }, [status]);
-
-  if (loading) return (
-    <div className="min-h-screen grid place-items-center">
-      <Loader2 className="size-6 animate-spin text-primary" />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="size-6 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Carregando programação…</p>
+        </div>
+      </div>
+    );
+  }
 
   if (selectedEntry) {
     return (
@@ -717,63 +710,68 @@ function TvPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-black text-2xl">Empire TV</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Grade de programação</p>
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <Tv className="size-5 text-primary" />
+          <h1 className="font-black text-lg">Empire TV</h1>
         </div>
-        <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-border">
-          <button onClick={() => setView("grid")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors
-              ${view === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          ><LayoutGrid className="size-3.5" /> Grade</button>
-          <button onClick={() => setView("planner")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors
-              ${view === "planner" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          ><CalendarDays className="size-3.5" /> Agenda</button>
-        </div>
+        <p className="text-xs text-muted-foreground">Programação completa do canal</p>
       </div>
 
-      {/* Status atual */}
-      {current && getProgramStatus(current) === "live" && (
+      {/* Now Playing */}
+      {current && getProgramStatus(current) === "broadcasting" && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-          className="p-4 rounded-2xl bg-red-600/10 border border-red-600/20 flex items-center gap-3"
+          className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3"
         >
-          <span className="size-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-black text-red-400 uppercase tracking-widest">Ao vivo agora</p>
-            <p className="font-bold text-sm truncate">{current.programa}</p>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-widest">
+              <span className="size-1.5 rounded-full bg-white animate-pulse" /> Ao vivo
+            </span>
+            <p className="font-black text-sm">{current.programa}</p>
           </div>
-          <button onClick={() => {
-            const live = entries.find(e => e.hasLive);
-            if (live) setSelectedEntry(live);
-          }} className="px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-black hover:bg-red-500 transition-colors shrink-0">
-            Assistir
+          <NowPlayingBar current={current} />
+          <button
+            onClick={() => {
+              const e = entries.find(en => checkIsLive(current, en));
+              if (e) setSelectedEntry(e);
+            }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-black hover:bg-primary/90 transition-colors"
+          >
+            <Play className="size-3.5" /> Assistir e Comentar
           </button>
         </motion.div>
       )}
 
-      {/* Conteúdo */}
-      <AnimatePresence mode="wait">
-        {view === "grid" ? (
-          <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-            {entries.length === 0 ? (
-              <div className="rounded-2xl border border-border bg-card p-10 text-center">
-                <Tv className="size-8 mx-auto mb-3 text-muted-foreground opacity-30" />
-                <p className="text-sm text-muted-foreground">Nenhuma programação disponível.</p>
-              </div>
-            ) : entries.map((entry, i) => (
-              <motion.div key={entry.programa + entry.data} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-                <ProgramCard entry={entry} onSelect={() => setSelectedEntry(entry)} />
-              </motion.div>
-            ))}
-          </motion.div>
-        ) : (
-          <motion.div key="planner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <PlannerView entries={entries} onSelect={setSelectedEntry} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* View Toggle */}
+      <div className="flex gap-2">
+        {(["grade", "planner"] as const).map(v => (
+          <button key={v} onClick={() => setView(v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-colors
+              ${view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-white/5"}`}
+          >
+            {v === "grade" ? <><LayoutGrid className="size-3.5" />Grade</> : <><CalendarDays className="size-3.5" />Planner</>}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      {view === "grade" ? (
+        <div className="space-y-3">
+          {entries.length === 0 && (
+            <div className="rounded-2xl border border-border bg-card p-10 text-center text-muted-foreground">
+              <Tv className="size-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Nenhuma programação disponível.</p>
+            </div>
+          )}
+          {entries.map((entry, i) => (
+            <motion.div key={entry.programa + entry.data} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+              <ProgramCard entry={entry} onSelect={() => setSelectedEntry(entry)} />
+            </motion.div>
+          ))}
+        </div>
+      ) : (
+        <PlannerView entries={entries} onSelect={setSelectedEntry} />
+      )}
     </div>
   );
 }
