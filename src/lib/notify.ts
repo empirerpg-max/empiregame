@@ -2,8 +2,7 @@ import { toast } from "sonner";
 
 /**
  * Mostra o resultado de uma ação do Apps Script como toast bonito.
- * O backend retorna strings tipo "✅ ...", "❌ ...", "⚠️ ..." ou JSON com {ok, msg}.
- * Esconde códigos UUID e ruído técnico.
+ * Compatível com Sonner v2 (API estável: toast, toast.error, toast.warning, toast.success).
  */
 export function notify(result: unknown, opts: { successFallback?: string } = {}) {
   let msg = "";
@@ -11,31 +10,31 @@ export function notify(result: unknown, opts: { successFallback?: string } = {})
     msg = result;
   } else if (result && typeof result === "object") {
     const res = result as Record<string, unknown>;
-    if (res.erro) msg = "❌ " + String(res.erro);
-    else if (res.message) msg = String(res.message);
-    else if (res.msg) msg = String(res.msg);
-    else if (res.ok === true) msg = "✅ " + (opts.successFallback || "Feito!");
-    else if (res.ok === false) msg = "❌ " + (String(res.msg) || "Falhou.");
+    if (res.erro)          msg = "\u274C " + String(res.erro);
+    else if (res.message)  msg = String(res.message);
+    else if (res.msg)      msg = String(res.msg);
+    else if (res.ok === true)  msg = "\u2705 " + (opts.successFallback || "Feito!");
+    else if (res.ok === false) msg = "\u274C " + (String(res.msg) || "Falhou.");
     else msg = opts.successFallback || "Feito!";
   }
 
-  // limpa: remove IDs longos (UUIDs e similares) que vazam pro usuário
+  // limpa IDs longos (UUIDs) que possam vazar para o usuário
   const clean = msg.replace(/\b[a-f0-9]{8}\b/gi, "").trim();
 
-  // separa título (primeira linha) das demais (vão como description)
-  const lines = clean.split(/\n+/).filter(Boolean);
-  const title = lines[0] || "Feito";
+  const lines       = clean.split(/\n+/).filter(Boolean);
+  const title       = lines[0] || "Feito";
   const description = lines.slice(1).join("\n") || undefined;
 
-  if (title.startsWith("❌")) {
-    toast.error(title.replace(/^❌\s*/, ""), { description });
-  } else if (title.startsWith("⚠️")) {
-    toast.warning(title.replace(/^⚠️\s*/, ""), { description });
-  } else if (title.startsWith("✅")) {
-    toast.success(title.replace(/^✅\s*/, ""), { description });
+  // Sonner v2: toast.error / toast.warning / toast.success / toast() — API estável
+  if (title.startsWith("\u274C")) {
+    toast.error(title.replace(/^\u274C\s*/, ""), { description });
+  } else if (title.startsWith("\u26A0\uFE0F")) {
+    toast.warning(title.replace(/^\u26A0\uFE0F\s*/, ""), { description });
+  } else if (title.startsWith("\u2705")) {
+    toast.success(title.replace(/^\u2705\s*/, ""), { description });
   } else {
     toast(title, { description });
   }
 
-  return { ok: title.startsWith("✅"), title, description };
+  return { ok: title.startsWith("\u2705"), title, description };
 }
