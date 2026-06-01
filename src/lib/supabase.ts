@@ -8,11 +8,32 @@ const SUPABASE_ANON =
   (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjZnp6aHVjdnNxZXFkbGZveG1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMzg2MTQsImV4cCI6MjA5NTkxNDYxNH0.U9SL1CDN2jNpv2H0BSwP-lw2hA045cKtrPbccFWV1BQ";
 
-// Cliente sem Realtime — WebSocket causa crash no Telegram Mini App WebView.
-// O chat usa polling incremental (fetchMensagens com afterId) em vez de subscribe.
+// CRÍTICO: O Supabase JS v2 abre WebSocket mesmo com eventsPerSecond:0.
+// No Telegram Mini App WebView, qualquer WebSocket pendente derruba o app.
+// Solução: usar fetch nativo direto, sem o cliente JS do Supabase para mutações.
+// O cliente Supabase é mantido APENAS para queries SELECT (sem realtime).
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
-  realtime: { params: { eventsPerSecond: 0 } },
+  realtime: {
+    params: { eventsPerSecond: 0 },
+  },
+  global: {
+    // Força o uso do fetch nativo sem keepalive que pode pendurar no WebView
+    fetch: (url, options) =>
+      fetch(url, { ...options, keepalive: false }),
+  },
 });
+
+// Desconecta qualquer WebSocket que o cliente possa ter aberto na inicialização
+supabase.realtime.disconnect();
+
+// ─── Constantes ───────────────────────────────────────────────────────────────
+const REST_BASE = `${SUPABASE_URL}/rest/v1`;
+const HEADERS   = {
+  "Content-Type": "application/json",
+  "apikey":       SUPABASE_ANON,
+  "Authorization": `Bearer ${SUPABASE_ANON}`,
+  "Prefer":       "return=representation",
+};
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface MensagemDB {
@@ -34,8 +55,6 @@ export interface RankingItem {
 }
 
 // ─── Rate limit client-side ──────────────────────────────────────────────────
-// Impede duplo-clique no botão de envio e protege contra spam.
-// Complementa o trigger de rate limit do banco (1 msg/s por telegram_id).
 const _lastSent: Record<string, number> = {};
 export function podeSendMensagem(telegramId: string | number): boolean {
   const key   = String(telegramId);
@@ -45,74 +64,81 @@ export function podeSendMensagem(telegramId: string | number): boolean {
   return true;
 }
 
-// ─── Buscar mensagens (histórico ou incremental via afterId) ─────────────────
+// ─── Buscar mensagens via fetch nativo (sem WebSocket) ───────────────────────
 export async function fetchMensagens(
   streamId: string,
   limit = 60,
   afterId = 0
 ): Promise<MensagemDB[]> {
-  let query = supabase
-    .from("mensagens")
-    .select("*")
-    .eq("stream_id", streamId)
-    .order("id", { ascending: true })   // ordena por id (usa o índice stream_id+id)
-    .limit(limit);
+  try {
+    let url = `${REST_BASE}/mensagens?select=*&stream_id=eq.${encodeURIComponent(streamId)}&order=id.asc&limit=${limit}`;
+    if (afterId > 0) url += `&id=gt.${afterId}`;
 
-  if (afterId > 0) {
-    query = query.gt("id", afterId);
+    const res = await fetch(url, {
+      method: "GET",
+      headers: HEADERS,
+      keepalive: false,
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    return (await res.json()) as MensagemDB[];
+  } catch {
+    return [];
   }
-
-  const { data, error } = await query;
-  if (error) { console.error("[Supabase] fetchMensagens:", error.message); return []; }
-  return data ?? [];
 }
 
-// ─── Inserir mensagem com abort em 3.5s ──────────────────────────────────────
-// Usa AbortController para CANCELAR o fetch subjacente após 3.5s,
-// impedindo que a promise continue rodando em background e atualize
-// estado do React após o componente já ter recebido o "timeout" visual.
-//
-// Motivos do timeout de 3.5s:
-//   - Telegram WebApp mostra "aguardar ou sair" após ~5s de fetch pendente.
-//   - 3.5s garante resolução bem antes desse limiar.
-//   - A mensagem otimista já está visível; o polling confirma a real em seguida.
-//
-// Retorna "rate_limited" se o banco rejeitar por spam (trigger trg_rate_limit).
+// ─── Inserir mensagem via fetch nativo com abort em 3.5s ─────────────────────
+// Usa fetch nativo puro — SEM o cliente Supabase JS — para garantir
+// que nenhum WebSocket seja aberto ou mantido vivo durante o POST.
+// O AbortSignal.timeout(3500) cancela o fetch se o Supabase demorar demais,
+// evitando que o Telegram WebView exiba o diálogo "aguardar ou sair".
 export async function inserirMensagem(
   payload: Omit<MensagemDB, "id" | "created_at">
 ): Promise<MensagemDB | null | "rate_limited"> {
-  const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 3500);
-
   try {
-    const { data, error } = await supabase
-      .from("mensagens")
-      .insert(payload)
-      .select()
-      .single()
-      .abortSignal(controller.signal);
+    const res = await fetch(`${REST_BASE}/mensagens`, {
+      method:  "POST",
+      headers: HEADERS,
+      body:    JSON.stringify(payload),
+      keepalive: false,
+      signal:  AbortSignal.timeout(3500),
+    });
 
-    clearTimeout(timeoutId);
-
-    if (error) {
-      if (error.code === "23514" || error.message?.includes("rate_limit")) {
-        return "rate_limited";
-      }
-      console.error("[Supabase] inserirMensagem:", error.message);
+    if (res.status === 409 || res.status === 400) {
+      // Pode ser rate_limit (trigger retorna 23514 → PostgREST retorna 400/409)
+      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+      const msg  = String(body?.message || body?.details || "");
+      if (msg.includes("rate_limit") || res.status === 409) return "rate_limited";
+      console.error("[Supabase] inserirMensagem:", body);
       return null;
     }
-    return data as MensagemDB;
+
+    if (!res.ok) {
+      console.error("[Supabase] inserirMensagem HTTP", res.status);
+      return null;
+    }
+
+    const data = await res.json() as MensagemDB | MensagemDB[];
+    return Array.isArray(data) ? (data[0] ?? null) : data;
   } catch {
-    clearTimeout(timeoutId);
-    return null; // abortado ou erro de rede
+    // AbortError (timeout 3.5s) ou erro de rede — retorna null silenciosamente
+    return null;
   }
 }
 
 // ─── Ranking de participação (via RPC) ────────────────────────────────────────
 export async function getRanking(streamId: string): Promise<RankingItem[]> {
-  const { data, error } = await supabase.rpc("participacao_ranking", {
-    p_stream_id: streamId,
-  });
-  if (error) { console.error("[Supabase] getRanking:", error.message); return []; }
-  return (data as RankingItem[]) ?? [];
+  try {
+    const res = await fetch(`${REST_BASE}/rpc/participacao_ranking`, {
+      method:  "POST",
+      headers: HEADERS,
+      body:    JSON.stringify({ p_stream_id: streamId }),
+      keepalive: false,
+      signal:  AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    return (await res.json()) as RankingItem[];
+  } catch {
+    return [];
+  }
 }
