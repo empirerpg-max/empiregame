@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Tv, Loader2, ChevronLeft, ChevronRight, ArrowLeft,
   MessageCircle, Play, Clock, ChevronDown,
@@ -367,9 +367,13 @@ function KickPlayer({ programa }: { programa: string }) {
 }
 
 // ─── LIVE CHAT ────────────────────────────────────────────────────────────────
-const CHAT_WS_URL   = "wss://empiretv-chat-backend.onrender.com";
-const CHAT_PING_URL = "https://empiretv-chat-backend.onrender.com/ping";
+const CHAT_WS_URL    = "wss://empiretv-chat-backend.onrender.com";
+const CHAT_HTTP_URL  = "https://empiretv-chat-backend.onrender.com";
+const CHAT_PING_URL  = `${CHAT_HTTP_URL}/ping`;
 const WS_CONNECT_TIMEOUT_MS = 12_000;
+// Intervalo de polling HTTP usado como fallback quando o WS não está disponível.
+// Isso garante que mensagens cheguem mesmo que o cold-start do Render demore.
+const POLL_INTERVAL_MS = 4_000;
 
 function LiveChat({ programa, topicoId, user }: {
   programa: string;
@@ -378,13 +382,19 @@ function LiveChat({ programa, topicoId, user }: {
 }) {
   const [msgs, setMsgs]         = useState<ChatMsg[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [wsReady, setWsReady]   = useState(false);
   const [wsError, setWsError]   = useState(false);
   const [texto, setTexto]       = useState("");
   const [sending, setSending]   = useState(false);
   const scrollRef               = useRef<HTMLDivElement>(null);
   const wsRef                   = useRef<WebSocket | null>(null);
+  // Evita scroll automático enquanto o teclado virtual está aberto no mobile.
+  // Sem essa guard, o scrollTop forçado conflita com o resize do layout e
+  // congela o foco do input no Chrome embutido do Telegram.
   const inputFocusedRef         = useRef(false);
   const nomeRef                 = useRef(user?.name || "Jogador");
+  const pollTimerRef            = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastMsgTsRef            = useRef<string | null>(null);
   useEffect(() => { nomeRef.current = user?.name || "Jogador"; });
 
   function scrollBottom() {
@@ -396,20 +406,66 @@ function LiveChat({ programa, topicoId, user }: {
     });
   }
 
+  // ─── Polling HTTP — garantia de entrega quando WS não está disponível ────────
+  // O Render gratuito derruba o serviço após 15 min de inatividade.
+  // O WS pode demorar até 90s para conectar (cold start). Durante esse tempo,
+  // o polling HTTP garante que o histórico apareça e novas mensagens sejam
+  // recebidas sem travar o app aguardando o handshake do WebSocket.
+  const startPolling = useCallback((roomId: string) => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+
+    async function poll() {
+      // Para o polling assim que o WS estiver conectado e recebendo mensagens.
+      if (wsRef.current?.readyState === WebSocket.OPEN) return;
+      try {
+        const url = lastMsgTsRef.current
+          ? `${CHAT_HTTP_URL}/messages/${encodeURIComponent(roomId)}?since=${encodeURIComponent(lastMsgTsRef.current)}&limit=50`
+          : `${CHAT_HTTP_URL}/messages/${encodeURIComponent(roomId)}?limit=60`;
+        const res  = await fetchWithTimeout(url, 6_000);
+        if (!res.ok) return;
+        const data = await res.json() as { ok: boolean; messages: ChatMsg[] };
+        if (!data.ok || !Array.isArray(data.messages) || data.messages.length === 0) return;
+        setMsgs(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const novos = data.messages.filter(m => !existingIds.has(m.id));
+          if (novos.length === 0) return prev;
+          const merged = [...prev, ...novos];
+          lastMsgTsRef.current = merged[merged.length - 1].data;
+          return merged;
+        });
+        setLoading(false);
+        scrollBottom();
+      } catch {
+        // falha silenciosa no polling — não exibe erro ao usuário
+      }
+    }
+
+    poll();
+    pollTimerRef.current = setInterval(poll, POLL_INTERVAL_MS);
+  }, []);
+
+  function stopPolling() {
+    if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
+  }
+
   function buildSocket(roomId: string, userId: string) {
     const ws = new WebSocket(CHAT_WS_URL);
     wsRef.current = ws;
+    setWsReady(false);
     let destroyed = false;
 
     const connectTimeout = setTimeout(() => {
       if (ws.readyState !== WebSocket.OPEN) {
         ws.close();
-        if (!destroyed) { setLoading(false); setWsError(true); }
+        // WS não conectou no tempo limite — o polling HTTP já está cobrindo,
+        // portanto não exibimos erro; apenas registramos e paramos de tentar.
+        if (!destroyed) setLoading(false);
       }
     }, WS_CONNECT_TIMEOUT_MS);
 
     ws.onopen = () => {
       clearTimeout(connectTimeout);
+      setWsReady(true);
       ws.send(JSON.stringify({ type: "join", roomId, userId, nome: nomeRef.current }));
     };
 
@@ -419,12 +475,22 @@ function LiveChat({ programa, topicoId, user }: {
 
         if (data.type === "history" && Array.isArray(data.messages)) {
           setMsgs(data.messages as ChatMsg[]);
+          if (data.messages.length > 0)
+            lastMsgTsRef.current = data.messages[data.messages.length - 1].data;
           setLoading(false);
+          // WS funcionando — não precisa mais de polling
+          stopPolling();
           scrollBottom();
         }
 
         if (data.type === "message" && data.message) {
-          setMsgs((prev) => [...prev, data.message as ChatMsg]);
+          const m = data.message as ChatMsg;
+          setMsgs((prev) => {
+            // Evita duplicata: se já existe mensagem com mesmo id (ex.: via polling), ignora.
+            if (prev.some(p => p.id === m.id)) return prev;
+            return [...prev, m];
+          });
+          lastMsgTsRef.current = m.data;
           scrollBottom();
         }
 
@@ -435,18 +501,21 @@ function LiveChat({ programa, topicoId, user }: {
               p.id.startsWith("tmp-") && p.tgId === m.tgId && p.texto === m.texto ? m : p
             )
           );
+          lastMsgTsRef.current = m.data;
         }
       } catch {}
     };
 
     ws.onerror = () => {
       clearTimeout(connectTimeout);
+      // Não exibe wsError aqui — o polling HTTP é o fallback silencioso.
       if (!destroyed) setLoading(false);
     };
 
     ws.onclose = () => {
       clearTimeout(connectTimeout);
       destroyed = true;
+      setWsReady(false);
     };
 
     return () => {
@@ -465,27 +534,38 @@ function LiveChat({ programa, topicoId, user }: {
 
     setLoading(true);
     setWsError(false);
+    setWsReady(false);
     setMsgs([]);
+    lastMsgTsRef.current = null;
 
     const roomId = String(topicoId);
     const userId = String(user.id);
     let cleanup: (() => void) | undefined;
 
-    // Ping para acordar o Render (cold start) usando AbortController compatível
-    // com o Chrome embutido do Telegram (AbortSignal.timeout não existe lá).
+    // 1) Inicia polling HTTP imediatamente — garante que o usuário veja
+    //    mensagens mesmo enquanto o WS está conectando (ou se não conectar).
+    startPolling(roomId);
+
+    // 2) Ping para acordar o Render antes de abrir o WS.
     fetchWithTimeout(CHAT_PING_URL, 8_000)
       .catch(() => {})
       .finally(() => { cleanup = buildSocket(roomId, userId); });
 
-    return () => { cleanup?.(); wsRef.current = null; };
+    return () => {
+      stopPolling();
+      cleanup?.();
+      wsRef.current = null;
+    };
+    // Apenas topicoId e user.id recriamos o socket.
+    // user.name é lido via nomeRef para evitar loop.
   }, [topicoId, user?.id]);
 
+  // ─── Envio de mensagem ────────────────────────────────────────────────────
   async function enviar() {
     const t = texto.trim();
     if (!t || !user?.id || sending) return;
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-
     setSending(true);
+
     const optimistic: ChatMsg = {
       id: "tmp-" + Date.now(),
       tgId: String(user.id),
@@ -495,30 +575,70 @@ function LiveChat({ programa, topicoId, user }: {
       gifUrl: "",
       data: new Date().toISOString(),
     };
-
     setMsgs((m) => [...m, optimistic]);
     setTexto("");
     scrollBottom();
 
+    // Prefere WS quando disponível; fallback para HTTP POST automaticamente.
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify({
+          type: "message",
+          roomId: String(topicoId),
+          userId: String(user.id),
+          nome: nomeRef.current,
+          texto: t,
+        }));
+      } catch {
+        // WS falhou ao enviar — tenta HTTP
+        await enviarViaHttp(t, optimistic.id);
+      }
+    } else {
+      // WS não está disponível — envia via HTTP diretamente
+      await enviarViaHttp(t, optimistic.id);
+    }
+    setSending(false);
+  }
+
+  async function enviarViaHttp(texto: string, tmpId: string) {
     try {
-      wsRef.current.send(JSON.stringify({
-        type: "message",
-        roomId: String(topicoId),
-        userId: String(user.id),
-        nome: nomeRef.current,
-        texto: t,
-      }));
-    } catch {}
-    finally { setSending(false); }
+      const res = await fetchWithTimeout(`${CHAT_HTTP_URL}/send`, 8_000);
+      // Nota: fetchWithTimeout não aceita body; usamos fetch direto com abort controller.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8_000);
+      const r = await fetch(`${CHAT_HTTP_URL}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId: String(topicoId),
+          userId: String(user!.id),
+          nome: nomeRef.current,
+          texto,
+        }),
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer));
+      if (r.ok) {
+        const data = await r.json() as { ok: boolean; message?: ChatMsg };
+        if (data.ok && data.message) {
+          // Substitui a mensagem otimista pelo id real
+          setMsgs(prev => prev.map(p => p.id === tmpId ? data.message! : p));
+        }
+      }
+    } catch {
+      // Falha no HTTP também — a mensagem otimista permanece visível.
+    }
   }
 
   function handleRetry() {
     if (!user?.id || !topicoId) return;
     setWsError(false);
     setLoading(true);
+    lastMsgTsRef.current = null;
+    const roomId = String(topicoId);
+    startPolling(roomId);
     fetchWithTimeout(CHAT_PING_URL, 8_000)
       .catch(() => {})
-      .finally(() => { buildSocket(String(topicoId), String(user.id)); });
+      .finally(() => { buildSocket(roomId, String(user.id)); });
   }
 
   return (
