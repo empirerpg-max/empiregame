@@ -65,10 +65,28 @@ export interface ProgramEntry {
   liveItem?: TvProgram;
 }
 
+/**
+ * Agrupa itens da grade em entradas por programa+data.
+ * Aceita TvProgram[], TvStatus (extrai fullSchedule automaticamente) ou null/undefined.
+ * O currentRowNum marca qual entrada está ao vivo.
+ */
 export function buildProgramEntries(
-  schedule: TvProgram[],
+  input: TvProgram[] | TvStatus | null | undefined,
   currentRowNum?: number
 ): ProgramEntry[] {
+  // normaliza o input para sempre trabalhar com TvProgram[]
+  let schedule: TvProgram[];
+  if (!input) {
+    schedule = [];
+  } else if (Array.isArray(input)) {
+    schedule = input;
+  } else {
+    // recebeu TvStatus — extrai fullSchedule
+    schedule = Array.isArray((input as TvStatus).fullSchedule)
+      ? (input as TvStatus).fullSchedule!
+      : [];
+  }
+
   const map = new Map<string, ProgramEntry>();
   for (const p of schedule) {
     const nome = String(p.programa || p.titulo || "Sem nome");
@@ -102,9 +120,6 @@ export function buildProgramEntries(
 // Pool de callbacks JSONP ativos — permite cancelar requests pendentes
 const activeJsonp = new Map<string, { script: HTMLScriptElement; timeout: ReturnType<typeof setTimeout> }>();
 
-// FIX: versão corrigida do JSONP
-// Problema anterior: scripts acumulavam no DOM em caso de erro/timeout,
-// vazando memória na WebView do Telegram e travando ao abrir o teclado.
 function jsonp<T>(url: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const cbName = "_gjp_" + Date.now() + "_" + Math.random().toString(36).slice(2);
@@ -119,7 +134,6 @@ function jsonp<T>(url: string): Promise<T> {
       clearTimeout(timeout);
       activeJsonp.delete(cbName);
       try { delete (window as any)[cbName]; } catch {}
-      // FIX: remove o script do DOM sempre, mesmo em erro — evita leak de nós no <head>
       try { if (script.parentNode) script.parentNode.removeChild(script); } catch {}
     }
 
