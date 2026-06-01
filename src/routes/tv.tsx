@@ -208,7 +208,7 @@ function ProgramCard({ entry, onSelect }: { entry: ProgramEntry; onSelect: () =>
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-black text-sm truncate">{entry.programa}</p>
-          <StatusBadge live={entry.hasLive} upcoming={!entry.hasLive} />
+          {entry.hasLive && <StatusBadge live />}
         </div>
         {entry.data && (
           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
