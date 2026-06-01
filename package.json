@@ -1,7 +1,12 @@
 {
   "name": "tanstack_start_ts",
   "private": true,
-  "sideEffects": false,
+  "sideEffects": [
+    "src/lib/notify.ts",
+    "src/lib/telegram.ts",
+    "src/lib/supabase.ts",
+    "*.css"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite dev",
