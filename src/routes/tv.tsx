@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Tv, Loader2, ChevronLeft, ChevronRight, ArrowLeft,
   MessageCircle, Play, Clock, ChevronDown,
   Music2, Film, Zap, LayoutGrid, CalendarDays, Trophy, Users,
-  ExternalLink
+  ExternalLink, X, CornerUpLeft
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTelegramUser } from "@/lib/telegram";
@@ -15,6 +15,11 @@ import {
   type TvStatus, type TvProgram, type ParticipacaoItem, type ProgramEntry, type ChatMsg
 } from "@/lib/empiretv";
 import { Send } from "lucide-react";
+import {
+  supabase,
+  fetchMensagens, inserirMensagem, getRanking,
+  type MensagemDB, type RankingItem
+} from "@/lib/supabase";
 
 export const Route = createFileRoute("/tv")({
   head: () => ({
@@ -70,16 +75,6 @@ function kickEmbedUrl(): string {
   return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false&parent=${parent}`;
 }
 
-// ─── fetch com timeout compatível com Telegram WebApp ────────────────────────
-// AbortSignal.timeout() NÃO existe no Chrome embutido do Telegram e
-// lança exceção síncrona, travando a thread ("Página sem resposta").
-// Esta função usa AbortController + setTimeout, compatível com todos os ambientes.
-function fetchWithTimeout(url: string, ms: number): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
-}
-
 // ─── MEDAL ───────────────────────────────────────────────────────────────────
 function Medal({ pos }: { pos: number }) {
   if (pos === 1) return <span className="text-base">🥇</span>;
@@ -89,50 +84,45 @@ function Medal({ pos }: { pos: number }) {
 }
 
 // ─── RANKING ─────────────────────────────────────────────────────────────────
-function RankingParticipacao({ programa, currentUserId }: { programa: string; currentUserId?: string }) {
-  const [items, setItems]     = useState<ParticipacaoItem[]>([]);
+function RankingParticipacao({ streamId, currentUserId }: { streamId: string; currentUserId?: string }) {
+  const [items, setItems]     = useState<RankingItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!programa) return;
+    if (!streamId) return;
     setLoading(true);
-    tvApi.participacao(programa)
-      .then(data => setItems(Array.isArray(data) ? data : []))
-      .catch(() => setItems([]))
+    getRanking(streamId)
+      .then(data => setItems(data))
       .finally(() => setLoading(false));
     const id = setInterval(() => {
-      tvApi.participacao(programa).then(data => setItems(Array.isArray(data) ? data : [])).catch(() => {});
+      getRanking(streamId).then(data => setItems(data)).catch(() => {});
     }, 30_000);
     return () => clearInterval(id);
-  }, [programa]);
+  }, [streamId]);
 
   if (loading) return <div className="flex items-center justify-center py-6"><Loader2 className="size-4 animate-spin text-primary" /></div>;
   if (items.length === 0) return (
     <div className="text-center py-6 space-y-1">
       <Users className="size-5 text-muted-foreground mx-auto" />
-      <p className="text-[11px] text-muted-foreground">Nenhuma participação ainda hoje.</p>
+      <p className="text-[11px] text-muted-foreground">Nenhuma participação ainda.</p>
     </div>
   );
 
-  const sorted = [...items].sort((a, b) => (b.mensagens || 0) - (a.mensagens || 0));
-  const total  = sorted.reduce((acc, i) => acc + (i.mensagens || 0), 0);
-
   return (
     <div className="space-y-1.5">
-      {sorted.map((item, idx) => {
-        const pct  = total > 0 ? Math.round((item.mensagens / total) * 100) : 0;
-        const isMe = currentUserId && String(item.tgId) === String(currentUserId);
+      {items.map((item, idx) => {
+        const isMe = currentUserId && String(item.telegram_id) === String(currentUserId);
         return (
-          <motion.div key={item.tgId + idx} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.04 }}
+          <motion.div key={item.telegram_id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.04 }}
             className={`relative flex items-center gap-2.5 px-3 py-2 rounded-xl overflow-hidden ${isMe ? "border border-primary/40 bg-primary/10" : "bg-white/5"}`}
           >
             <div className="absolute inset-y-0 left-0 rounded-xl transition-all duration-700"
-              style={{ width: `${pct}%`, background: isMe ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.04)" }} />
+              style={{ width: `${item.porcentagem}%`, background: isMe ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.04)" }} />
             <div className="relative flex items-center gap-2.5 w-full">
               <Medal pos={idx + 1} />
               <p className={`flex-1 text-xs font-bold truncate ${isMe ? "text-primary" : ""}`}>{item.nome}{isMe ? " (você)" : ""}</p>
-              <span className="text-[10px] text-muted-foreground shrink-0">{item.mensagens} msg</span>
-              <span className={`text-[10px] font-black shrink-0 ${isMe ? "text-primary" : "text-white/60"}`}>{pct}%</span>
+              <span className="text-[10px] text-muted-foreground shrink-0">{item.total_mensagens} msg</span>
+              <span className={`text-[10px] font-black shrink-0 ${isMe ? "text-primary" : "text-white/60"}`}>{item.porcentagem}%</span>
             </div>
           </motion.div>
         );
@@ -367,34 +357,23 @@ function KickPlayer({ programa }: { programa: string }) {
 }
 
 // ─── LIVE CHAT ────────────────────────────────────────────────────────────────
-const CHAT_WS_URL    = "wss://empiretv-chat-backend.onrender.com";
-const CHAT_HTTP_URL  = "https://empiretv-chat-backend.onrender.com";
-const CHAT_PING_URL  = `${CHAT_HTTP_URL}/ping`;
-const WS_CONNECT_TIMEOUT_MS = 12_000;
-// Intervalo de polling HTTP usado como fallback quando o WS não está disponível.
-// Isso garante que mensagens cheguem mesmo que o cold-start do Render demore.
-const POLL_INTERVAL_MS = 4_000;
+// Chat em tempo real via Supabase Realtime.
+// Não há WebSocket próprio, polling, nem dependência do Render.
+// A conexão é gerenciada pelo SDK do Supabase e reconecta automaticamente.
 
-function LiveChat({ programa, topicoId, user }: {
-  programa: string;
-  topicoId: string;
+function LiveChat({ streamId, user }: {
+  streamId: string;
   user: ReturnType<typeof useTelegramUser>["user"];
 }) {
-  const [msgs, setMsgs]         = useState<ChatMsg[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [wsReady, setWsReady]   = useState(false);
-  const [wsError, setWsError]   = useState(false);
-  const [texto, setTexto]       = useState("");
-  const [sending, setSending]   = useState(false);
-  const scrollRef               = useRef<HTMLDivElement>(null);
-  const wsRef                   = useRef<WebSocket | null>(null);
-  // Evita scroll automático enquanto o teclado virtual está aberto no mobile.
-  // Sem essa guard, o scrollTop forçado conflita com o resize do layout e
-  // congela o foco do input no Chrome embutido do Telegram.
-  const inputFocusedRef         = useRef(false);
-  const nomeRef                 = useRef(user?.name || "Jogador");
-  const pollTimerRef            = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastMsgTsRef            = useRef<string | null>(null);
+  const [msgs, setMsgs]           = useState<MensagemDB[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [texto, setTexto]         = useState("");
+  const [sending, setSending]     = useState(false);
+  const [replyTo, setReplyTo]     = useState<MensagemDB | null>(null);
+  const scrollRef                 = useRef<HTMLDivElement>(null);
+  // Evita scroll automático enquanto o teclado virtual está aberto no mobile/Telegram WebApp.
+  const inputFocusedRef           = useRef(false);
+  const nomeRef                   = useRef(user?.name || "Jogador");
   useEffect(() => { nomeRef.current = user?.name || "Jogador"; });
 
   function scrollBottom() {
@@ -406,239 +385,91 @@ function LiveChat({ programa, topicoId, user }: {
     });
   }
 
-  // ─── Polling HTTP — garantia de entrega quando WS não está disponível ────────
-  // O Render gratuito derruba o serviço após 15 min de inatividade.
-  // O WS pode demorar até 90s para conectar (cold start). Durante esse tempo,
-  // o polling HTTP garante que o histórico apareça e novas mensagens sejam
-  // recebidas sem travar o app aguardando o handshake do WebSocket.
-  const startPolling = useCallback((roomId: string) => {
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-
-    async function poll() {
-      // Para o polling assim que o WS estiver conectado e recebendo mensagens.
-      if (wsRef.current?.readyState === WebSocket.OPEN) return;
-      try {
-        const url = lastMsgTsRef.current
-          ? `${CHAT_HTTP_URL}/messages/${encodeURIComponent(roomId)}?since=${encodeURIComponent(lastMsgTsRef.current)}&limit=50`
-          : `${CHAT_HTTP_URL}/messages/${encodeURIComponent(roomId)}?limit=60`;
-        const res  = await fetchWithTimeout(url, 6_000);
-        if (!res.ok) return;
-        const data = await res.json() as { ok: boolean; messages: ChatMsg[] };
-        if (!data.ok || !Array.isArray(data.messages) || data.messages.length === 0) return;
-        setMsgs(prev => {
-          const existingIds = new Set(prev.map(m => m.id));
-          const novos = data.messages.filter(m => !existingIds.has(m.id));
-          if (novos.length === 0) return prev;
-          const merged = [...prev, ...novos];
-          lastMsgTsRef.current = merged[merged.length - 1].data;
-          return merged;
-        });
-        setLoading(false);
-        scrollBottom();
-      } catch {
-        // falha silenciosa no polling — não exibe erro ao usuário
-      }
-    }
-
-    poll();
-    pollTimerRef.current = setInterval(poll, POLL_INTERVAL_MS);
-  }, []);
-
-  function stopPolling() {
-    if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
-  }
-
-  function buildSocket(roomId: string, userId: string) {
-    const ws = new WebSocket(CHAT_WS_URL);
-    wsRef.current = ws;
-    setWsReady(false);
-    let destroyed = false;
-
-    const connectTimeout = setTimeout(() => {
-      if (ws.readyState !== WebSocket.OPEN) {
-        ws.close();
-        // WS não conectou no tempo limite — o polling HTTP já está cobrindo,
-        // portanto não exibimos erro; apenas registramos e paramos de tentar.
-        if (!destroyed) setLoading(false);
-      }
-    }, WS_CONNECT_TIMEOUT_MS);
-
-    ws.onopen = () => {
-      clearTimeout(connectTimeout);
-      setWsReady(true);
-      ws.send(JSON.stringify({ type: "join", roomId, userId, nome: nomeRef.current }));
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "history" && Array.isArray(data.messages)) {
-          setMsgs(data.messages as ChatMsg[]);
-          if (data.messages.length > 0)
-            lastMsgTsRef.current = data.messages[data.messages.length - 1].data;
-          setLoading(false);
-          // WS funcionando — não precisa mais de polling
-          stopPolling();
-          scrollBottom();
-        }
-
-        if (data.type === "message" && data.message) {
-          const m = data.message as ChatMsg;
-          setMsgs((prev) => {
-            // Evita duplicata: se já existe mensagem com mesmo id (ex.: via polling), ignora.
-            if (prev.some(p => p.id === m.id)) return prev;
-            return [...prev, m];
-          });
-          lastMsgTsRef.current = m.data;
-          scrollBottom();
-        }
-
-        if (data.type === "message_ack" && data.message) {
-          const m = data.message as ChatMsg;
-          setMsgs((prev) =>
-            prev.map((p) =>
-              p.id.startsWith("tmp-") && p.tgId === m.tgId && p.texto === m.texto ? m : p
-            )
-          );
-          lastMsgTsRef.current = m.data;
-        }
-      } catch {}
-    };
-
-    ws.onerror = () => {
-      clearTimeout(connectTimeout);
-      // Não exibe wsError aqui — o polling HTTP é o fallback silencioso.
-      if (!destroyed) setLoading(false);
-    };
-
-    ws.onclose = () => {
-      clearTimeout(connectTimeout);
-      destroyed = true;
-      setWsReady(false);
-    };
-
-    return () => {
-      destroyed = true;
-      clearTimeout(connectTimeout);
-      try { ws.close(); } catch {}
-    };
-  }
-
+  // ─── Conexão Supabase Realtime ────────────────────────────────────────────
+  // Dependências: apenas streamId e user.id.
+  // user.name é lido via nomeRef para evitar reconexões desnecessárias.
   useEffect(() => {
-    if (!topicoId || !user?.id) {
+    if (!streamId || !user?.id) {
       setMsgs([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    setWsError(false);
-    setWsReady(false);
     setMsgs([]);
-    lastMsgTsRef.current = null;
+    setReplyTo(null);
 
-    const roomId = String(topicoId);
-    const userId = String(user.id);
-    let cleanup: (() => void) | undefined;
+    // 1) Busca histórico inicial
+    fetchMensagens(streamId).then(data => {
+      setMsgs(data);
+      setLoading(false);
+      scrollBottom();
+    });
 
-    // 1) Inicia polling HTTP imediatamente — garante que o usuário veja
-    //    mensagens mesmo enquanto o WS está conectando (ou se não conectar).
-    startPolling(roomId);
-
-    // 2) Ping para acordar o Render antes de abrir o WS.
-    fetchWithTimeout(CHAT_PING_URL, 8_000)
-      .catch(() => {})
-      .finally(() => { cleanup = buildSocket(roomId, userId); });
+    // 2) Subscribe em tempo real — filtra apenas pelo stream atual
+    const channel = supabase
+      .channel(`chat:${streamId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "mensagens",
+          filter: `stream_id=eq.${streamId}`,
+        },
+        (payload) => {
+          const nova = payload.new as MensagemDB;
+          setMsgs(prev => {
+            // Evita duplicata: substitui mensagem otimista pelo registro real
+            const semOtimista = prev.filter(
+              p => !(typeof p.id === "string" && (p as unknown as { id: string }).id.startsWith("tmp-") && p.texto === nova.texto && String(p.telegram_id) === String(nova.telegram_id))
+            );
+            if (semOtimista.some(p => p.id === nova.id)) return semOtimista;
+            return [...semOtimista, nova];
+          });
+          scrollBottom();
+        }
+      )
+      .subscribe();
 
     return () => {
-      stopPolling();
-      cleanup?.();
-      wsRef.current = null;
+      supabase.removeChannel(channel);
     };
-    // Apenas topicoId e user.id recriamos o socket.
-    // user.name é lido via nomeRef para evitar loop.
-  }, [topicoId, user?.id]);
+  }, [streamId, user?.id]);
 
   // ─── Envio de mensagem ────────────────────────────────────────────────────
   async function enviar() {
     const t = texto.trim();
     if (!t || !user?.id || sending) return;
     setSending(true);
+    setTexto("");
+    setReplyTo(null);
 
-    const optimistic: ChatMsg = {
-      id: "tmp-" + Date.now(),
-      tgId: String(user.id),
+    // Mensagem otimista (aparece instantaneamente)
+    const optimistic = {
+      id: Date.now() as unknown as number,
+      created_at: new Date().toISOString(),
+      stream_id: streamId,
+      telegram_id: Number(user.id),
+      username: user.username || null,
       nome: nomeRef.current,
       texto: t,
-      tipo: "texto",
-      gifUrl: "",
-      data: new Date().toISOString(),
-    };
-    setMsgs((m) => [...m, optimistic]);
-    setTexto("");
+      reply_to_id: replyTo?.id ?? null,
+    } satisfies MensagemDB;
+    setMsgs(prev => [...prev, optimistic]);
     scrollBottom();
 
-    // Prefere WS quando disponível; fallback para HTTP POST automaticamente.
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({
-          type: "message",
-          roomId: String(topicoId),
-          userId: String(user.id),
-          nome: nomeRef.current,
-          texto: t,
-        }));
-      } catch {
-        // WS falhou ao enviar — tenta HTTP
-        await enviarViaHttp(t, optimistic.id);
-      }
-    } else {
-      // WS não está disponível — envia via HTTP diretamente
-      await enviarViaHttp(t, optimistic.id);
-    }
+    await inserirMensagem({
+      stream_id: streamId,
+      telegram_id: Number(user.id),
+      username: user.username || null,
+      nome: nomeRef.current,
+      texto: t,
+      reply_to_id: replyTo?.id ?? null,
+    });
+    // O Realtime vai trazer a mensagem real e substituir a otimista via setMsgs acima.
+
     setSending(false);
-  }
-
-  async function enviarViaHttp(texto: string, tmpId: string) {
-    try {
-      const res = await fetchWithTimeout(`${CHAT_HTTP_URL}/send`, 8_000);
-      // Nota: fetchWithTimeout não aceita body; usamos fetch direto com abort controller.
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8_000);
-      const r = await fetch(`${CHAT_HTTP_URL}/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomId: String(topicoId),
-          userId: String(user!.id),
-          nome: nomeRef.current,
-          texto,
-        }),
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timer));
-      if (r.ok) {
-        const data = await r.json() as { ok: boolean; message?: ChatMsg };
-        if (data.ok && data.message) {
-          // Substitui a mensagem otimista pelo id real
-          setMsgs(prev => prev.map(p => p.id === tmpId ? data.message! : p));
-        }
-      }
-    } catch {
-      // Falha no HTTP também — a mensagem otimista permanece visível.
-    }
-  }
-
-  function handleRetry() {
-    if (!user?.id || !topicoId) return;
-    setWsError(false);
-    setLoading(true);
-    lastMsgTsRef.current = null;
-    const roomId = String(topicoId);
-    startPolling(roomId);
-    fetchWithTimeout(CHAT_PING_URL, 8_000)
-      .catch(() => {})
-      .finally(() => { buildSocket(roomId, String(user.id)); });
   }
 
   return (
@@ -647,23 +478,11 @@ function LiveChat({ programa, topicoId, user }: {
         {loading && (
           <div className="flex flex-col items-center justify-center py-6 gap-2">
             <Loader2 className="size-4 animate-spin text-primary" />
-            <p className="text-[10px] text-muted-foreground">Conectando ao chat…</p>
+            <p className="text-[10px] text-muted-foreground">Carregando chat…</p>
           </div>
         )}
 
-        {!loading && wsError && (
-          <div className="h-full grid place-items-center text-center px-4">
-            <div className="space-y-2">
-              <MessageCircle className="size-7 text-muted-foreground mx-auto" />
-              <p className="text-xs text-muted-foreground">Chat temporariamente indisponível.</p>
-              <button onClick={handleRetry} className="text-[10px] text-primary underline underline-offset-2">
-                Tentar novamente
-              </button>
-            </div>
-          </div>
-        )}
-
-        {!loading && !wsError && msgs.length === 0 && (
+        {!loading && msgs.length === 0 && (
           <div className="h-full grid place-items-center text-center px-4">
             <div className="space-y-1.5">
               <MessageCircle className="size-7 text-muted-foreground mx-auto" />
@@ -673,27 +492,51 @@ function LiveChat({ programa, topicoId, user }: {
         )}
 
         {msgs.map((m) => {
-          const isMe = user?.id && String(m.tgId) === String(user.id);
+          const isMe = user?.id && String(m.telegram_id) === String(user.id);
+          const replied = m.reply_to_id ? msgs.find(p => p.id === m.reply_to_id) : null;
           return (
-            <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${isMe ? "bg-primary text-primary-foreground" : "bg-white/5 border border-white/5"}`}>
+            <div
+              key={m.id}
+              className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+              onDoubleClick={() => setReplyTo(m)}
+            >
+              <div className={`max-w-[80%] rounded-2xl px-3 py-2 space-y-1 ${
+                isMe ? "bg-primary text-primary-foreground" : "bg-white/5 border border-white/5"
+              }`}>
                 {!isMe && (
-                  <p className="text-[10px] font-black uppercase tracking-wider text-primary/80 mb-0.5">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-primary/80">
                     {m.nome || "Anon"}
                   </p>
                 )}
-                {m.gifUrl ? (
-                  <img src={m.gifUrl} alt="" className="rounded-lg max-h-40" />
-                ) : (
-                  <p className="text-sm leading-snug whitespace-pre-wrap break-words">
-                    {m.texto}
-                  </p>
+                {replied && (
+                  <div className={`text-[10px] px-2 py-1 rounded-lg border-l-2 border-primary/60 ${
+                    isMe ? "bg-black/20" : "bg-white/5"
+                  }`}>
+                    <span className="font-bold text-primary/80">{replied.nome}: </span>
+                    <span className="opacity-70 line-clamp-1">{replied.texto}</span>
+                  </div>
                 )}
+                <p className="text-sm leading-snug whitespace-pre-wrap break-words">
+                  {m.texto}
+                </p>
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Preview de reply */}
+      {replyTo && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border-t border-border text-xs">
+          <CornerUpLeft className="size-3.5 text-primary shrink-0" />
+          <span className="text-muted-foreground truncate flex-1">
+            <span className="font-bold text-primary">{replyTo.nome}:</span> {replyTo.texto}
+          </span>
+          <button onClick={() => setReplyTo(null)} className="shrink-0 text-muted-foreground hover:text-foreground">
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
 
       <form
         onSubmit={(e) => { e.preventDefault(); enviar(); }}
@@ -750,7 +593,8 @@ function EventRoom({
     });
   }, [user, isThisLive, current?.topicoId]);
 
-  const topicoId = (isThisLive && current?.topicoId) ? String(current.topicoId) : entry.topicoId || "";
+  // O streamId é o topicoId da transmissão (identificador único da sala de chat)
+  const streamId = (isThisLive && current?.topicoId) ? String(current.topicoId) : entry.topicoId || "";
   const tabs = ["Chat", "Ranking"] as const;
   const [tab, setTab] = useState<typeof tabs[number]>("Chat");
 
@@ -791,7 +635,7 @@ function EventRoom({
       </div>
 
       {/* Chat / Ranking */}
-      {topicoId && (
+      {streamId && (
         <div className="rounded-2xl border border-border bg-card overflow-hidden flex flex-col" style={{ height: 420 }}>
           <div className="flex border-b border-border shrink-0">
             {tabs.map((t) => (
@@ -805,10 +649,10 @@ function EventRoom({
           </div>
 
           {tab === "Chat" ? (
-            <LiveChat programa={entry.programa} topicoId={topicoId} user={user} />
+            <LiveChat streamId={streamId} user={user} />
           ) : (
             <div className="flex-1 overflow-y-auto px-4 py-3">
-              <RankingParticipacao programa={entry.programa} currentUserId={user?.id ? String(user.id) : undefined} />
+              <RankingParticipacao streamId={streamId} currentUserId={user?.id ? String(user.id) : undefined} />
             </div>
           )}
         </div>
@@ -824,7 +668,6 @@ function TvPage() {
   const [loading, setLoading]     = useState(true);
   const [view, setView]           = useState<"grid" | "planner">("grid");
   const [selectedEntry, setSelectedEntry] = useState<ProgramEntry | null>(null);
-  // ref para evitar re-abrir o ao-vivo se o usuário já navegou manualmente
   const autoOpenedRef = useRef(false);
 
   useEffect(() => {
@@ -847,9 +690,6 @@ function TvPage() {
   const entries = status ? buildProgramEntries(status) : [];
   const current = status?.current ?? null;
 
-  // Abre automaticamente o programa ao vivo, apenas uma vez após o primeiro carregamento.
-  // Usa `status` como dependência (objeto estável) em vez de `entries.length`
-  // (valor derivado que muda referência a cada render e causava re-execuções).
   useEffect(() => {
     if (!status || autoOpenedRef.current || selectedEntry) return;
     const entriesNow = buildProgramEntries(status);
