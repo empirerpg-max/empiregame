@@ -18,7 +18,7 @@ export interface TvProgram {
   duracao?:        number;
   driveId?:        string;
   videoUrl?:       string;
-  topicoId?:       string; // agora é Chat_ID (sala do backend)
+  topicoId?:       string;
   topicoUrl?:      string;
   status?:         string;
   rowNum?:         number;
@@ -59,7 +59,7 @@ export interface ProgramEntry {
   horario:   string;
   capaUrl:   string;
   topicoUrl: string;
-  topicoId:  string; // Chat_ID da transmissão
+  topicoId:  string;
   rowNums:   number[];
   hasLive:   boolean;
   liveItem?: TvProgram;
@@ -99,11 +99,17 @@ export function buildProgramEntries(
   return Array.from(map.values());
 }
 
-// JSONP — resolve CORS do Apps Script sem precisar de proxy
+// Pool de callbacks JSONP ativos — permite cancelar requests pendentes
+const activeJsonp = new Map<string, { script: HTMLScriptElement; timeout: ReturnType<typeof setTimeout> }>();
+
+// FIX: versão corrigida do JSONP
+// Problema anterior: scripts acumulavam no DOM em caso de erro/timeout,
+// vazando memória na WebView do Telegram e travando ao abrir o teclado.
 function jsonp<T>(url: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const cbName = "_gjp_" + Date.now() + "_" + Math.random().toString(36).slice(2);
     const script = document.createElement("script");
+
     const timeout = setTimeout(() => {
       cleanup();
       reject(new Error("JSONP timeout"));
@@ -111,8 +117,10 @@ function jsonp<T>(url: string): Promise<T> {
 
     function cleanup() {
       clearTimeout(timeout);
-      delete (window as any)[cbName];
-      if (script.parentNode) script.parentNode.removeChild(script);
+      activeJsonp.delete(cbName);
+      try { delete (window as any)[cbName]; } catch {}
+      // FIX: remove o script do DOM sempre, mesmo em erro — evita leak de nós no <head>
+      try { if (script.parentNode) script.parentNode.removeChild(script); } catch {}
     }
 
     (window as any)[cbName] = (data: T) => {
@@ -122,13 +130,12 @@ function jsonp<T>(url: string): Promise<T> {
 
     script.src = `${url}${url.includes("?") ? "&" : "?"}callback=${cbName}&_t=${Date.now()}`;
     script.onerror = () => { cleanup(); reject(new Error("JSONP error")); };
+
+    activeJsonp.set(cbName, { script, timeout });
     document.head.appendChild(script);
   });
 }
 
-// Toda comunicação write usa JSONP (GET) — POST direto pro Apps Script
-// dispara redirect cross-origin que, dentro da WebView do Telegram,
-// estoura erro de rede não-capturável e derruba a tela.
 async function postScript<T>(params: Record<string, unknown>): Promise<T> {
   const qs = Object.entries(params)
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v ?? ""))}`)
@@ -136,7 +143,6 @@ async function postScript<T>(params: Record<string, unknown>): Promise<T> {
   return jsonp<T>(`${EMPIRETV_SCRIPT_URL}?${qs}`);
 }
 
-// URL base do chat realtime (Render)
 const CHAT_BACKEND_URL = "https://empiretv-chat-backend.onrender.com";
 
 export const tvApi = {
@@ -147,7 +153,6 @@ export const tvApi = {
     const url = `${EMPIRETV_SCRIPT_URL}?acao=tv_participacao_lista&programa=${encodeURIComponent(programa)}`;
     return jsonp<ParticipacaoItem[]>(url);
   },
-  // mantido apenas para compatibilidade; agora o chat em tempo real usa WebSocket
   chatList(topicoId?: string): Promise<ChatMsg[]> {
     const qs = topicoId ? `&topicoId=${encodeURIComponent(topicoId)}` : "";
     return jsonp<ChatMsg[]>(`${EMPIRETV_SCRIPT_URL}?acao=tv_chat_list${qs}`);
@@ -198,22 +203,12 @@ export async function searchGifs(query: string): Promise<GifResult[]> {
   } catch { return []; }
 }
 
-/**
- * Regra do player:
- * - Transmissão ao vivo (broadcasting) → sempre embed do Kick
- * - Arquivo pré-gravado via proxy → usa videoUrl do current
- *   (identificado pelo driveId: se tiver driveId, é arquivo local)
- */
 export function buildPlayerSrc(p?: TvProgram | null): string {
   if (!p) return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false`;
-
-  // Se tem driveId, é um arquivo do Drive sendo servido pelo proxy
   const driveId = String(p.driveId || "").trim();
   if (driveId && p.videoUrl && String(p.videoUrl).startsWith("http")) {
     return String(p.videoUrl);
   }
-
-  // Para tudo mais (live stream, agenda, backup), usa o Kick
   return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false`;
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // ---------- Tipos mínimos do Telegram WebApp ----------
 type HapticImpactStyle = "light" | "medium" | "heavy" | "rigid" | "soft";
@@ -98,19 +98,39 @@ export interface TgUser {
   isTest: boolean;
 }
 
+// FIX: lê/grava localStorage com try/catch — WebView do Telegram pode lançar
+// SecurityError silencioso em alguns dispositivos Android ao acessar storage.
+function safeLocalGet(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function safeLocalSet(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch {}
+}
+
 export function useTelegramUser(): {
   user: TgUser | null;
   ready: boolean;
   setUserManually: (id: string, name?: string) => void;
 } {
+  // FIX: usa null como estado inicial e só sobe para um valor real uma única vez.
+  // Antes, o estado transitava null → { id: 'guest' } → { id: real } causando
+  // 2-3 remontagens do WebSocket do chat na inicialização.
   const [user, setUser] = useState<TgUser | null>(null);
   const [ready, setReady] = useState(false);
+  // Guard: impede setar o usuário mais de uma vez após o ready
+  const resolvedRef = useRef(false);
+
+  function resolve(u: TgUser) {
+    if (resolvedRef.current) return;
+    resolvedRef.current = true;
+    setUser(u);
+    setReady(true);
+  }
 
   const setUserManually = (id: string, name?: string) => {
     const newUser = { id, name: name || "Usuário Manual", isTest: true };
-    setUser(newUser);
-    localStorage.setItem("tg_user_cache", JSON.stringify(newUser));
-    setReady(true);
+    safeLocalSet("tg_user_cache", JSON.stringify(newUser));
+    resolve(newUser);
   };
 
   const userFromInitData = (str: string) => {
@@ -147,9 +167,8 @@ export function useTelegramUser(): {
         name: nameFromUrl || "Usuário #" + urlId.slice(-4),
         isTest: true,
       };
-      setUser(newUser);
-      localStorage.setItem("tg_user_cache", JSON.stringify(newUser));
-      setReady(true);
+      safeLocalSet("tg_user_cache", JSON.stringify(newUser));
+      resolve(newUser);
       return;
     }
 
@@ -169,13 +188,9 @@ export function useTelegramUser(): {
           photo_url: (sdkUser as any).photo_url,
           isTest: false,
         };
-        setUser(newUser);
-        localStorage.setItem("tg_user_cache", JSON.stringify(newUser));
-        if (w) {
-          w.ready();
-          w.expand();
-        }
-        setReady(true);
+        safeLocalSet("tg_user_cache", JSON.stringify(newUser));
+        if (w) { w.ready(); w.expand(); }
+        resolve(newUser);
         return true;
       }
 
@@ -198,25 +213,27 @@ export function useTelegramUser(): {
             name: u.first_name || u.username || "Usuário",
             isTest: false,
           };
-          setUser(newUser);
-          localStorage.setItem("tg_user_cache", JSON.stringify(newUser));
-          setReady(true);
+          safeLocalSet("tg_user_cache", JSON.stringify(newUser));
+          resolve(newUser);
           return true;
         }
       }
 
       if (attempts >= maxAttempts) {
-        const cached = localStorage.getItem("tg_user_cache");
+        // FIX: tenta cache antes de cair no guest — evita abrir socket com id 'guest'
+        // e reabrir logo depois com o id real quando o cache é lido
+        const cached = safeLocalGet("tg_user_cache");
         if (cached) {
           try {
             const parsed = JSON.parse(cached);
-            setUser(parsed);
-            setReady(true);
-            return true;
+            if (parsed?.id) {
+              resolve(parsed);
+              return true;
+            }
           } catch {}
         }
-        setUser({ id: "guest", name: "Guest", isTest: true });
-        setReady(true);
+        // fallback final: guest — apenas se não houver cache nenhum
+        resolve({ id: "guest", name: "Guest", isTest: true });
         return true;
       }
       return false;
