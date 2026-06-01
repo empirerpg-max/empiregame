@@ -1,7 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Valores de fallback embutidos — funcionam mesmo sem variáveis de ambiente no Lovable.
-// As variáveis de ambiente têm prioridade se configuradas.
 const SUPABASE_URL  =
   (import.meta.env.VITE_SUPABASE_URL  as string | undefined) ||
   "https://rcfzzhucvsqeqdlfoxmq.supabase.co";
@@ -10,7 +8,11 @@ const SUPABASE_ANON =
   (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjZnp6aHVjdnNxZXFkbGZveG1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMzg2MTQsImV4cCI6MjA5NTkxNDYxNH0.U9SL1CDN2jNpv2H0BSwP-lw2hA045cKtrPbccFWV1BQ";
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+// Cliente único — sem Realtime habilitado para não abrir WebSocket persistente
+// que causa crash na WebView do Telegram Mini App.
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  realtime: { params: { eventsPerSecond: 0 } },
+});
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface MensagemDB {
@@ -31,15 +33,24 @@ export interface RankingItem {
   porcentagem: number;
 }
 
-// ─── Buscar histórico inicial ─────────────────────────────────────────────────
-export async function fetchMensagens(streamId: string, limit = 60): Promise<MensagemDB[]> {
-  const { data, error } = await supabase
+// ─── Buscar mensagens a partir de um ID (polling incremental) ────────────────
+export async function fetchMensagens(
+  streamId: string,
+  limit = 60,
+  afterId = 0
+): Promise<MensagemDB[]> {
+  let query = supabase
     .from("mensagens")
     .select("*")
     .eq("stream_id", streamId)
     .order("created_at", { ascending: true })
     .limit(limit);
 
+  if (afterId > 0) {
+    query = query.gt("id", afterId);
+  }
+
+  const { data, error } = await query;
   if (error) { console.error("[Supabase] fetchMensagens:", error.message); return []; }
   return data ?? [];
 }
