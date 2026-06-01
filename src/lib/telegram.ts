@@ -1,52 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-
-// ---------- Tipos mínimos do Telegram WebApp ----------
-type HapticImpactStyle = "light" | "medium" | "heavy" | "rigid" | "soft";
-type HapticNotificationType = "error" | "success" | "warning";
-
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        ready: () => void;
-        expand: () => void;
-        close?: () => void;
-        setHeaderColor?: (c: string) => void;
-        setBackgroundColor?: (c: string) => void;
-        openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
-        openTelegramLink?: (url: string) => void;
-        initDataUnsafe?: { user?: { id: number; first_name?: string; username?: string } };
-        colorScheme?: "light" | "dark";
-        themeParams?: Record<string, string>;
-        onEvent?: (event: string, cb: () => void) => void;
-        offEvent?: (event: string, cb: () => void) => void;
-        BackButton?: {
-          show: () => void;
-          hide: () => void;
-          onClick: (cb: () => void) => void;
-          offClick: (cb: () => void) => void;
-        };
-        MainButton?: {
-          text: string;
-          show: () => void;
-          hide: () => void;
-          enable: () => void;
-          disable: () => void;
-          onClick: (cb: () => void) => void;
-          offClick: (cb: () => void) => void;
-          setText: (t: string) => void;
-          showProgress: (leaveActive?: boolean) => void;
-          hideProgress: () => void;
-        };
-        HapticFeedback?: {
-          impactOccurred: (style: HapticImpactStyle) => void;
-          notificationOccurred: (type: HapticNotificationType) => void;
-          selectionChanged: () => void;
-        };
-      };
-    };
-  }
-}
+import type {} from "./telegram.d";
 
 // ---------- Helpers de UX nativa ----------
 const tg = () => (typeof window !== "undefined" ? window.Telegram?.WebApp : undefined);
@@ -98,8 +51,6 @@ export interface TgUser {
   isTest: boolean;
 }
 
-// FIX: lê/grava localStorage com try/catch — WebView do Telegram pode lançar
-// SecurityError silencioso em alguns dispositivos Android ao acessar storage.
 function safeLocalGet(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
 }
@@ -112,12 +63,8 @@ export function useTelegramUser(): {
   ready: boolean;
   setUserManually: (id: string, name?: string) => void;
 } {
-  // FIX: usa null como estado inicial e só sobe para um valor real uma única vez.
-  // Antes, o estado transitava null → { id: 'guest' } → { id: real } causando
-  // 2-3 remontagens do WebSocket do chat na inicialização.
   const [user, setUser] = useState<TgUser | null>(null);
   const [ready, setReady] = useState(false);
-  // Guard: impede setar o usuário mais de uma vez após o ready
   const resolvedRef = useRef(false);
 
   function resolve(u: TgUser) {
@@ -185,7 +132,7 @@ export function useTelegramUser(): {
           id: String(sdkUser.id),
           name: sdkUser.first_name || sdkUser.username || "Usuário",
           username: sdkUser.username,
-          photo_url: (sdkUser as any).photo_url,
+          photo_url: sdkUser.photo_url,
           isTest: false,
         };
         safeLocalSet("tg_user_cache", JSON.stringify(newUser));
@@ -220,8 +167,6 @@ export function useTelegramUser(): {
       }
 
       if (attempts >= maxAttempts) {
-        // FIX: tenta cache antes de cair no guest — evita abrir socket com id 'guest'
-        // e reabrir logo depois com o id real quando o cache é lido
         const cached = safeLocalGet("tg_user_cache");
         if (cached) {
           try {
@@ -232,7 +177,6 @@ export function useTelegramUser(): {
             }
           } catch {}
         }
-        // fallback final: guest — apenas se não houver cache nenhum
         resolve({ id: "guest", name: "Guest", isTest: true });
         return true;
       }
