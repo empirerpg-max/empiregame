@@ -88,6 +88,47 @@ export interface BemItem {
   status?: string;
 }
 
+// --- Interfaces Social ---
+export interface PostSocial {
+  id: string;
+  autor: string;
+  foto_autor: string;
+  conteudo: string;
+  imagem?: string;
+  timestamp: string;
+  likes: number;
+  comentarios: number;
+  tipo: string;
+}
+
+export interface PerfilSocial {
+  tg_id: string;
+  nome: string;
+  foto: string;
+  bio?: string;
+  seguidores: number;
+  seguindo: number;
+}
+
+export interface NewsSocial {
+  id: string;
+  titulo: string;
+  conteudo: string;
+  autor: string;
+  timestamp: string;
+  imagem?: string;
+}
+
+export interface ComentarioSocial {
+  id: string;
+  post_id: string;
+  autor: string;
+  foto_autor: string;
+  conteudo: string;
+  timestamp: string;
+}
+// --- fim interfaces Social ---
+
 function qs(params: Record<string, string | number | undefined>) {
   const u = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -273,6 +314,60 @@ export const api = {
       .map((a) => normalizeArtist(a))
       .sort((a, b) => b.prestigio - a.prestigio);
   },
+
+  // --- Social ---
+  async listarPostsSocial(): Promise<PostSocial[]> {
+    const data = await call<PostSocial[]>({ acao: "listarPostsSocial" }, { cache: true });
+    return Array.isArray(data) ? data : [];
+  },
+  async listarPerfisSocial(): Promise<PerfilSocial[]> {
+    const data = await call<PerfilSocial[]>({ acao: "listarPerfisSocial" }, { cache: true });
+    return Array.isArray(data) ? data : [];
+  },
+  async listarNewsSocial(): Promise<NewsSocial[]> {
+    const data = await call<NewsSocial[]>({ acao: "listarNewsSocial" }, { cache: true });
+    return Array.isArray(data) ? data : [];
+  },
+  async salvarPostSocial(payload: Record<string, unknown>, tgId: string): Promise<CommonResponse> {
+    return call<CommonResponse>({
+      acao: "salvarPostSocial",
+      payload: JSON.stringify(payload),
+      tgId,
+    });
+  },
+  async salvarPerfilSocial(payload: Record<string, unknown>, tgId: string): Promise<CommonResponse> {
+    return call<CommonResponse>({
+      acao: "salvarPerfilSocial",
+      payload: JSON.stringify(payload),
+      tgId,
+    });
+  },
+  async salvarNewsSocial(payload: Record<string, unknown>, tgId: string): Promise<CommonResponse> {
+    return call<CommonResponse>({
+      acao: "salvarNewsSocial",
+      payload: JSON.stringify(payload),
+      tgId,
+    });
+  },
+  async curtirPostSocial(postId: string, tgId: string): Promise<{ ok: boolean; likes?: number }> {
+    return call<{ ok: boolean; likes?: number }>({
+      acao: "curtirPostSocial",
+      postId,
+      tgId,
+    });
+  },
+  async comentarPostSocial(payload: Record<string, unknown>, tgId: string): Promise<CommonResponse> {
+    return call<CommonResponse>({
+      acao: "comentarPostSocial",
+      payload: JSON.stringify(payload),
+      tgId,
+    });
+  },
+  async listarComentariosSocial(postId: string): Promise<ComentarioSocial[]> {
+    const data = await call<ComentarioSocial[]>({ acao: "listarComentariosSocial", postId });
+    return Array.isArray(data) ? data : [];
+  },
+  // --- fim Social ---
 };
 
 // Utilitários de formatação
