@@ -1,11 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL  as string;
-const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+// Valores de fallback embutidos — funcionam mesmo sem variáveis de ambiente no Lovable.
+// As variáveis de ambiente têm prioridade se configuradas.
+const SUPABASE_URL  =
+  (import.meta.env.VITE_SUPABASE_URL  as string | undefined) ||
+  "https://rcfzzhucvsqeqdlfoxmq.supabase.co";
 
-if (!SUPABASE_URL || !SUPABASE_ANON) {
-  console.warn("[Supabase] Variáveis VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY não configuradas.");
-}
+const SUPABASE_ANON =
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjZnp6aHVjdnNxZXFkbGZveG1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMzg2MTQsImV4cCI6MjA5NTkxNDYxNH0.U9SL1CDN2jNpv2H0BSwP-lw2hA045cKtrPbccFWV1BQ";
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
