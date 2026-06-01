@@ -374,29 +374,48 @@ function LiveChat({ programa, topicoId, user }: {
   const scrollRef             = useRef<HTMLDivElement>(null);
   const lastIdRef             = useRef<string>("");
 
+  // merge defensivo: ignora erros, dedupe por id, mantém otimistas pendentes
+  function mergeMsgs(prev: ChatMsg[], incoming: ChatMsg[]): ChatMsg[] {
+    const ids = new Set(incoming.map(m => m.id));
+    const pendentes = prev.filter(m => m.id.startsWith("tmp-") && !ids.has(m.id));
+    const merged = [...incoming, ...pendentes];
+    return merged;
+  }
+
+  function scrollBottom() {
+    requestAnimationFrame(() => {
+      try {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      } catch {}
+    });
+  }
+
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setMsgs([]);
+    lastIdRef.current = "";
 
-    tvApi.chatList(topicoId || undefined)
-      .then(d => {
+    async function pull(initial = false) {
+      try {
+        const d = await tvApi.chatList(topicoId || undefined);
         if (!alive) return;
         const arr = Array.isArray(d) ? d : [];
-        setMsgs(arr);
+        setMsgs(prev => mergeMsgs(prev, arr));
         const lastId = arr[arr.length - 1]?.id || "";
+        const isNew = lastId && lastId !== lastIdRef.current;
         lastIdRef.current = lastId;
-        requestAnimationFrame(() => {
-          if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-          }
-        });
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
+        if (initial || isNew) scrollBottom();
+      } catch {
+        // silencia: rede instável no WebView do Telegram não pode derrubar a tela
+      } finally {
+        if (alive && initial) setLoading(false);
+      }
+    }
 
-    return () => { alive = false; };
+    pull(true);
+    const id = setInterval(() => pull(false), 4000);
+    return () => { alive = false; clearInterval(id); };
   }, [topicoId]);
 
   async function enviar() {
@@ -414,9 +433,7 @@ function LiveChat({ programa, topicoId, user }: {
     };
     setMsgs(m => [...m, optimistic]);
     setTexto("");
-    requestAnimationFrame(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    });
+    scrollBottom();
     try {
       await tvApi.chatSend({
         tgId: String(user.id),
@@ -425,7 +442,7 @@ function LiveChat({ programa, topicoId, user }: {
         topicoId,
       });
     } catch {
-      // mantém a otimista — próximo carregamento reconcilia
+      // mantém a otimista — próximo poll reconcilia
     } finally {
       setSending(false);
     }
