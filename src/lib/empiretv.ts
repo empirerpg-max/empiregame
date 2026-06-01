@@ -18,7 +18,7 @@ export interface TvProgram {
   duracao?:        number;
   driveId?:        string;
   videoUrl?:       string;
-  topicoId?:       string;
+  topicoId?:       string; // agora é Chat_ID (sala do backend)
   topicoUrl?:      string;
   status?:         string;
   rowNum?:         number;
@@ -59,7 +59,7 @@ export interface ProgramEntry {
   horario:   string;
   capaUrl:   string;
   topicoUrl: string;
-  topicoId:  string;
+  topicoId:  string; // Chat_ID da transmissão
   rowNums:   number[];
   hasLive:   boolean;
   liveItem?: TvProgram;
@@ -136,6 +136,9 @@ async function postScript<T>(params: Record<string, unknown>): Promise<T> {
   return jsonp<T>(`${EMPIRETV_SCRIPT_URL}?${qs}`);
 }
 
+// URL base do chat realtime (Render)
+const CHAT_BACKEND_URL = "https://empiretv-chat-backend.onrender.com";
+
 export const tvApi = {
   status(): Promise<TvStatus> {
     return jsonp<TvStatus>(EMPIRETV_SCRIPT_URL);
@@ -144,6 +147,7 @@ export const tvApi = {
     const url = `${EMPIRETV_SCRIPT_URL}?acao=tv_participacao_lista&programa=${encodeURIComponent(programa)}`;
     return jsonp<ParticipacaoItem[]>(url);
   },
+  // mantido apenas para compatibilidade; agora o chat em tempo real usa WebSocket
   chatList(topicoId?: string): Promise<ChatMsg[]> {
     const qs = topicoId ? `&topicoId=${encodeURIComponent(topicoId)}` : "";
     return jsonp<ChatMsg[]>(`${EMPIRETV_SCRIPT_URL}?acao=tv_chat_list${qs}`);
