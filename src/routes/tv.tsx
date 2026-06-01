@@ -74,7 +74,7 @@ function kickEmbedUrl(): string {
   return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false&parent=${parent}`;
 }
 
-// ─── MEDAL ───────────────────────────────────────────────────────────────────
+// ─── MEDAL ─────────────────────────────────────────────────────────────────────────────
 function Medal({ pos }: { pos: number }) {
   if (pos === 1) return <span className="text-base">🥇</span>;
   if (pos === 2) return <span className="text-base">🥈</span>;
@@ -82,7 +82,7 @@ function Medal({ pos }: { pos: number }) {
   return <span className="text-xs font-black text-muted-foreground w-5 text-center">{pos}</span>;
 }
 
-// ─── RANKING ─────────────────────────────────────────────────────────────────
+// ─── RANKING ─────────────────────────────────────────────────────────────────────────
 function RankingParticipacao({ streamId, currentUserId }: { streamId: string; currentUserId?: string }) {
   const [items, setItems]     = useState<RankingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,7 +130,7 @@ function RankingParticipacao({ streamId, currentUserId }: { streamId: string; cu
   );
 }
 
-// ─── NOW PLAYING BAR ─────────────────────────────────────────────────────────
+// ─── NOW PLAYING BAR ───────────────────────────────────────────────────────────────────
 function NowPlayingBar({ current }: { current: TvProgram | null }) {
   if (!current || (!current.tipo && !current.material && !current.buff)) return null;
   return (
@@ -163,7 +163,7 @@ function NowPlayingBar({ current }: { current: TvProgram | null }) {
   );
 }
 
-// ─── STATUS BADGE ─────────────────────────────────────────────────────────────
+// ─── STATUS BADGE ───────────────────────────────────────────────────────────────────────────
 function StatusBadge({ live, upcoming }: { live?: boolean; upcoming?: boolean }) {
   if (live) return (
     <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-widest">
@@ -176,7 +176,7 @@ function StatusBadge({ live, upcoming }: { live?: boolean; upcoming?: boolean })
   return null;
 }
 
-// ─── PROGRAM CARD ─────────────────────────────────────────────────────────────
+// ─── PROGRAM CARD ─────────────────────────────────────────────────────────────────────────
 function ProgramCard({ entry, onSelect }: { entry: ProgramEntry; onSelect: () => void }) {
   const capa = driveImgUrl(entry.capaUrl);
   return (
@@ -217,7 +217,7 @@ function ProgramCard({ entry, onSelect }: { entry: ProgramEntry; onSelect: () =>
   );
 }
 
-// ─── PLANNER ──────────────────────────────────────────────────────────────────
+// ─── PLANNER ──────────────────────────────────────────────────────────────────────────────
 function PlannerView({ entries, onSelect }: {
   entries: ProgramEntry[];
   onSelect: (e: ProgramEntry) => void;
@@ -317,7 +317,7 @@ function PlannerView({ entries, onSelect }: {
   );
 }
 
-// ─── KICK PLAYER ─────────────────────────────────────────────────────────────
+// ─── KICK PLAYER ─────────────────────────────────────────────────────────────────────────
 function KickPlayer({ programa }: { programa: string }) {
   const [failed, setFailed] = useState(false);
   const src = kickEmbedUrl();
@@ -355,7 +355,7 @@ function KickPlayer({ programa }: { programa: string }) {
   );
 }
 
-// ─── LIVE CHAT ────────────────────────────────────────────────────────────────
+// ─── LIVE CHAT ───────────────────────────────────────────────────────────────────────────────
 // Chat em tempo real via polling incremental ao Supabase.
 // NÃO usa Supabase Realtime (WebSocket) pois causa crash no Telegram Mini App WebView.
 // Estratégia: busca histórico inicial → polling a cada 3s buscando apenas msgs novas (afterId).
@@ -364,10 +364,13 @@ function KickPlayer({ programa }: { programa: string }) {
 // 1. Input NÃO fica disabled durante envio — apenas o botão mostra spinner.
 //    Motivo: disabled=true no input durante um fetch pendente congela o foco
 //    no Telegram WebApp, dando aparência de travamento total do app.
-// 2. scrollBottom usa double-RAF e guarda inputFocusedRef para não brigar
-//    com o teclado virtual ao rolar.
-// 3. Timeout do insert reduzido para 4s (abaixo do limiar de ~5s do Telegram
-//    que dispara o dialog "aguardar ou sair").
+// 2. scrollBottom usa bottomRef + scrollIntoView (single RAF) para não brigar
+//    com o teclado virtual ao rolar. Usa inputFocusedRef para bloquear scroll
+//    enquanto o teclado está abrindo.
+// 3. enviar() usa try/finally: setSending(false) SEMPRE executa, mesmo em
+//    erros inesperados, evitando que o botão trave permanentemente.
+// 4. inserirMensagem usa AbortController: cancela o fetch subjacente após
+//    3.5s, impedindo atualizações de estado após timeout.
 
 const POLL_INTERVAL = 3000;
 
@@ -380,7 +383,7 @@ function LiveChat({ streamId, user }: {
   const [texto, setTexto]         = useState("");
   const [sending, setSending]     = useState(false);
   const [replyTo, setReplyTo]     = useState<MensagemDB | null>(null);
-  const scrollRef                 = useRef<HTMLDivElement>(null);
+  const bottomRef                 = useRef<HTMLDivElement>(null);
   const inputFocusedRef           = useRef(false);
   const nomeRef                   = useRef(user?.name || "Jogador");
   const lastIdRef                 = useRef(0);
@@ -388,15 +391,10 @@ function LiveChat({ streamId, user }: {
 
   function scrollBottom() {
     // Não força scroll enquanto o teclado virtual está abrindo —
-    // forçar scrollTop durante o resize do layout congela o foco no WebView.
+    // forçar scroll durante o resize do layout congela o foco no WebView.
     if (inputFocusedRef.current) return;
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        try {
-          if (scrollRef.current)
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        } catch {}
-      });
+      bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     });
   }
 
@@ -452,12 +450,14 @@ function LiveChat({ streamId, user }: {
   async function enviar() {
     const t = texto.trim();
     if (!t || !user?.id || sending || !streamId) return;
+
     setSending(true);
     setTexto("");
     setReplyTo(null);
 
+    const optimisticId = Date.now();
     const optimistic: MensagemDB = {
-      id: Date.now() as unknown as number,
+      id: optimisticId as unknown as number,
       created_at: new Date().toISOString(),
       stream_id: streamId,
       telegram_id: Number(user.id),
@@ -469,21 +469,27 @@ function LiveChat({ streamId, user }: {
     setMsgs(prev => [...prev, optimistic]);
     scrollBottom();
 
-    await inserirMensagem({
-      stream_id: streamId,
-      telegram_id: Number(user.id),
-      username: user.username || null,
-      nome: nomeRef.current,
-      texto: t,
-      reply_to_id: replyTo?.id ?? null,
-    });
-
-    setSending(false);
+    try {
+      await inserirMensagem({
+        stream_id: streamId,
+        telegram_id: Number(user.id),
+        username: user.username || null,
+        nome: nomeRef.current,
+        texto: t,
+        reply_to_id: replyTo?.id ?? null,
+      });
+    } catch {
+      // Remove mensagem otimista se houve falha total não tratada
+      setMsgs(prev => prev.filter(m => m.id !== optimisticId));
+    } finally {
+      // SEMPRE libera o botão, mesmo em erro ou timeout
+      setSending(false);
+    }
   }
 
   return (
     <>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
         {loading && (
           <div className="flex flex-col items-center justify-center py-6 gap-2">
             <Loader2 className="size-4 animate-spin text-primary" />
@@ -532,6 +538,9 @@ function LiveChat({ streamId, user }: {
             </div>
           );
         })}
+
+        {/* Ancora de scroll — scrollIntoView aponta aqui */}
+        <div ref={bottomRef} aria-hidden="true" />
       </div>
 
       {replyTo && (
@@ -580,7 +589,7 @@ function LiveChat({ streamId, user }: {
   );
 }
 
-// ─── SALA DO EVENTO ───────────────────────────────────────────────────────────
+// ─── SALA DO EVENTO ───────────────────────────────────────────────────────────────────────────
 function EventRoom({
   entry, current, onBack
 }: {
@@ -673,7 +682,7 @@ function EventRoom({
   );
 }
 
-// ─── TV PAGE ──────────────────────────────────────────────────────────────────
+// ─── TV PAGE ────────────────────────────────────────────────────────────────────────────────
 function TvPage() {
   const { user } = useTelegramUser();
   const [status, setStatus]         = useState<TvStatus | null>(null);
