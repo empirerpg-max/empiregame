@@ -70,6 +70,16 @@ function kickEmbedUrl(): string {
   return `https://player.kick.com/${KICK_CHANNEL}?autoplay=true&muted=false&parent=${parent}`;
 }
 
+// ─── fetch com timeout compatível com Telegram WebApp ────────────────────────
+// AbortSignal.timeout() NÃO existe no Chrome embutido do Telegram e
+// lança exceção síncrona, travando a thread ("Página sem resposta").
+// Esta função usa AbortController + setTimeout, compatível com todos os ambientes.
+function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 // ─── MEDAL ───────────────────────────────────────────────────────────────────
 function Medal({ pos }: { pos: number }) {
   if (pos === 1) return <span className="text-base">🥇</span>;
@@ -373,17 +383,11 @@ function LiveChat({ programa, topicoId, user }: {
   const [sending, setSending]   = useState(false);
   const scrollRef               = useRef<HTMLDivElement>(null);
   const wsRef                   = useRef<WebSocket | null>(null);
-
-  // FIX 3: guard — não rola durante abertura do teclado no Telegram WebApp
   const inputFocusedRef         = useRef(false);
-
-  // FIX 1: nome em ref para não ser dependência do useEffect
-  // Evita recriar o socket toda vez que useTelegramUser() re-renderiza com novo objeto user
   const nomeRef                 = useRef(user?.name || "Jogador");
   useEffect(() => { nomeRef.current = user?.name || "Jogador"; });
 
   function scrollBottom() {
-    // FIX 3: não rola enquanto o teclado virtual está abrindo
     if (inputFocusedRef.current) return;
     requestAnimationFrame(() => {
       try {
@@ -392,7 +396,7 @@ function LiveChat({ programa, topicoId, user }: {
     });
   }
 
-  function buildSocket(roomId: string, userId: string, onReady?: () => void) {
+  function buildSocket(roomId: string, userId: string) {
     const ws = new WebSocket(CHAT_WS_URL);
     wsRef.current = ws;
     let destroyed = false;
@@ -407,7 +411,6 @@ function LiveChat({ programa, topicoId, user }: {
     ws.onopen = () => {
       clearTimeout(connectTimeout);
       ws.send(JSON.stringify({ type: "join", roomId, userId, nome: nomeRef.current }));
-      onReady?.();
     };
 
     ws.onmessage = (event) => {
@@ -421,30 +424,19 @@ function LiveChat({ programa, topicoId, user }: {
         }
 
         if (data.type === "message" && data.message) {
-          const m = data.message as ChatMsg;
-          setMsgs((prev) => {
-            // remove otimista duplicado de outros usuários (não do remetente — o ACK cuida disso)
-            return [...prev, m];
-          });
+          setMsgs((prev) => [...prev, data.message as ChatMsg]);
           scrollBottom();
         }
 
-        // FIX 4: trata message_ack — substitui mensagem otimista (tmp-) pelo id real do servidor
-        // O backend envia ack só para o remetente; broadcast vai para os outros.
-        // Sem isso, a mensagem otimista ficava presa com id "tmp-XXX" para sempre.
         if (data.type === "message_ack" && data.message) {
           const m = data.message as ChatMsg;
           setMsgs((prev) =>
             prev.map((p) =>
-              p.id.startsWith("tmp-") && p.tgId === m.tgId && p.texto === m.texto
-                ? m
-                : p
+              p.id.startsWith("tmp-") && p.tgId === m.tgId && p.texto === m.texto ? m : p
             )
           );
         }
-      } catch {
-        // ignora erros de parse
-      }
+      } catch {}
     };
 
     ws.onerror = () => {
@@ -479,19 +471,13 @@ function LiveChat({ programa, topicoId, user }: {
     const userId = String(user.id);
     let cleanup: (() => void) | undefined;
 
-    // FIX 2: ping HTTP antes do WebSocket — acorda o Render Free (cold start)
-    // O Render dorme após 15min e pode travar o handshake WS por 30-90s no Telegram WebApp.
-    // O ping HTTP é mais tolerante ao cold start; só abrimos o WS depois que ele responder.
-    fetch(CHAT_PING_URL, { signal: AbortSignal.timeout(8_000) })
-      .catch(() => {/* ignora — tenta o WS mesmo sem resposta do ping */})
+    // Ping para acordar o Render (cold start) usando AbortController compatível
+    // com o Chrome embutido do Telegram (AbortSignal.timeout não existe lá).
+    fetchWithTimeout(CHAT_PING_URL, 8_000)
+      .catch(() => {})
       .finally(() => { cleanup = buildSocket(roomId, userId); });
 
     return () => { cleanup?.(); wsRef.current = null; };
-
-    // FIX 1: user?.name REMOVIDO das dependências
-    // Era a causa principal do travamento: qualquer rerender do useTelegramUser()
-    // com novo objeto user recriava o socket, disparava setLoading(true) + setMsgs([])
-    // enquanto o usuário tentava digitar, bloqueando o input.
   }, [topicoId, user?.id]);
 
   async function enviar() {
@@ -500,13 +486,9 @@ function LiveChat({ programa, topicoId, user }: {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
     setSending(true);
-    const roomId = String(topicoId);
-    const userId = String(user.id);
-
-    // mensagem otimista — substituída pelo message_ack (FIX 4)
     const optimistic: ChatMsg = {
       id: "tmp-" + Date.now(),
-      tgId: userId,
+      tgId: String(user.id),
       nome: nomeRef.current,
       texto: t,
       tipo: "texto",
@@ -520,24 +502,23 @@ function LiveChat({ programa, topicoId, user }: {
 
     try {
       wsRef.current.send(JSON.stringify({
-        type: "message", roomId, userId, nome: nomeRef.current, texto: t,
+        type: "message",
+        roomId: String(topicoId),
+        userId: String(user.id),
+        nome: nomeRef.current,
+        texto: t,
       }));
-    } catch {
-      // mantém otimista em caso de falha
-    } finally {
-      setSending(false);
-    }
+    } catch {}
+    finally { setSending(false); }
   }
 
   function handleRetry() {
     if (!user?.id || !topicoId) return;
     setWsError(false);
     setLoading(true);
-    const roomId = String(topicoId);
-    const userId = String(user.id);
-    fetch(CHAT_PING_URL, { signal: AbortSignal.timeout(8_000) })
+    fetchWithTimeout(CHAT_PING_URL, 8_000)
       .catch(() => {})
-      .finally(() => { buildSocket(roomId, userId); });
+      .finally(() => { buildSocket(String(topicoId), String(user.id)); });
   }
 
   return (
@@ -601,7 +582,6 @@ function LiveChat({ programa, topicoId, user }: {
         <input
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
-          // FIX 3: guard de foco para não conflitar scrollBottom com abertura do teclado
           onFocus={() => { inputFocusedRef.current = true; }}
           onBlur={() => { inputFocusedRef.current = false; }}
           placeholder={user?.id ? `Comentar como ${nomeRef.current}…` : "Entre pelo Telegram para comentar"}
@@ -724,6 +704,8 @@ function TvPage() {
   const [loading, setLoading]     = useState(true);
   const [view, setView]           = useState<"grid" | "planner">("grid");
   const [selectedEntry, setSelectedEntry] = useState<ProgramEntry | null>(null);
+  // ref para evitar re-abrir o ao-vivo se o usuário já navegou manualmente
+  const autoOpenedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -745,12 +727,18 @@ function TvPage() {
   const entries = status ? buildProgramEntries(status) : [];
   const current = status?.current ?? null;
 
-  // abre automaticamente o programa ao vivo
+  // Abre automaticamente o programa ao vivo, apenas uma vez após o primeiro carregamento.
+  // Usa `status` como dependência (objeto estável) em vez de `entries.length`
+  // (valor derivado que muda referência a cada render e causava re-execuções).
   useEffect(() => {
-    if (!entries.length || selectedEntry) return;
-    const live = entries.find(e => e.hasLive);
-    if (live) setSelectedEntry(live);
-  }, [entries.length]);
+    if (!status || autoOpenedRef.current || selectedEntry) return;
+    const entriesNow = buildProgramEntries(status);
+    const live = entriesNow.find(e => e.hasLive);
+    if (live) {
+      autoOpenedRef.current = true;
+      setSelectedEntry(live);
+    }
+  }, [status]);
 
   if (loading) return (
     <div className="min-h-screen grid place-items-center">
