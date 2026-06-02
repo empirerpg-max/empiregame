@@ -1,4 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+// Acesso ao Supabase via REST puro (sem o cliente JS).
+// O cliente JS abre WebSocket no boot — mesmo com realtime desligado —
+// e isso trava o WebView do Telegram. Por isso usamos apenas fetch nativo.
 
 const SUPABASE_URL  =
   (import.meta.env.VITE_SUPABASE_URL  as string | undefined) ||
@@ -7,24 +9,6 @@ const SUPABASE_URL  =
 const SUPABASE_ANON =
   (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjZnp6aHVjdnNxZXFkbGZveG1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMzg2MTQsImV4cCI6MjA5NTkxNDYxNH0.U9SL1CDN2jNpv2H0BSwP-lw2hA045cKtrPbccFWV1BQ";
-
-// CRÍTICO: O Supabase JS v2 abre WebSocket mesmo com eventsPerSecond:0.
-// No Telegram Mini App WebView, qualquer WebSocket pendente derruba o app.
-// Solução: usar fetch nativo direto, sem o cliente JS do Supabase para mutações.
-// O cliente Supabase é mantido APENAS para queries SELECT (sem realtime).
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
-  realtime: {
-    params: { eventsPerSecond: 0 },
-  },
-  global: {
-    // Força o uso do fetch nativo sem keepalive que pode pendurar no WebView
-    fetch: (url, options) =>
-      fetch(url, { ...options, keepalive: false }),
-  },
-});
-
-// Desconecta qualquer WebSocket que o cliente possa ter aberto na inicialização
-supabase.realtime.disconnect();
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const REST_BASE = `${SUPABASE_URL}/rest/v1`;
