@@ -315,9 +315,15 @@ function SocialPage() {
     "px-2.5 py-0.5 rounded-full border-2 border-black text-[11px] font-black uppercase tracking-tight text-white text-center";
   const neoInput =
     "w-full border-[3px] border-black rounded-[16px] p-3.5 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-[#3D8BFF]/20 text-black bg-white placeholder:text-black/30 transition-all";
+  const blockingModalOpen =
+    isModalOpen || isNewsModalOpen || isProfileModalOpen || isCommentModalOpen || Boolean(selectedNews);
+  const visiblePosts = posts.slice(0, 40);
+  const visibleNews = news.slice(0, 30);
 
   return (
     <div className="flex-1 bg-[#F4F4F5] min-h-screen pb-32">
+      {!blockingModalOpen && (
+        <>
       {/* Header */}
       <div className="pt-4 px-4 sticky top-0 bg-[#F4F4F5]/90 backdrop-blur-md z-[60] border-b-2 border-black/5">
         <div className="flex flex-col gap-4 mb-4">
@@ -433,7 +439,7 @@ function SocialPage() {
                 <p className="font-black italic uppercase text-black">Carregando Hype...</p>
               </div>
             ) : (
-              posts.map((post) => (
+              visiblePosts.map((post) => (
                 <motion.div
                   key={post.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -569,7 +575,7 @@ function SocialPage() {
               </button>
             </div>
             <div className="grid grid-cols-1 gap-8">
-              {news.map((item) => (
+              {visibleNews.map((item) => (
                 <motion.div
                   key={item.id}
                   layoutId={item.id}
@@ -1165,6 +1171,8 @@ function SocialPage() {
       >
         <Plus className="size-8 stroke-[3] text-black" />
       </button>
+        </>
+      )}
 
       {/* Post Creation Modal */}
       {isModalOpen && (
