@@ -317,6 +317,8 @@ function SocialPage() {
     "w-full border-[3px] border-black rounded-[16px] p-3.5 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-[#3D8BFF]/20 text-black bg-white placeholder:text-black/30 transition-all";
   const blockingModalOpen =
     isModalOpen || isNewsModalOpen || isProfileModalOpen || isCommentModalOpen || Boolean(selectedNews);
+  const visiblePosts = posts.slice(0, 40);
+  const visibleNews = news.slice(0, 30);
 
   return (
     <div className="flex-1 bg-[#F4F4F5] min-h-screen pb-32">
@@ -437,7 +439,7 @@ function SocialPage() {
                 <p className="font-black italic uppercase text-black">Carregando Hype...</p>
               </div>
             ) : (
-              posts.map((post) => (
+              visiblePosts.map((post) => (
                 <motion.div
                   key={post.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -573,7 +575,7 @@ function SocialPage() {
               </button>
             </div>
             <div className="grid grid-cols-1 gap-8">
-              {news.map((item) => (
+              {visibleNews.map((item) => (
                 <motion.div
                   key={item.id}
                   layoutId={item.id}
