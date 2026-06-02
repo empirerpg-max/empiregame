@@ -797,7 +797,7 @@ function TvPage() {
         <p className="text-xs text-muted-foreground">Programação completa do canal</p>
       </div>
 
-      {current && getProgramStatus(current) === "broadcasting" && (
+      {current && getProgramStatus(current) === "live" && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3"
         >
