@@ -150,11 +150,11 @@ export function PlaylistEditor({ existing }: { existing?: PlaylistPayload }) {
         descricao,
         capa_url: capa,
         owner: owner || tgName || "Player",
-        telegram_id: localTgId,
+        telegram_id: localTgId || undefined,
         tracks,
         data: existing?.data || new Date().toISOString().slice(0, 10),
       };
-      const r = await api.salvarPlaylist(payload, localTgId);
+      const r = await api.salvarPlaylist(payload, localTgId || undefined);
       const { ok } = notifyResult(r as Record<string, unknown>, {
         successFallback: existing ? "Playlist atualizada!" : "Playlist criada!",
       });
