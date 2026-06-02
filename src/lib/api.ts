@@ -181,8 +181,10 @@ export interface CommonResponse {
 }
 
 export const api = {
+  // chamada genérica de baixo nível (mantida para compatibilidade com chamadas diretas)
   call: <T = unknown>(params: Record<string, unknown>, opts: { cache?: boolean } = {}) =>
     call<T>(params, opts),
+
   async meusArtistas(telegramId: string): Promise<Artist[]> {
     const data = await call<Record<string, unknown>[]>(
       { acao: "meus_artistas", telegram_id: telegramId },

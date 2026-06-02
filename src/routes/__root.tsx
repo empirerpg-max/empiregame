@@ -35,7 +35,6 @@ import {
   Share2,
   Send,
   Target,
-  Tv,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
@@ -362,7 +361,7 @@ function BottomNav() {
               key={it.to}
               to={it.to}
               search={it.search}
-              preload={it.to === "/social" ? false : "intent"}
+              preload="intent"
               onClick={() => haptic.selection()}
               aria-label={it.label}
               aria-current={active ? "page" : undefined}
@@ -408,6 +407,7 @@ function RootInner() {
     (window as any).setShowLinkModal = setShowLinkModal;
   }, []);
 
+  // Sincroniza cores do header/background do Telegram com o tema do app
   useEffect(() => {
     const w = window.Telegram?.WebApp;
     if (!w) return;
@@ -417,6 +417,7 @@ function RootInner() {
     } catch {}
   }, []);
 
+  // BackButton nativo do Telegram em rotas internas
   const isHome = pathname === "/";
   const handleBack = () => {
     haptic.light();
@@ -424,12 +425,14 @@ function RootInner() {
   };
   useTelegramBackButton(!isHome, handleBack);
 
+  // Scroll para o topo a cada navegação (UX padrão de apps mobile)
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
     }
   }, [pathname]);
 
+  // Fechar menu hamburguer ao navegar
   useEffect(() => {
     setIsOpen(false);
   }, [pathname]);
@@ -460,6 +463,7 @@ function RootInner() {
          </button>
       </nav>
 
+      {/* Hamburger Overlay Menu */}
       <AnimatePresence>
         {isOpen && (
           <motion.div 
@@ -469,52 +473,140 @@ function RootInner() {
             className="fixed inset-0 z-50 bg-background pt-20 px-6 overflow-y-auto"
           >
              <div className="space-y-4 pb-12">
-                <Link to="/acesso-rapido" onClick={() => setIsOpen(false)} className="flex items-center gap-4 p-5 rounded-3xl bg-primary/15 border border-primary/30 text-primary hover:bg-primary/20 transition-all">
-                   <div className="size-11 rounded-2xl bg-primary text-primary-foreground grid place-items-center"><Send className="size-5" /></div>
-                   <div className="flex-1 min-w-0"><p className="font-black uppercase tracking-widest text-xs">Acesso Rápido</p><p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Canais oficiais Telegram</p></div>
+                <Link
+                  to="/acesso-rapido"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-4 p-5 rounded-3xl bg-primary/15 border border-primary/30 text-primary hover:bg-primary/20 transition-all"
+                >
+                   <div className="size-11 rounded-2xl bg-primary text-primary-foreground grid place-items-center">
+                      <Send className="size-5" />
+                   </div>
+                   <div className="flex-1 min-w-0">
+                      <p className="font-black uppercase tracking-widest text-xs">Acesso Rápido</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Canais oficiais Telegram</p>
+                   </div>
                 </Link>
-                 <Link to="/tv" preload={false} onClick={() => setIsOpen(false)} className="flex items-center gap-4 p-5 rounded-3xl bg-red-600/10 border border-red-600/30 text-red-500 hover:bg-red-600/15 transition-all">
-                   <div className="size-11 rounded-2xl bg-red-600 text-white grid place-items-center"><Tv className="size-5" /></div>
-                   <div className="flex-1 min-w-0"><p className="font-black uppercase tracking-widest text-xs">Empire TV</p><p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Transmissões agendadas + chat ao vivo</p></div>
-                </Link>
-                <MenuCategory title="Empire Studio" icon={Library} items={[{ to: "/artistas", search: { filter: "all" }, label: "Empire Artists", icon: Library },{ to: "/incubadora", label: "Corporativo", icon: Building2 },{ to: "/albuns", label: "Discografia", icon: Disc3 },{ to: "/playlists", label: "Playlists", icon: ListMusic }]} onClose={() => setIsOpen(false)} />
-                <MenuCategory title="Empire Market" icon={ShoppingBag} items={[{ to: "/market", label: "Mercado Principal", icon: ShoppingBag },{ to: "/leiloes", label: "Leilões", icon: Gavel },{ to: "/bet", label: "Empire Bet", icon: Dice5 }]} onClose={() => setIsOpen(false)} />
-                <MenuCategory title="Empire Coliseum" icon={Swords} items={[{ to: "/duelo", label: "Duelos", icon: Swords },{ to: "/hall", label: "Hall of Fame", icon: Crown }]} onClose={() => setIsOpen(false)} />
-                <MenuCategory title="Empire Extras" icon={Radio} items={[{ to: "/radar", label: "Radar Feed", icon: Radio },{ to: "/filantropia", label: "Filantropia", icon: HandHeart },{ to: "/games", label: "Jogos", icon: Gamepad2 }]} onClose={() => setIsOpen(false)} />
+
+                <MenuCategory 
+                  title="Empire Studio" 
+                  icon={Library}
+                  items={[
+                    { to: "/artistas", search: { filter: "all" }, label: "Empire Artists", icon: Library },
+                    { to: "/incubadora", label: "Corporativo", icon: Building2 },
+                    { to: "/albuns", label: "Discografia", icon: Disc3 },
+                    { to: "/playlists", label: "Playlists", icon: ListMusic },
+                  ]} 
+                  onClose={() => setIsOpen(false)}
+                />
+
+                <MenuCategory 
+                  title="Empire Market" 
+                  icon={ShoppingBag}
+                  items={[
+                    { to: "/market", label: "Mercado Principal", icon: ShoppingBag },
+                    { to: "/leiloes", label: "Leilões", icon: Gavel },
+                    { to: "/bet", label: "Empire Bet", icon: Dice5 },
+                  ]} 
+                  onClose={() => setIsOpen(false)}
+                />
+
+                <MenuCategory 
+                  title="Empire Coliseum" 
+                  icon={Swords}
+                  items={[
+                    { to: "/duelo", label: "Duelos", icon: Swords },
+                    { to: "/hall", label: "Hall of Fame", icon: Crown },
+                  ]} 
+                  onClose={() => setIsOpen(false)}
+                />
+
+                <MenuCategory 
+                  title="Empire Extras" 
+                  icon={Radio}
+                  items={[
+                    { to: "/radar", label: "Radar Feed", icon: Radio },
+                    { to: "/filantropia", label: "Filantropia", icon: HandHeart },
+                    { to: "/games", label: "Jogos", icon: Gamepad2 },
+                  ]} 
+                  onClose={() => setIsOpen(false)}
+                />
+                
                 <div className="pt-8 border-t border-white/5 space-y-3">
-                   <Link to="/tutorial" onClick={() => setIsOpen(false)} className="flex items-center gap-4 p-4 rounded-3xl bg-white/[0.02] border border-white/5 text-muted-foreground hover:text-foreground transition-all">
+                   <Link
+                     to="/tutorial"
+                     onClick={() => setIsOpen(false)}
+                     className="flex items-center gap-4 p-4 rounded-3xl bg-white/[0.02] border border-white/5 text-muted-foreground hover:text-foreground transition-all"
+                   >
                       <HelpCircle className="size-5" />
                       <span className="font-black uppercase tracking-widest text-[10px]">Guia de Sobrevivência</span>
                    </Link>
-                   <p className="text-center text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground/30 pt-4">Empire Hub · v1.0.0</p>
+                   <p className="text-center text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground/30 pt-4">
+                      Empire Hub · v1.0.0
+                   </p>
                 </div>
              </div>
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* Modais Globais */}
       <AnimatePresence>
         {showIdModal && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-sm bg-card border border-white/10 rounded-[3rem] p-8 shadow-2xl relative">
-              <button onClick={() => setShowIdModal(false)} className="absolute top-6 right-6 p-2 rounded-full hover:bg-white/5 transition-colors"><X className="size-5 text-muted-foreground" /></button>
-              <div className="size-16 rounded-3xl bg-primary/10 grid place-items-center mb-6 mx-auto"><Crown className="size-8 text-primary" /></div>
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-sm bg-card border border-white/10 rounded-[3rem] p-8 shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setShowIdModal(false)}
+                className="absolute top-6 right-6 p-2 rounded-full hover:bg-white/5 transition-colors"
+              >
+                <X className="size-5 text-muted-foreground" />
+              </button>
+              
+              <div className="size-16 rounded-3xl bg-primary/10 grid place-items-center mb-6 mx-auto">
+                <Crown className="size-8 text-primary" />
+              </div>
+              
               <h3 className="text-xl font-black tracking-tighter mb-2 text-center underline decoration-primary decoration-4 underline-offset-4">Identidade Imperial</h3>
               <p className="text-[11px] text-muted-foreground uppercase font-black tracking-[0.2em] text-center mb-6 px-4 opacity-70">Sincronize seu passaporte para acessar seus bens e artistas.</p>
+              
               <div className="space-y-4">
                 <div className="relative">
-                  <input type="text" value={manualId} onChange={(e) => setManualId(e.target.value)} placeholder="DIGITE SEU ID TELEGRAM" className="w-full h-20 bg-white/5 border-2 border-white/10 rounded-3xl px-6 font-black text-center text-xl outline-none focus:border-primary/50 transition-all placeholder:text-white/10" />
+                  <input 
+                    type="text"
+                    value={manualId}
+                    onChange={(e) => setManualId(e.target.value)}
+                    placeholder="DIGITE SEU ID TELEGRAM"
+                    className="w-full h-20 bg-white/5 border-2 border-white/10 rounded-3xl px-6 font-black text-center text-xl outline-none focus:border-primary/50 transition-all placeholder:text-white/10"
+                  />
                   {!manualId && <span className="absolute left-1/2 -translate-x-1/2 bottom-3 animate-pulse text-[11px] font-black text-primary uppercase">Obrigatório</span>}
                 </div>
+                
                 <div className="grid grid-cols-2 gap-3 pt-2">
-                  <button onClick={() => setShowIdModal(false)} className="h-16 rounded-[2rem] bg-white/5 border border-white/10 font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all hover:bg-white/10">Voltar</button>
-                  <button onClick={handleManualIdSubmit} className="h-16 rounded-[2rem] bg-primary text-primary-foreground font-black uppercase text-[10px] tracking-[0.2em] active:scale-95 transition-all shadow-[0_10px_30px_rgba(var(--primary-rgb),0.3)] shadow-primary/20">Conectar</button>
+                  <button 
+                    onClick={() => setShowIdModal(false)} 
+                    className="h-16 rounded-[2rem] bg-white/5 border border-white/10 font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all hover:bg-white/10"
+                  >
+                    Voltar
+                  </button>
+                  <button 
+                    onClick={handleManualIdSubmit} 
+                    className="h-16 rounded-[2rem] bg-primary text-primary-foreground font-black uppercase text-[10px] tracking-[0.2em] active:scale-95 transition-all shadow-[0_10px_30px_rgba(var(--primary-rgb),0.3)] shadow-primary/20"
+                  >
+                    Conectar
+                  </button>
                 </div>
               </div>
             </motion.div>
           </div>
         )}
-        {showLinkModal && <GlobalLinkModal onClose={() => setShowLinkModal(false)} />}
+        
+        {showLinkModal && (
+          <GlobalLinkModal onClose={() => setShowLinkModal(false)} />
+        )}
       </AnimatePresence>
 
       <RouteTransitionOverlay />
@@ -530,8 +622,20 @@ function RouteTransitionOverlay() {
   return (
     <AnimatePresence>
       {isLoading && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="fixed inset-0 z-[100] grid place-items-center bg-background/85 backdrop-blur-sm pointer-events-none">
-          <motion.img src={logoIcon} alt="" className="size-20 object-contain drop-shadow-[0_0_30px_rgba(var(--primary-rgb),0.5)]" animate={{ scale: [1, 1.08, 1], opacity: [0.8, 1, 0.8] }} transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }} />
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-[100] grid place-items-center bg-background/85 backdrop-blur-sm pointer-events-none"
+        >
+          <motion.img
+            src={logoIcon}
+            alt=""
+            className="size-20 object-contain drop-shadow-[0_0_30px_rgba(var(--primary-rgb),0.5)]"
+            animate={{ scale: [1, 1.08, 1], opacity: [0.8, 1, 0.8] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+          />
         </motion.div>
       )}
     </AnimatePresence>
@@ -540,20 +644,35 @@ function RouteTransitionOverlay() {
 
 function MenuCategory({ title, icon: Icon, items, onClose }: any) {
   const [expanded, setExpanded] = useState(true);
+
   return (
     <div className="space-y-2">
-      <button onClick={() => setExpanded(!expanded)} className="w-full flex items-center justify-between p-4 rounded-3xl bg-white/[0.02] border border-white/5 text-left group">
+      <button 
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between p-4 rounded-3xl bg-white/[0.02] border border-white/5 text-left group"
+      >
         <div className="flex items-center gap-3">
-           <div className="size-8 rounded-xl bg-primary/10 text-primary grid place-items-center"><Icon className="size-4" /></div>
+           <div className="size-8 rounded-xl bg-primary/10 text-primary grid place-items-center">
+              <Icon className="size-4" />
+           </div>
            <span className="font-black uppercase tracking-widest text-xs group-hover:text-primary transition-colors">{title}</span>
         </div>
         <ChevronDown className={`size-4 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
       </button>
+
       {expanded && (
         <div className="grid grid-cols-2 gap-2 px-1">
           {items.map((it: any, i: number) => (
-            <Link key={i} to={it.to} search={it.search} onClick={onClose} className="flex flex-col items-center justify-center gap-2 p-5 rounded-[2rem] bg-card border border-white/5 hover:border-primary/20 transition-all text-center group">
-              <div className="size-11 rounded-2xl bg-white/5 text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-all grid place-items-center"><it.icon className="size-5" /></div>
+            <Link
+              key={i}
+              to={it.to}
+              search={it.search}
+              onClick={onClose}
+              className="flex flex-col items-center justify-center gap-2 p-5 rounded-[2rem] bg-card border border-white/5 hover:border-primary/20 transition-all text-center group"
+            >
+              <div className="size-11 rounded-2xl bg-white/5 text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-all grid place-items-center">
+                <it.icon className="size-5" />
+              </div>
               <span className="font-black uppercase tracking-widest text-[10px] text-muted-foreground/60 group-hover:text-foreground">{it.label}</span>
             </Link>
           ))}

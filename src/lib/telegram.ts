@@ -1,5 +1,52 @@
-import { useEffect, useRef, useState } from "react";
-import type {} from "./telegram.d";
+import { useEffect, useState } from "react";
+
+// ---------- Tipos mínimos do Telegram WebApp ----------
+type HapticImpactStyle = "light" | "medium" | "heavy" | "rigid" | "soft";
+type HapticNotificationType = "error" | "success" | "warning";
+
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        ready: () => void;
+        expand: () => void;
+        close?: () => void;
+        setHeaderColor?: (c: string) => void;
+        setBackgroundColor?: (c: string) => void;
+        openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
+        openTelegramLink?: (url: string) => void;
+        initDataUnsafe?: { user?: { id: number; first_name?: string; username?: string } };
+        colorScheme?: "light" | "dark";
+        themeParams?: Record<string, string>;
+        onEvent?: (event: string, cb: () => void) => void;
+        offEvent?: (event: string, cb: () => void) => void;
+        BackButton?: {
+          show: () => void;
+          hide: () => void;
+          onClick: (cb: () => void) => void;
+          offClick: (cb: () => void) => void;
+        };
+        MainButton?: {
+          text: string;
+          show: () => void;
+          hide: () => void;
+          enable: () => void;
+          disable: () => void;
+          onClick: (cb: () => void) => void;
+          offClick: (cb: () => void) => void;
+          setText: (t: string) => void;
+          showProgress: (leaveActive?: boolean) => void;
+          hideProgress: () => void;
+        };
+        HapticFeedback?: {
+          impactOccurred: (style: HapticImpactStyle) => void;
+          notificationOccurred: (type: HapticNotificationType) => void;
+          selectionChanged: () => void;
+        };
+      };
+    };
+  }
+}
 
 // ---------- Helpers de UX nativa ----------
 const tg = () => (typeof window !== "undefined" ? window.Telegram?.WebApp : undefined);
@@ -51,13 +98,6 @@ export interface TgUser {
   isTest: boolean;
 }
 
-function safeLocalGet(key: string): string | null {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-function safeLocalSet(key: string, value: string) {
-  try { localStorage.setItem(key, value); } catch {}
-}
-
 export function useTelegramUser(): {
   user: TgUser | null;
   ready: boolean;
@@ -65,19 +105,12 @@ export function useTelegramUser(): {
 } {
   const [user, setUser] = useState<TgUser | null>(null);
   const [ready, setReady] = useState(false);
-  const resolvedRef = useRef(false);
-
-  function resolve(u: TgUser) {
-    if (resolvedRef.current) return;
-    resolvedRef.current = true;
-    setUser(u);
-    setReady(true);
-  }
 
   const setUserManually = (id: string, name?: string) => {
     const newUser = { id, name: name || "Usuário Manual", isTest: true };
-    safeLocalSet("tg_user_cache", JSON.stringify(newUser));
-    resolve(newUser);
+    setUser(newUser);
+    localStorage.setItem("tg_user_cache", JSON.stringify(newUser));
+    setReady(true);
   };
 
   const userFromInitData = (str: string) => {
@@ -114,8 +147,9 @@ export function useTelegramUser(): {
         name: nameFromUrl || "Usuário #" + urlId.slice(-4),
         isTest: true,
       };
-      safeLocalSet("tg_user_cache", JSON.stringify(newUser));
-      resolve(newUser);
+      setUser(newUser);
+      localStorage.setItem("tg_user_cache", JSON.stringify(newUser));
+      setReady(true);
       return;
     }
 
@@ -132,12 +166,16 @@ export function useTelegramUser(): {
           id: String(sdkUser.id),
           name: sdkUser.first_name || sdkUser.username || "Usuário",
           username: sdkUser.username,
-          photo_url: sdkUser.photo_url,
+          photo_url: (sdkUser as any).photo_url,
           isTest: false,
         };
-        safeLocalSet("tg_user_cache", JSON.stringify(newUser));
-        if (w) { w.ready(); w.expand(); }
-        resolve(newUser);
+        setUser(newUser);
+        localStorage.setItem("tg_user_cache", JSON.stringify(newUser));
+        if (w) {
+          w.ready();
+          w.expand();
+        }
+        setReady(true);
         return true;
       }
 
@@ -160,24 +198,25 @@ export function useTelegramUser(): {
             name: u.first_name || u.username || "Usuário",
             isTest: false,
           };
-          safeLocalSet("tg_user_cache", JSON.stringify(newUser));
-          resolve(newUser);
+          setUser(newUser);
+          localStorage.setItem("tg_user_cache", JSON.stringify(newUser));
+          setReady(true);
           return true;
         }
       }
 
       if (attempts >= maxAttempts) {
-        const cached = safeLocalGet("tg_user_cache");
+        const cached = localStorage.getItem("tg_user_cache");
         if (cached) {
           try {
             const parsed = JSON.parse(cached);
-            if (parsed?.id) {
-              resolve(parsed);
-              return true;
-            }
+            setUser(parsed);
+            setReady(true);
+            return true;
           } catch {}
         }
-        resolve({ id: "guest", name: "Guest", isTest: true });
+        setUser({ id: "guest", name: "Guest", isTest: true });
+        setReady(true);
         return true;
       }
       return false;

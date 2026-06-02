@@ -9,7 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TvRouteImport } from './routes/tv'
 import { Route as TutorialRouteImport } from './routes/tutorial'
 import { Route as SocialRouteImport } from './routes/social'
 import { Route as RescisaoRouteImport } from './routes/rescisao'
@@ -54,11 +53,6 @@ import { Route as ArtistasNomeProjetosRouteImport } from './routes/artistas.$nom
 import { Route as ArtistasNomeBensRouteImport } from './routes/artistas.$nome.bens'
 import { Route as AlbumIdEditarRouteImport } from './routes/album.$id.editar'
 
-const TvRoute = TvRouteImport.update({
-  id: '/tv',
-  path: '/tv',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TutorialRoute = TutorialRouteImport.update({
   id: '/tutorial',
   path: '/tutorial',
@@ -294,7 +288,6 @@ export interface FileRoutesByFullPath {
   '/rescisao': typeof RescisaoRoute
   '/social': typeof SocialRoute
   '/tutorial': typeof TutorialRoute
-  '/tv': typeof TvRoute
   '/acoes/album': typeof AcoesAlbumRoute
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
@@ -340,7 +333,6 @@ export interface FileRoutesByTo {
   '/rescisao': typeof RescisaoRoute
   '/social': typeof SocialRoute
   '/tutorial': typeof TutorialRoute
-  '/tv': typeof TvRoute
   '/acoes/album': typeof AcoesAlbumRoute
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
@@ -387,7 +379,6 @@ export interface FileRoutesById {
   '/rescisao': typeof RescisaoRoute
   '/social': typeof SocialRoute
   '/tutorial': typeof TutorialRoute
-  '/tv': typeof TvRoute
   '/acoes/album': typeof AcoesAlbumRoute
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
@@ -435,7 +426,6 @@ export interface FileRouteTypes {
     | '/rescisao'
     | '/social'
     | '/tutorial'
-    | '/tv'
     | '/acoes/album'
     | '/acoes/cinema'
     | '/acoes/tour'
@@ -481,7 +471,6 @@ export interface FileRouteTypes {
     | '/rescisao'
     | '/social'
     | '/tutorial'
-    | '/tv'
     | '/acoes/album'
     | '/acoes/cinema'
     | '/acoes/tour'
@@ -527,7 +516,6 @@ export interface FileRouteTypes {
     | '/rescisao'
     | '/social'
     | '/tutorial'
-    | '/tv'
     | '/acoes/album'
     | '/acoes/cinema'
     | '/acoes/tour'
@@ -574,7 +562,6 @@ export interface RootRouteChildren {
   RescisaoRoute: typeof RescisaoRoute
   SocialRoute: typeof SocialRoute
   TutorialRoute: typeof TutorialRoute
-  TvRoute: typeof TvRoute
   AcoesAlbumRoute: typeof AcoesAlbumRoute
   AcoesCinemaRoute: typeof AcoesCinemaRoute
   AcoesTourRoute: typeof AcoesTourRoute
@@ -600,13 +587,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/tv': {
-      id: '/tv'
-      path: '/tv'
-      fullPath: '/tv'
-      preLoaderRoute: typeof TvRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/tutorial': {
       id: '/tutorial'
       path: '/tutorial'
@@ -977,7 +957,6 @@ const rootRouteChildren: RootRouteChildren = {
   RescisaoRoute: RescisaoRoute,
   SocialRoute: SocialRoute,
   TutorialRoute: TutorialRoute,
-  TvRoute: TvRoute,
   AcoesAlbumRoute: AcoesAlbumRoute,
   AcoesCinemaRoute: AcoesCinemaRoute,
   AcoesTourRoute: AcoesTourRoute,

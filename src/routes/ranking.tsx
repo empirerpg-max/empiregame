@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { Crown } from "lucide-react";
 import { api, fmtMoney, driveImg, type Artist } from "@/lib/api";
 
+export const Route = createFileRoute("/ranking")({ component: Ranking });
+
 function Ranking() {
   const [data, setData] = useState<Artist[] | null>(null);
   const [tab, setTab] = useState<"fortuna" | "prestigio">("fortuna");
@@ -104,5 +106,3 @@ function Ranking() {
     </main>
   );
 }
-
-export const Route = createFileRoute("/ranking")({ component: Ranking });
