@@ -386,3 +386,10 @@ export function driveImg(url: string, size = 200): string {
   if (m) return `https://lh3.googleusercontent.com/d/${m[1]}=s${size}`;
   return url;
 }
+
+export function driveAudioSrc(url: string): string {
+  if (!url) return "";
+  const m = url.match(/\/d\/([^/]+)/) || url.match(/[?&]id=([^&]+)/);
+  if (m) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
+  return url;
+}
