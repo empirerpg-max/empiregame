@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { BackButton } from "@/components/BackButton";
 import { useEffect, useState } from "react";
 import {
@@ -48,6 +48,7 @@ const SEGMENTS = [
 ];
 
 function IncubadoraPage() {
+  const navigate = useNavigate();
   const { user, ready } = useTelegramUser();
   const [artists, setArtists] = useState<Artist[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,19 +73,20 @@ function IncubadoraPage() {
     e.preventDefault();
     if (!selectedArtist || !nomeEmpresa || !investimento) return;
     setSubmitting(true);
-    // Simulação da chamada de API (visto que no roteador do Apps Script não tinha 'incubadora' explícita,
-    // mas a estrutura pede. Vou usar o endpoint de compra do market com categoria customizada ou
-    // avisar que é uma ação administrativa por enquanto se não houver lógica de cron para lucro)
-    const r = await api.comprarMarket({
+    const r = await api.fundarEmpresa({
       nome: selectedArtist,
-      categoria: "INCUBADORA",
-      item: `Fundação: ${nomeEmpresa} (${segmento})`,
+      nomeEmpresa,
+      segmento,
+      investimento: parseInt(investimento) || 0,
     });
     notify(r, {
       successFallback:
-        "Empresa fundada com sucesso! Os lucros semanais serão calculados pelo cron.",
+        "Empresa fundada! Lucros/perdas serão creditados diariamente no pró-labore.",
     });
     setSubmitting(false);
+    if ((r as any)?.ok) {
+      setTimeout(() => navigate({ to: "/bolsa" }), 600);
+    }
   }
 
   return (
