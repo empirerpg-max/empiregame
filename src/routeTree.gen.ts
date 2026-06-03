@@ -24,6 +24,7 @@ import { Route as GravadorasRouteImport } from './routes/gravadoras'
 import { Route as FilantropiaRouteImport } from './routes/filantropia'
 import { Route as DueloRouteImport } from './routes/duelo'
 import { Route as ChartsRouteImport } from './routes/charts'
+import { Route as BolsaRouteImport } from './routes/bolsa'
 import { Route as BetRouteImport } from './routes/bet'
 import { Route as AlbunsRouteImport } from './routes/albuns'
 import { Route as AcessoRapidoRouteImport } from './routes/acesso-rapido'
@@ -127,6 +128,11 @@ const DueloRoute = DueloRouteImport.update({
 const ChartsRoute = ChartsRouteImport.update({
   id: '/charts',
   path: '/charts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BolsaRoute = BolsaRouteImport.update({
+  id: '/bolsa',
+  path: '/bolsa',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BetRoute = BetRouteImport.update({
@@ -280,6 +286,7 @@ export interface FileRoutesByFullPath {
   '/acesso-rapido': typeof AcessoRapidoRoute
   '/albuns': typeof AlbunsRoute
   '/bet': typeof BetRoute
+  '/bolsa': typeof BolsaRoute
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
   '/filantropia': typeof FilantropiaRoute
@@ -326,6 +333,7 @@ export interface FileRoutesByTo {
   '/acesso-rapido': typeof AcessoRapidoRoute
   '/albuns': typeof AlbunsRoute
   '/bet': typeof BetRoute
+  '/bolsa': typeof BolsaRoute
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
   '/filantropia': typeof FilantropiaRoute
@@ -373,6 +381,7 @@ export interface FileRoutesById {
   '/acesso-rapido': typeof AcessoRapidoRoute
   '/albuns': typeof AlbunsRoute
   '/bet': typeof BetRoute
+  '/bolsa': typeof BolsaRoute
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
   '/filantropia': typeof FilantropiaRoute
@@ -421,6 +430,7 @@ export interface FileRouteTypes {
     | '/acesso-rapido'
     | '/albuns'
     | '/bet'
+    | '/bolsa'
     | '/charts'
     | '/duelo'
     | '/filantropia'
@@ -467,6 +477,7 @@ export interface FileRouteTypes {
     | '/acesso-rapido'
     | '/albuns'
     | '/bet'
+    | '/bolsa'
     | '/charts'
     | '/duelo'
     | '/filantropia'
@@ -513,6 +524,7 @@ export interface FileRouteTypes {
     | '/acesso-rapido'
     | '/albuns'
     | '/bet'
+    | '/bolsa'
     | '/charts'
     | '/duelo'
     | '/filantropia'
@@ -560,6 +572,7 @@ export interface RootRouteChildren {
   AcessoRapidoRoute: typeof AcessoRapidoRoute
   AlbunsRoute: typeof AlbunsRoute
   BetRoute: typeof BetRoute
+  BolsaRoute: typeof BolsaRoute
   ChartsRoute: typeof ChartsRoute
   DueloRoute: typeof DueloRoute
   FilantropiaRoute: typeof FilantropiaRoute
@@ -703,6 +716,13 @@ declare module '@tanstack/react-router' {
       path: '/charts'
       fullPath: '/charts'
       preLoaderRoute: typeof ChartsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bolsa': {
+      id: '/bolsa'
+      path: '/bolsa'
+      fullPath: '/bolsa'
+      preLoaderRoute: typeof BolsaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bet': {
@@ -963,6 +983,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcessoRapidoRoute: AcessoRapidoRoute,
   AlbunsRoute: AlbunsRoute,
   BetRoute: BetRoute,
+  BolsaRoute: BolsaRoute,
   ChartsRoute: ChartsRoute,
   DueloRoute: DueloRoute,
   FilantropiaRoute: FilantropiaRoute,
