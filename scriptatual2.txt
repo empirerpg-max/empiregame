@@ -163,6 +163,13 @@ function processAction(p) {
   if (acao === 'ponto_saldo_ecoin')               return jsonOut(acao_ponto_saldo_ecoin_(p));
   if (acao === 'ponto_salvar_playlist_ecoin')     return jsonOut(acao_ponto_salvar_playlist_ecoin_(p));
 
+  // BOLSA — Empresas + Turnês unificadas
+  if (acao === 'fundar_empresa')                  return jsonOut(handleFundarEmpresa(p));
+  if (acao === 'listar_empresas')                 return jsonOut(handleListarEmpresas());
+  if (acao === 'minhas_empresas')                 return jsonOut(handleMinhasEmpresas(tgId));
+  if (acao === 'historico_bolsa')                 return jsonOut(handleHistoricoBolsa(p));
+  if (acao === 'tick_bolsa_manual')               return jsonOut(tickBolsaDiario());
+
   return jsonOut({ erro: 'Ação Inexistente: ' + acao });
 }
 

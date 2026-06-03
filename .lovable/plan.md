@@ -1,25 +1,67 @@
-## Objetivo
-Adicionar acesso ao app Empire TV (https://empiretv.vercel.app/) através de uma nova entrada no menu hambúrguer, sem nenhum risco de quebrar o que já funciona.
 
-## Por que não quebra nada
-A integração será feita exatamente no mesmo padrão que vocês já usam para o `/charts` (arquivo `src/routes/charts.tsx`): uma rota nova, isolada, que carrega o site externo dentro de um `<iframe>`. Como o app Empire TV roda no Vercel (servidor separado), nada do código de transmissão entra no projeto Lovable. Se algo der errado lá, fica restrito à página `/tv` e não afeta o resto.
+# Empresas com lucro recorrente + Bolsa de Valores (empresas + turnês)
 
-## Mudanças (mínimas, 2 arquivos)
+Hoje a Incubadora só registra a fundação como item no Market — não há receita recorrente, nem visão consolidada. Vamos criar de fato uma economia diária no Google Apps Script e uma tela de Bolsa unificada no app.
 
-**1. Criar `src/routes/tv.tsx`** — nova rota `/tv`
-- Componente idêntico ao `charts.tsx`: um `<iframe>` em tela cheia apontando para `https://empiretv.vercel.app/`
-- Inclui `allow="autoplay; camera; microphone; fullscreen"` (necessário para transmissões)
-- Metadata SEO próprio (title "Empire TV")
+## 1. Google Apps Script (`scriptatual2.txt`)
 
-**2. Editar `src/routes/__root.tsx`** — adicionar item no menu hambúrguer
-- Adicionar uma nova `<MenuCategory>` chamada "Empire TV" (ou incluir como item em "Empire Extras", se preferir), com `{ to: "/tv", label: "Empire TV", icon: Tv }`
-- Importar o ícone `Tv` do `lucide-react`
-- **Nenhuma outra linha alterada** — todas as categorias existentes (Studio, Market, Coliseum, Extras) permanecem intactas
+### 1.1 Nova aba `EMPRESAS`
+Colunas: `id | dono | nome | segmento | capital_inicial | valor_atual | lucro_acumulado | criada_em | ativa`.
 
-## Sobre o Telegram WebApp
-Você não precisa se preocupar: como o Empire TV vai estar embutido via iframe dentro da própria rota `/tv` do app principal, o Telegram trata como navegação interna normal. Não precisa de "abrir outro app" — o usuário nem sai do mini-app.
+### 1.2 Novas ações no `processAction`
+- `fundar_empresa` → valida saldo do artista, debita `capital_inicial` da `DB_ARTISTAS`, cria linha em `EMPRESAS` com `valor_atual = capital_inicial`. Registra em `REGISTROS` (artista, "FUNDAÇÃO EMPRESA", valor).
+- `listar_empresas` → todas as empresas ativas (para visão global da bolsa).
+- `minhas_empresas` (por `tgId`) → empresas do jogador.
+- `historico_bolsa` (por artista, opcional) → últimas N linhas do log para o gráfico.
 
-> **Observação técnica**: se o Vercel estiver configurado para enviar header `X-Frame-Options: DENY` ou CSP `frame-ancestors`, o iframe ficará em branco (sem quebrar nada — só não aparece o conteúdo). Como o `/charts` de vocês já funciona com o mesmo padrão, é provável que funcione. Se não funcionar, a correção é simples: adicionar no `next.config.js` do Empire TV no GitHub um header permitindo o frame do domínio do Lovable. Eu te aviso após testar.
+### 1.3 Nova aba `BOLSA_LOG`
+Colunas: `data | artista | tipo (EMPRESA/TOUR) | ref_id | resultado_dia | saldo_apos`. Serve de fonte para mini-gráficos no app.
 
-## Custo
-~1 crédito. São duas edições pequenas e diretas, sem instalação de dependências nem migrations.
+### 1.4 Função `tickBolsaDiario()` (gatilho time-driven diário)
+Para cada empresa ativa:
+- Calcula variação do dia = `valor_atual * fator`, onde `fator`:
+  - base por segmento: tech ±12%, beauty ±7%, food ±3%
+  - modificador de tendência global do dia (um único `Math.random()` que sobe/desce o mercado entre -3% e +3%)
+  - bônus de prestígio do dono: `+prestigio/2000` (cap em +2%)
+- Atualiza `valor_atual` (mínimo 0), soma em `lucro_acumulado`.
+- Credita o `resultado_dia` no `saldo` da `DB_ARTISTAS` (pró-labore — vira fortuna).
+- Loga em `BOLSA_LOG` e em `REGISTROS`.
+
+Para turnês: para cada linha de `CONTROLE_TOURS` ativa, pega shows do dia via `_tour_tick_status_`, calcula bilheteria do dia (porte × continente, fórmula já usada hoje) e credita no artista + loga em `BOLSA_LOG` como `tipo=TOUR`. Isso unifica tudo num só lugar.
+
+Instalar trigger com helper `instalarTriggerBolsa()` (chamada manual uma vez no editor).
+
+## 2. Frontend
+
+### 2.1 `src/lib/api.ts`
+Adicionar: `fundarEmpresa`, `listarEmpresas`, `minhasEmpresas`, `historicoBolsa`.
+
+### 2.2 `src/routes/incubadora.tsx`
+Trocar a chamada `comprarMarket` por `api.fundarEmpresa(...)`. Manter o layout atual; após sucesso, redirecionar para `/bolsa`.
+
+### 2.3 Nova rota `src/routes/bolsa.tsx` (global)
+- Header com índice geral do dia (soma de `resultado_dia` de hoje).
+- Tabs: **Empresas** | **Turnês**.
+- Lista cada ativo com nome, dono, valor atual, variação 24h (verde/vermelho), sparkline a partir de `BOLSA_LOG`.
+
+### 2.4 Aba "Portfólio" dentro do artista
+Em `src/routes/artistas.$nome.index.tsx`, adicionar seção "Portfólio na Bolsa" listando as empresas e turnês do artista com resultado do dia e total acumulado.
+
+### 2.5 Menu
+Adicionar `Bolsa` no menu hambúrguer (categoria Empire Extras).
+
+## Detalhes técnicos
+
+- Fórmula final por empresa por dia:
+  `resultado = valor_atual * (volBase * (rand*2-1) + tendenciaGlobal + min(prestigio/2000, 0.02))`
+- `valor_atual` nunca < 0; se empresa zerar 3 dias seguidos → `ativa=false` (falência) e gera entrada no `RADAR_FEED`.
+- O crédito vai sempre na coluna `saldo` (col D da `DB_ARTISTAS`) — exatamente como já fazem `handleQueridometroVotar` e `handleCompraTour`, garantindo que entra na fortuna.
+- Nada do que existe hoje em `incubadora.tsx`, `tours.index.tsx` ou `__root.tsx` é removido — só estendido.
+
+## Arquivos tocados
+- `scriptatual2.txt` (você cola no Apps Script depois)
+- `src/lib/api.ts`
+- `src/routes/incubadora.tsx`
+- `src/routes/bolsa.tsx` (novo)
+- `src/routes/artistas.$nome.index.tsx`
+- `src/routes/__root.tsx` (item de menu)

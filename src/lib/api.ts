@@ -88,6 +88,30 @@ export interface BemItem {
   status?: string; // Ativo / Vendido
 }
 
+// ---- Bolsa de Valores ----
+export interface EmpresaBolsa {
+  id: string;
+  dono: string;
+  nome: string;
+  segmento: string;
+  capital_inicial: number;
+  valor_atual: number;
+  lucro_acumulado: number;
+  dias_zerados: number;
+  criada_em: string;
+  ativa: boolean;
+}
+
+export interface BolsaLogItem {
+  data: string;
+  artista: string;
+  tipo: "EMPRESA" | "TOUR";
+  ref_id: string;
+  ref_nome: string;
+  resultado_dia: number;
+  valor_apos: number;
+}
+
 function qs(params: Record<string, string | number | undefined>) {
   const u = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -305,6 +329,35 @@ export const api = {
   async venderBem(p: { nome: string; id: string }): Promise<CommonResponse> {
     invalidateCache();
     return call<CommonResponse>({ acao: "vender_bem", nome: p.nome, id: p.id });
+  },
+
+  // ---- Bolsa de Valores ----
+  async fundarEmpresa(p: {
+    nome: string;
+    nomeEmpresa: string;
+    segmento: string;
+    investimento: number;
+  }): Promise<CommonResponse> {
+    invalidateCache();
+    return call<CommonResponse>({ acao: "fundar_empresa", ...p });
+  },
+  async listarEmpresas(): Promise<EmpresaBolsa[]> {
+    const r = await call<EmpresaBolsa[]>({ acao: "listar_empresas" }, { cache: true });
+    return Array.isArray(r) ? r : [];
+  },
+  async minhasEmpresas(telegramId: string): Promise<EmpresaBolsa[]> {
+    const r = await call<EmpresaBolsa[]>(
+      { acao: "minhas_empresas", telegram_id: telegramId },
+      { cache: true },
+    );
+    return Array.isArray(r) ? r : [];
+  },
+  async historicoBolsa(p: { nome?: string; limit?: number } = {}): Promise<BolsaLogItem[]> {
+    const r = await call<BolsaLogItem[]>(
+      { acao: "historico_bolsa", nome: p.nome || "", limit: p.limit || 120 },
+      { cache: true },
+    );
+    return Array.isArray(r) ? r : [];
   },
 
   // ---- Álbuns ----

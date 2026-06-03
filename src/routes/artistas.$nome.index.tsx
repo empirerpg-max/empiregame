@@ -19,6 +19,7 @@ import {
   Gavel,
   Radio,
   FileX,
+  TrendingUp,
 } from "lucide-react";
 import { useTelegramUser } from "@/lib/telegram";
 import { api, fmtEC, fmtMoney, driveImg, type Artist, type AlbumPayload } from "@/lib/api";
@@ -274,6 +275,8 @@ function ArtistDashboard() {
                 />
                 <MiniAction label="Leilão" icon={<Gavel />} onClick={() => setModal("leilao")} color="text-amber-500" />
                 <MiniAction label="Market" icon={<ShoppingBag />} to="/market" color="text-indigo-500" />
+                <MiniAction label="Bolsa" icon={<TrendingUp />} to="/bolsa" color="text-emerald-500" />
+                <MiniAction label="Empresa" icon={<Building2 />} to="/incubadora" color="text-sky-500" />
                 <MiniAction
                   label="Vender Comp."
                   icon={<Disc3 />}
