@@ -33,6 +33,7 @@ import {
   Search,
   HelpCircle,
   Share2,
+  Tv,
   Send,
   Target,
 } from "lucide-react";
@@ -527,6 +528,7 @@ function RootInner() {
                     { to: "/radar", label: "Radar Feed", icon: Radio },
                     { to: "/filantropia", label: "Filantropia", icon: HandHeart },
                     { to: "/games", label: "Jogos", icon: Gamepad2 },
+                    { to: "/tv", label: "Empire TV", icon: Tv },
                   ]} 
                   onClose={() => setIsOpen(false)}
                 />
