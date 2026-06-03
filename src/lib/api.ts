@@ -88,6 +88,30 @@ export interface BemItem {
   status?: string; // Ativo / Vendido
 }
 
+// ---- Bolsa de Valores ----
+export interface EmpresaBolsa {
+  id: string;
+  dono: string;
+  nome: string;
+  segmento: string;
+  capital_inicial: number;
+  valor_atual: number;
+  lucro_acumulado: number;
+  dias_zerados: number;
+  criada_em: string;
+  ativa: boolean;
+}
+
+export interface BolsaLogItem {
+  data: string;
+  artista: string;
+  tipo: "EMPRESA" | "TOUR";
+  ref_id: string;
+  ref_nome: string;
+  resultado_dia: number;
+  valor_apos: number;
+}
+
 function qs(params: Record<string, string | number | undefined>) {
   const u = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
