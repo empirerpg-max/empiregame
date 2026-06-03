@@ -331,6 +331,35 @@ export const api = {
     return call<CommonResponse>({ acao: "vender_bem", nome: p.nome, id: p.id });
   },
 
+  // ---- Bolsa de Valores ----
+  async fundarEmpresa(p: {
+    nome: string;
+    nomeEmpresa: string;
+    segmento: string;
+    investimento: number;
+  }): Promise<CommonResponse> {
+    invalidateCache();
+    return call<CommonResponse>({ acao: "fundar_empresa", ...p });
+  },
+  async listarEmpresas(): Promise<EmpresaBolsa[]> {
+    const r = await call<EmpresaBolsa[]>({ acao: "listar_empresas" }, { cache: true });
+    return Array.isArray(r) ? r : [];
+  },
+  async minhasEmpresas(telegramId: string): Promise<EmpresaBolsa[]> {
+    const r = await call<EmpresaBolsa[]>(
+      { acao: "minhas_empresas", telegram_id: telegramId },
+      { cache: true },
+    );
+    return Array.isArray(r) ? r : [];
+  },
+  async historicoBolsa(p: { nome?: string; limit?: number } = {}): Promise<BolsaLogItem[]> {
+    const r = await call<BolsaLogItem[]>(
+      { acao: "historico_bolsa", nome: p.nome || "", limit: p.limit || 120 },
+      { cache: true },
+    );
+    return Array.isArray(r) ? r : [];
+  },
+
   // ---- Álbuns ----
   async lancarAlbum(payload: AlbumPayload): Promise<CommonResponse> {
     invalidateCache();
