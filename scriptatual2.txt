@@ -1,116 +1,327 @@
-// =============================================================
-// EMPIRE TV — Handlers para o Apps Script
-// =============================================================
-// No switch do doGet/doPost, adicione:
+// ============================================================
+// EMPIRE TV — GOOGLE APPS SCRIPT (COMPLETO)
+// ============================================================
+// Aba Agenda_TV:
+//   Programa | Tipo | Material | Buff | Data | Horario
+//   Capa_URL | Status | Topico_ID | Topico_URL
 //
-//   case "listar_programas_tv":   return _json(listarProgramasTV());
-//   case "registrar_presenca_tv": return _json(registrarPresencaTV(e));
-//   case "listar_presenca_tv":    return _json(listarPresencaTV(e));
-//   case "salvar_chat_tv":        return _json(salvarChatTV(e));
-//   case "listar_arquivo_tv":     return _json(listarArquivoTV());
+// Abas criadas automaticamente:
+//   Presenca_TV   → programa_id | telegram_id | nome | watched_seconds | last_seen
+//   Chat_Arquivos → Data | Hora | Sala | Total_Msgs | JSON_Completo
 //
-// =============================================================
-// ABAS DA PLANILHA
-// =============================================================
-//
-// 1) Agenda_TV (já existe) — colunas exatas:
-//    Programa | Tipo | Material | Buff | Data | Horario | Capa_URL | Status | Topico_ID | Topico_URL
-//    - Status: "Ao Vivo" / "Agendado" / "Finalizado"
-//    - Data: DD/MM/YYYY ; Horario: HH:mm
-//
-// 2) Presenca_TV (criada automaticamente):
-//    programa_id | telegram_id | nome | watched_seconds | last_seen
-//
-// 3) Chat_Arquivos (já existe):
-//    Data | Hora | Sala | Total_Msgs | JSON_Completo
-//
-// =============================================================
+// ROTEAMENTO:
+//   - GET sem parâmetro "acao"   → buildPayload() (formato antigo, usado por GitHub Actions)
+//   - GET/POST com parâmetro "acao" → handler do app (listar_programas_tv, etc.)
+// ============================================================
+
+const SHEET_NAME     = "Agenda_TV";
+const SPREADSHEET_ID = "";
+
+// ── Configurações do GitHub ────────────────────────────────────
+function getGithubToken() {
+  return PropertiesService.getScriptProperties().getProperty("GITHUB_TOKEN") || "";
+}
+const GITHUB_OWNER       = "empirerpg-max";
+const GITHUB_REPO        = "empiretv";
+const GITHUB_WORKFLOW_ID = "transmissao.yml";
+
+const JANELA_MINUTOS = 10;
+
+const SKIP_STATUSES_AGENDA  = ["concluido","concluído","finalizado","cancelado","transmitido","arquivado"];
+const SKIP_STATUSES_DISPARO = [...SKIP_STATUSES_AGENDA, "transmitindo"];
+
+// ============================================================
+// HELPERS GERAIS
+// ============================================================
+function getSheet() {
+  const ss = SPREADSHEET_ID
+    ? SpreadsheetApp.openById(SPREADSHEET_ID)
+    : SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) { sheet = ss.insertSheet(SHEET_NAME); initHeaders(sheet); }
+  return sheet;
+}
+
+function initHeaders(sheet) {
+  const headers = ["Programa","Tipo","Material","Buff","Data","Horario","Capa_URL","Status","Topico_ID","Topico_URL"];
+  sheet.appendRow(headers);
+  sheet.getRange(1,1,1,headers.length)
+    .setBackground("#7c3aed").setFontColor("#ffffff").setFontWeight("bold");
+  sheet.autoResizeColumns(1, headers.length);
+}
+
+function col(headers, name) {
+  const n = name.trim().toLowerCase();
+  return headers.findIndex(h => String(h).trim().toLowerCase() === n);
+}
+
+function nowSaoPaulo() {
+  const now = new Date();
+  return new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+}
+
+function parseDataHora(dataVal, horarioVal) {
+  try {
+    let year, month, day;
+    if (dataVal instanceof Date) {
+      year  = dataVal.getUTCFullYear();
+      month = dataVal.getUTCMonth() + 1;
+      day   = dataVal.getUTCDate();
+    } else {
+      const s = String(dataVal).trim();
+      const isoM = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoM) {
+        year = parseInt(isoM[1]); month = parseInt(isoM[2]); day = parseInt(isoM[3]);
+      } else {
+        const brM = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (brM) { day = parseInt(brM[1]); month = parseInt(brM[2]); year = parseInt(brM[3]); }
+        else { return null; }
+      }
+    }
+    let hh = 0, mm = 0, ss = 0;
+    if (horarioVal instanceof Date) {
+      hh = horarioVal.getUTCHours();
+      mm = horarioVal.getUTCMinutes();
+      ss = horarioVal.getUTCSeconds();
+    } else {
+      const s = String(horarioVal).trim();
+      const isoT = s.match(/T(\d{2}):(\d{2}):(\d{2})/);
+      if (isoT) { hh = parseInt(isoT[1]); mm = parseInt(isoT[2]); ss = parseInt(isoT[3]); }
+      else {
+        const timeM = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+        if (timeM) { hh = parseInt(timeM[1]); mm = parseInt(timeM[2]); ss = timeM[3] ? parseInt(timeM[3]) : 0; }
+      }
+    }
+    const iso = `${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}T${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}:${String(ss).padStart(2,"0")}-03:00`;
+    return new Date(iso);
+  } catch(e) { return null; }
+}
+
+function jsonResp(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+function jsonpResp(callback, data) {
+  return ContentService.createTextOutput(`${callback}(${JSON.stringify(data)})`).setMimeType(ContentService.MimeType.JAVASCRIPT);
+}
 
 function _param(e, k) {
   if (!e) return "";
   if (e.parameter && e.parameter[k] != null) return e.parameter[k];
   if (e.postData && e.postData.contents) {
-    try { var p = JSON.parse(e.postData.contents); if (p[k] != null) return p[k]; } catch (_) {}
+    try { const p = JSON.parse(e.postData.contents); if (p[k] != null) return p[k]; } catch (_) {}
   }
   return "";
 }
 
-function _fmtData(d) {
-  if (!d) return "";
-  if (d instanceof Date) {
-    var tz = Session.getScriptTimeZone();
-    return Utilities.formatDate(d, tz, "dd/MM/yyyy");
+// ============================================================
+// ROTEAMENTO
+// ============================================================
+function doGet(e) {
+  const callback = e && e.parameter && e.parameter.callback;
+  const acao = _param(e, "acao");
+
+  // Sem acao = comportamento antigo (GitHub Actions)
+  if (!acao) {
+    try {
+      const result = buildPayload();
+      return callback ? jsonpResp(callback, result) : jsonResp(result);
+    } catch(err) {
+      const errObj = { status: "error", message: String(err) };
+      return callback ? jsonpResp(callback, errObj) : jsonResp(errObj);
+    }
   }
-  return String(d);
-}
-function _fmtHora(h) {
-  if (!h) return "";
-  if (h instanceof Date) {
-    var tz = Session.getScriptTimeZone();
-    return Utilities.formatDate(h, tz, "HH:mm");
-  }
-  return String(h);
+
+  return routeAcao(e, acao, callback);
 }
 
-// ---------- Agenda_TV ----------
+function doPost(e) {
+  const acao = _param(e, "acao");
+  return routeAcao(e, acao, null);
+}
+
+function routeAcao(e, acao, callback) {
+  let result;
+  try {
+    switch (String(acao)) {
+      case "listar_programas_tv":   result = listarProgramasTV(); break;
+      case "registrar_presenca_tv": result = registrarPresencaTV(e); break;
+      case "listar_presenca_tv":    result = listarPresencaTV(e); break;
+      case "salvar_chat_tv":        result = salvarChatTV(e); break;
+      case "listar_arquivo_tv":     result = listarArquivoTV(); break;
+      default: result = { ok: false, error: "acao desconhecida: " + acao };
+    }
+  } catch (err) {
+    result = { ok: false, error: String(err) };
+  }
+  return callback ? jsonpResp(callback, result) : jsonResp(result);
+}
+
+// ============================================================
+// PAYLOAD ORIGINAL (GitHub Actions) — INTACTO
+// ============================================================
+function buildPayload() {
+  const sheet = getSheet();
+  const rows  = sheet.getDataRange().getValues();
+
+  if (rows.length <= 1) {
+    return { status: "ok", current: { status: "off", programa: "Empire TV" }, fullSchedule: [] };
+  }
+
+  const headers  = rows[0].map(h => String(h).trim());
+  const dataRows = rows.slice(1);
+
+  const iPrograma  = col(headers, "Programa");
+  const iTipo      = col(headers, "Tipo");
+  const iMaterial  = col(headers, "Material");
+  const iBuff      = col(headers, "Buff");
+  const iData      = col(headers, "Data");
+  const iHorario   = col(headers, "Horario");
+  const iCapa      = col(headers, "Capa_URL");
+  const iStatus    = col(headers, "Status");
+  const iTopicoId  = col(headers, "Topico_ID");
+  const iTopicoUrl = col(headers, "Topico_URL");
+
+  const now      = nowSaoPaulo();
+  const schedule = [];
+
+  dataRows.forEach((row, idx) => {
+    if (!row[iPrograma] && !row[iData]) return;
+    const rowStatus = String(row[iStatus] || "").trim().toLowerCase();
+    if (SKIP_STATUSES_AGENDA.includes(rowStatus)) return;
+    const dataVal    = iData    >= 0 ? row[iData]    : "";
+    const horarioVal = iHorario >= 0 ? row[iHorario] : "";
+    const startDt    = parseDataHora(dataVal, horarioVal);
+    if (!startDt) return;
+    schedule.push({
+      rowNum:    idx + 2,
+      startDt:   startDt,
+      programa:  String(row[iPrograma]  || "Empire TV").trim(),
+      tipo:      String(row[iTipo]      || "").trim(),
+      material:  String(row[iMaterial]  || "").trim(),
+      buff:      String(row[iBuff]      || "").trim(),
+      capaUrl:   String(row[iCapa]      || "").trim(),
+      topicoId:  String(row[iTopicoId]  || "").trim(),
+      topicoUrl: String(row[iTopicoUrl] || "").trim()
+    });
+  });
+
+  schedule.sort((a, b) => a.startDt - b.startDt);
+
+  const MAX_LIVE_WINDOW = 3 * 60 * 60 * 1000;
+  let current = null;
+
+  for (let i = 0; i < schedule.length; i++) {
+    const item   = schedule[i];
+    const diffMs = now - item.startDt;
+    if (diffMs >= 0) {
+      const nextStart = schedule[i+1] ? schedule[i+1].startDt : null;
+      const liveUntil = nextStart || new Date(item.startDt.getTime() + MAX_LIVE_WINDOW);
+      if (now < liveUntil) {
+        current = { ...item, status: "broadcasting", seekOffset: Math.floor(diffMs / 1000) };
+        try { if (iStatus >= 0) sheet.getRange(item.rowNum, iStatus + 1).setValue("Transmitindo"); } catch(e){}
+        break;
+      } else {
+        try { if (iStatus >= 0) sheet.getRange(item.rowNum, iStatus + 1).setValue("Finalizado"); } catch(e){}
+      }
+    } else {
+      if (!current) current = { ...item, status: "upcoming", secondsToStart: Math.ceil(-diffMs / 1000) };
+      break;
+    }
+  }
+
+  if (!current) current = { status: "off", programa: "Empire TV" };
+
+  const fmt = (dt, pattern) => Utilities.formatDate(dt, "America/Sao_Paulo", pattern);
+
+  const fullSchedule = schedule.map(item => ({
+    rowNum:     item.rowNum,
+    horarioStr: fmt(item.startDt, "HH:mm"),
+    data:       fmt(item.startDt, "dd/MM/yyyy"),
+    programa:   item.programa,
+    tipo:       item.tipo,
+    material:   item.material,
+    buff:       item.buff,
+    capaUrl:    item.capaUrl,
+    topicoId:   item.topicoId,
+    topicoUrl:  item.topicoUrl
+  }));
+
+  const currentOut = current.status === "off"
+    ? { status: "off", programa: "Empire TV" }
+    : {
+        status:         current.status,
+        programa:       current.programa,
+        tipo:           current.tipo,
+        material:       current.material,
+        buff:           current.buff,
+        capaUrl:        current.capaUrl,
+        topicoId:       current.topicoId   || "",
+        topicoUrl:      current.topicoUrl  || "",
+        horarioStr:     fmt(current.startDt, "HH:mm"),
+        data:           fmt(current.startDt, "dd/MM/yyyy"),
+        videoUrl:       "",
+        seekOffset:     current.seekOffset     || 0,
+        secondsToStart: current.secondsToStart || 0
+      };
+
+  return { status: "success", timestamp: new Date().toISOString(), current: currentOut, fullSchedule: fullSchedule };
+}
+
+// ============================================================
+// HANDLERS DO APP (acao=...)
+// ============================================================
+
+// ---------- listar_programas_tv ----------
+// Retorna no formato esperado pelo Empire Hub (frontend)
 function listarProgramasTV() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName("Agenda_TV");
-  if (!sh) return [];
-  const values = sh.getDataRange().getValues();
-  if (values.length < 2) return [];
+  const payload = buildPayload();
+  const items = payload.fullSchedule || [];
+  const currentTopicoId = payload.current && payload.current.topicoId;
 
-  const out = [];
-  for (let i = 1; i < values.length; i++) {
-    const row = values[i];
-    const programa = String(row[0] || "").trim();
-    if (!programa) continue;
-
-    const tipo      = String(row[1] || "").trim();
-    const material  = String(row[2] || "").trim();
-    const buff      = String(row[3] || "").trim();
-    const dataStr   = _fmtData(row[4]);
-    const horaStr   = _fmtHora(row[5]);
-    const capa      = String(row[6] || "").trim();
-    const status    = String(row[7] || "").trim();
-    const topicoId  = String(row[8] || "").trim();
-    const topicoUrl = String(row[9] || "").trim();
-
-    const statusLow = status.toLowerCase();
-    const aoVivo = statusLow === "ao vivo" || statusLow === "transmitindo" || statusLow === "live";
-    const finalizado = statusLow === "finalizado";
-
-    const id = topicoId || (programa + "_" + dataStr + "_" + horaStr).replace(/\s+/g, "_");
-
-    out.push({
+  return items.map(it => {
+    const statusLow = _statusDaLinha(it.rowNum).toLowerCase();
+    const aoVivo = (currentTopicoId && it.topicoId && it.topicoId === currentTopicoId) ||
+                   statusLow === "transmitindo" || statusLow === "ao vivo" || statusLow === "live";
+    const finalizado = statusLow === "finalizado" || statusLow === "concluido" || statusLow === "concluído";
+    const id = it.topicoId || (it.programa + "_" + it.data + "_" + it.horarioStr).replace(/\s+/g, "_");
+    return {
       id: id,
-      titulo: programa,
-      subtitulo: material || tipo,
-      categoria: tipo,
+      titulo: it.programa,
+      subtitulo: it.material || it.tipo || "",
+      categoria: it.tipo || "",
       ao_vivo: aoVivo,
       finalizado: finalizado,
-      status: status,
+      status: _capitalize(statusLow),
       espectadores: 0,
-      cover: capa,
-      stream_url: topicoUrl,
-      data: dataStr,
-      horario: horaStr,
-      data_inicio: (dataStr + " " + horaStr).trim(),
-      buff: buff,
-      topico_id: topicoId,
-      topico_url: topicoUrl
-    });
-  }
-  return out;
+      cover: it.capaUrl || "",
+      stream_url: it.topicoUrl || "",
+      data: it.data,
+      horario: it.horarioStr,
+      data_inicio: (it.data + " " + it.horarioStr).trim(),
+      buff: it.buff || "",
+      topico_id: it.topicoId || "",
+      topico_url: it.topicoUrl || ""
+    };
+  });
 }
+
+function _statusDaLinha(rowNum) {
+  const sheet = getSheet();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const iStatus = col(headers, "Status");
+  if (iStatus < 0) return "";
+  return String(sheet.getRange(rowNum, iStatus + 1).getValue() || "").trim();
+}
+function _capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
 
 // ---------- Presenca_TV ----------
 function _getOrCreatePresencaSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName("Presenca_TV");
   if (!sh) {
     sh = ss.insertSheet("Presenca_TV");
     sh.getRange(1, 1, 1, 5).setValues([["programa_id", "telegram_id", "nome", "watched_seconds", "last_seen"]]);
+    sh.getRange(1, 1, 1, 5).setBackground("#7c3aed").setFontColor("#ffffff").setFontWeight("bold");
   }
   return sh;
 }
@@ -144,7 +355,7 @@ function listarPresencaTV(e) {
   const sh = _getOrCreatePresencaSheet();
   const data = sh.getDataRange().getValues();
 
-  // duração estimada = max(watched_seconds) entre os participantes (não há coluna duracao em Agenda_TV)
+  // duração estimada = maior watched_seconds entre os participantes
   let maxWatched = 0;
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]) === programa_id) {
@@ -174,11 +385,12 @@ function salvarChatTV(e) {
   const json = String(_param(e, "json") || "[]");
   if (!sala) return { ok: false, error: "sala" };
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName("Chat_Arquivos");
   if (!sh) {
     sh = ss.insertSheet("Chat_Arquivos");
     sh.getRange(1, 1, 1, 5).setValues([["Data", "Hora", "Sala", "Total_Msgs", "JSON_Completo"]]);
+    sh.getRange(1, 1, 1, 5).setBackground("#7c3aed").setFontColor("#ffffff").setFontWeight("bold");
   }
 
   const data = sh.getDataRange().getValues();
@@ -198,7 +410,7 @@ function salvarChatTV(e) {
 }
 
 function listarArquivoTV() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName("Chat_Arquivos");
   if (!sh) return [];
   const data = sh.getDataRange().getValues();
@@ -214,4 +426,91 @@ function listarArquivoTV() {
     });
   }
   return out.reverse();
+}
+
+// ============================================================
+// GITHUB ACTIONS — INTACTO
+// ============================================================
+function dispararTransmissao() {
+  const token = getGithubToken();
+  if (!token) { Logger.log("[dispararTransmissao] GITHUB_TOKEN não configurado — abortando."); return; }
+
+  const sheet = getSheet();
+  const rows  = sheet.getDataRange().getValues();
+  if (rows.length <= 1) { Logger.log("[dispararTransmissao] Agenda vazia."); return; }
+
+  const headers   = rows[0].map(h => String(h).trim());
+  const dataRows  = rows.slice(1);
+  const iData     = col(headers, "Data");
+  const iHorario  = col(headers, "Horario");
+  const iPrograma = col(headers, "Programa");
+  const iStatus   = col(headers, "Status");
+
+  const now       = nowSaoPaulo();
+  const janela_ms = JANELA_MINUTOS * 60 * 1000;
+  const props     = PropertiesService.getScriptProperties();
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const row       = dataRows[i];
+    const rowStatus = String(row[iStatus] || "").trim().toLowerCase();
+    if (SKIP_STATUSES_DISPARO.includes(rowStatus)) continue;
+
+    const startDt = parseDataHora(iData >= 0 ? row[iData] : "", iHorario >= 0 ? row[iHorario] : "");
+    if (!startDt) continue;
+
+    const diffMs = now - startDt;
+    if (diffMs >= -janela_ms && diffMs <= janela_ms) {
+      const programa = String(row[iPrograma] || "Empire TV").trim();
+      const chave    = `disparado_${programa}_${Utilities.formatDate(startDt, "America/Sao_Paulo", "yyyyMMdd_HHmm")}`;
+
+      if (props.getProperty(chave)) { Logger.log(`[dispararTransmissao] Já disparado: ${chave}`); continue; }
+
+      Logger.log(`[dispararTransmissao] Disparando para "${programa}"...`);
+
+      const url     = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${GITHUB_WORKFLOW_ID}/dispatches`;
+      const options = {
+        method: "post",
+        contentType: "application/json",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28"
+        },
+        payload: JSON.stringify({ ref: "main" }),
+        muteHttpExceptions: true
+      };
+
+      const resp = UrlFetchApp.fetch(url, options);
+      const code = resp.getResponseCode();
+      if (code === 204) {
+        Logger.log(`[dispararTransmissao] ✓ Workflow disparado para "${programa}"`);
+        props.setProperty(chave, new Date().toISOString());
+      } else {
+        Logger.log(`[dispararTransmissao] Erro HTTP ${code}: ${resp.getContentText()}`);
+      }
+      break;
+    }
+  }
+}
+
+function instalarTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === "dispararTransmissao") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("dispararTransmissao").timeBased().everyMinutes(5).create();
+  Logger.log("[instalarTrigger] Trigger de 5 minutos instalado!");
+}
+
+function debug() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  Logger.log("Abas: " + ss.getSheets().map(s => s.getName()).join(", "));
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) { Logger.log("ERRO: aba " + SHEET_NAME + " não encontrada!"); return; }
+  const rows = sheet.getDataRange().getValues();
+  Logger.log("Total de linhas: " + rows.length);
+  Logger.log("Cabeçalhos: " + JSON.stringify(rows[0]));
+  if (rows[1]) Logger.log("Linha 2 (raw): " + JSON.stringify(rows[1]));
+  const payload = buildPayload();
+  Logger.log("fullSchedule count: " + payload.fullSchedule.length);
+  Logger.log("listarProgramasTV count: " + listarProgramasTV().length);
 }
