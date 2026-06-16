@@ -64,7 +64,11 @@ function TvPage() {
   const [watching, setWatching] = useState<Programa | null>(null);
 
   return (
-    <div className="fixed inset-0 top-[calc(4rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] bg-background text-foreground overflow-hidden">
+    <div
+      className={`fixed inset-0 bg-background text-foreground overflow-hidden transition-all ${
+        watching ? "z-[70]" : "top-[calc(4rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))]"
+      }`}
+    >
       {watching ? (
         <WatchView programa={watching} onBack={() => setWatching(null)} />
       ) : (
@@ -176,9 +180,10 @@ function ProgramRow({
 function WatchView({ programa, onBack }: { programa: Programa; onBack: () => void }) {
   return (
     <div className="h-full flex flex-col lg:flex-row">
-      {/* Video column */}
+      {/* Video + meta column */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card/60 backdrop-blur">
+        {/* Clean top bar: back + title + viewers */}
+        <div className="flex items-center gap-3 px-4 h-12 border-b border-border/60 bg-background/90 backdrop-blur shrink-0">
           <button
             onClick={onBack}
             className="size-8 rounded-md hover:bg-muted flex items-center justify-center"
@@ -186,38 +191,33 @@ function WatchView({ programa, onBack }: { programa: Programa; onBack: () => voi
           >
             <ArrowLeft className="size-4" />
           </button>
-          <img src={logoIcon} alt="Empire" className="size-7 rounded-md object-contain" />
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold leading-none truncate">{programa.titulo}</div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">
-              {programa.categoria}
-            </div>
+          <div className="min-w-0 flex-1 truncate text-sm font-semibold">
+            {programa.titulo}
           </div>
-          {programa.ao_vivo && (
-            <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/15 text-red-400 font-bold text-xs">
-              <Radio className="size-3 animate-pulse" /> AO VIVO
-            </span>
-          )}
+          <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+            <Users className="size-3" />
+            {programa.espectadores.toLocaleString("pt-BR")}
+          </span>
         </div>
 
-        {/* Sticky video (16:9) */}
-        <div className="sticky top-0 z-10 w-full bg-black" style={{ aspectRatio: "16 / 9" }}>
+        {/* Video (16:9) */}
+        <div className="w-full bg-black" style={{ aspectRatio: "16 / 9" }}>
           <iframe
             src={programa.stream_url}
             title={programa.titulo}
-            className="absolute inset-0 w-full h-full border-0"
+            className="w-full h-full border-0 block"
             allow="autoplay; camera; microphone; fullscreen; encrypted-media; picture-in-picture"
             allowFullScreen
             loading="lazy"
           />
         </div>
 
-        {/* Below-fold info (only on desktop layout where chat is sidebar) */}
-        <div className="hidden lg:block flex-1 overflow-y-auto p-4">
-          <h2 className="text-xl font-bold">{programa.titulo}</h2>
-          <p className="text-sm text-muted-foreground mt-2">{programa.subtitulo}</p>
-          <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-            <Users className="size-3" /> {programa.espectadores.toLocaleString("pt-BR")} assistindo
+        {/* Mobile-only meta below video */}
+        <div className="lg:hidden px-4 py-3 border-b border-border/60">
+          <div className="text-sm font-semibold">{programa.titulo}</div>
+          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+            <Users className="size-3" />
+            {programa.espectadores.toLocaleString("pt-BR")} assistindo
           </div>
         </div>
       </div>
