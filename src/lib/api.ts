@@ -411,7 +411,7 @@ export const api = {
       percentual: Number(x.percentual || 0),
     })) : [];
   },
-  async salvarChatTV(p: { programa_id: string; mensagens: Array<{ user: string; text: string; ts: number }>; total_msgs: number }): Promise<CommonResponse> {
+  async salvarChatTV(p: { programa_id: string; mensagens: Array<{ user: string; text: string; ts: number; reply_to?: { id: string; user: string; text: string } }>; total_msgs: number }): Promise<CommonResponse> {
     return call<CommonResponse>({
       acao: "salvar_chat_tv",
       sala: p.programa_id,
