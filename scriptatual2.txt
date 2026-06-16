@@ -5,7 +5,7 @@
 //
 //   case "listar_programas_tv": return _json(listarProgramasTV());
 //
-// Crie a aba "TV_PROGRAMAS" na planilha com colunas (header na linha 1):
+// A programação vem da aba "Agenda_TV" na planilha, com colunas (header na linha 1):
 //   id | titulo | subtitulo | categoria | ao_vivo | espectadores | cover | stream_url | data_inicio
 //
 // - ao_vivo: TRUE / FALSE  (TRUE = aparece no hero "AO VIVO" e na seção "No ar agora")
@@ -18,7 +18,7 @@
 
 function listarProgramasTV() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName("TV_PROGRAMAS");
+  const sh = ss.getSheetByName("Agenda_TV");
   if (!sh) return [];
   const values = sh.getDataRange().getValues();
   if (values.length < 2) return [];
