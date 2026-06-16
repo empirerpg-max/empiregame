@@ -37,7 +37,7 @@ const PROGRAMAS: Programa[] = [
     espectadores: 1284,
     cover:
       "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1600&q=80&auto=format&fit=crop",
-    stream_url: "https://empiretv.vercel.app/",
+    stream_url: "https://player.kick.com/empire?autoplay=true&muted=false",
   },
 ];
 
