@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { Send, Radio, Users, Play, ArrowLeft } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Send, Radio, Users, Play, ArrowLeft, Calendar } from "lucide-react";
 import logoIcon from "@/assets/logo-icon.png";
 import { useTelegramUser } from "@/lib/telegram";
+import { api, type ProgramaTV } from "@/lib/api";
 
 export const Route = createFileRoute("/tv")({
   head: () => ({
@@ -16,18 +17,9 @@ export const Route = createFileRoute("/tv")({
 
 const CHAT_STORAGE_KEY = "empire_tv_chat_v1";
 
-interface Programa {
-  id: string;
-  titulo: string;
-  subtitulo: string;
-  categoria: string;
-  ao_vivo: boolean;
-  espectadores: number;
-  cover: string;
-  stream_url: string;
-}
+type Programa = ProgramaTV;
 
-const PROGRAMAS: Programa[] = [
+const FALLBACK: Programa[] = [
   {
     id: "empire-live",
     titulo: "Empire ao Vivo",
@@ -62,6 +54,17 @@ function colorFor(name: string) {
 
 function TvPage() {
   const [watching, setWatching] = useState<Programa | null>(null);
+  const [programas, setProgramas] = useState<Programa[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    api.listarProgramasTV()
+      .then((list) => alive && setProgramas(list.length > 0 ? list : FALLBACK))
+      .catch(() => alive && setProgramas(FALLBACK))
+      .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, []);
 
   return (
     <div
@@ -72,7 +75,7 @@ function TvPage() {
       {watching ? (
         <WatchView programa={watching} onBack={() => setWatching(null)} />
       ) : (
-        <BrowseView onPlay={setWatching} />
+        <BrowseView programas={programas} loading={loading} onPlay={setWatching} />
       )}
     </div>
   );
