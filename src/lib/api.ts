@@ -387,7 +387,39 @@ export const api = {
       cover: String(x.cover || ""),
       stream_url: String(x.stream_url || ""),
       data_inicio: x.data_inicio ? String(x.data_inicio) : undefined,
+      duracao_min: x.duracao_min ? Number(x.duracao_min) : undefined,
     }));
+  },
+  async registrarPresencaTV(p: {
+    programa_id: string; telegram_id: string; nome: string; watched_seconds: number;
+  }): Promise<CommonResponse> {
+    return call<CommonResponse>({ acao: "registrar_presenca_tv", ...p, watched_seconds: String(p.watched_seconds) });
+  },
+  async listarPresencaTV(programa_id: string): Promise<Array<{ telegram_id: string; nome: string; watched_seconds: number; percentual: number }>> {
+    const r = await call<any[]>({ acao: "listar_presenca_tv", programa_id });
+    return Array.isArray(r) ? r.map((x) => ({
+      telegram_id: String(x.telegram_id || ""),
+      nome: String(x.nome || "Anônimo"),
+      watched_seconds: Number(x.watched_seconds || 0),
+      percentual: Number(x.percentual || 0),
+    })) : [];
+  },
+  async salvarChatTV(p: { programa_id: string; mensagens: Array<{ user: string; text: string; ts: number }>; total_msgs: number }): Promise<CommonResponse> {
+    return call<CommonResponse>({
+      acao: "salvar_chat_tv",
+      sala: p.programa_id,
+      total_msgs: String(p.total_msgs),
+      json: JSON.stringify(p.mensagens),
+    });
+  },
+  async listarArquivoTV(): Promise<Array<{ data: string; hora: string; sala: string; total_msgs: number }>> {
+    const r = await call<any[]>({ acao: "listar_arquivo_tv" }, { cache: true });
+    return Array.isArray(r) ? r.map((x) => ({
+      data: String(x.data || ""),
+      hora: String(x.hora || ""),
+      sala: String(x.sala || ""),
+      total_msgs: Number(x.total_msgs || 0),
+    })) : [];
   },
 
   // ---- Álbuns ----
