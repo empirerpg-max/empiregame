@@ -373,6 +373,23 @@ export const api = {
     return Array.isArray(r) ? r : [];
   },
 
+  // ---- Empire TV ----
+  async listarProgramasTV(): Promise<ProgramaTV[]> {
+    const r = await call<Record<string, unknown>[]>({ acao: "listar_programas_tv" }, { cache: true });
+    if (!Array.isArray(r)) return [];
+    return r.map((x) => ({
+      id: String(x.id || x.titulo || Math.random().toString(36).slice(2)),
+      titulo: String(x.titulo || ""),
+      subtitulo: String(x.subtitulo || ""),
+      categoria: String(x.categoria || ""),
+      ao_vivo: x.ao_vivo === true || String(x.ao_vivo || "").toUpperCase() === "TRUE" || String(x.ao_vivo || "") === "1" || String(x.ao_vivo || "").toLowerCase() === "sim",
+      espectadores: Number(x.espectadores || 0),
+      cover: String(x.cover || ""),
+      stream_url: String(x.stream_url || ""),
+      data_inicio: x.data_inicio ? String(x.data_inicio) : undefined,
+    }));
+  },
+
   // ---- Álbuns ----
   async lancarAlbum(payload: AlbumPayload): Promise<CommonResponse> {
     invalidateCache();
