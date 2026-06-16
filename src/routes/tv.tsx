@@ -216,7 +216,7 @@ function WatchView({ programa, programas, onBack, onPlay }: {
       if (total < 5) return;
       api.registrarPresencaTV({
         programa_id: programa.id,
-        telegram_id: String(user.telegramId),
+        telegram_id: user.id,
         nome: user.name || "Anônimo",
         watched_seconds: total,
       }).catch(() => {});
