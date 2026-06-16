@@ -194,7 +194,7 @@ function WatchView({ programa, programas, onBack, onPlay }: {
 
   // ---- Heartbeat de presença ----
   useEffect(() => {
-    if (!user?.telegramId) return;
+    if (!user?.id) return;
     const start = Date.now();
     let accumulated = 0;
     let lastTick = start;
@@ -237,7 +237,7 @@ function WatchView({ programa, programas, onBack, onPlay }: {
       const extra = visible ? Math.floor((Date.now() - lastTick) / 1000) : 0;
       send(extra);
     };
-  }, [programa.id, user?.telegramId, user?.name]);
+  }, [programa.id, user?.id, user?.name]);
 
   const tabs: { id: TabId; label: string; icon: typeof MessageSquare }[] = [
     { id: "chat", label: "Chat", icon: MessageSquare },
