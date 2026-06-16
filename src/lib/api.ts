@@ -119,11 +119,17 @@ export interface ProgramaTV {
   subtitulo: string;
   categoria: string;
   ao_vivo: boolean;
+  finalizado?: boolean;
+  status?: string;
   espectadores: number;
   cover: string;
   stream_url: string;
-  data_inicio?: string; // ISO ou "DD/MM HH:mm"
+  data?: string;       // DD/MM/YYYY
+  horario?: string;    // HH:mm
+  data_inicio?: string;
   duracao_min?: number;
+  buff?: string;
+  topico_url?: string;
 }
 
 function qs(params: Record<string, string | number | undefined>) {
@@ -405,7 +411,7 @@ export const api = {
       percentual: Number(x.percentual || 0),
     })) : [];
   },
-  async salvarChatTV(p: { programa_id: string; mensagens: Array<{ user: string; text: string; ts: number }>; total_msgs: number }): Promise<CommonResponse> {
+  async salvarChatTV(p: { programa_id: string; mensagens: Array<{ user: string; text: string; ts: number; reply_to?: { id: string; user: string; text: string } }>; total_msgs: number }): Promise<CommonResponse> {
     return call<CommonResponse>({
       acao: "salvar_chat_tv",
       sala: p.programa_id,
