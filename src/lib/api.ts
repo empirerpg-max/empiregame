@@ -123,6 +123,7 @@ export interface ProgramaTV {
   cover: string;
   stream_url: string;
   data_inicio?: string; // ISO ou "DD/MM HH:mm"
+  duracao_min?: number;
 }
 
 function qs(params: Record<string, string | number | undefined>) {
