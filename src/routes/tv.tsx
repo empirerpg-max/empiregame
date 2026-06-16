@@ -154,9 +154,9 @@ function BrowseView({
 }
 
 function ProgramRow({
-  title, programas, onPlay,
+  title, programas, onPlay, showSchedule,
 }: {
-  title: string; programas: Programa[]; onPlay: (p: Programa) => void;
+  title: string; programas: Programa[]; onPlay: (p: Programa) => void; showSchedule?: boolean;
 }) {
   return (
     <section>
@@ -174,10 +174,19 @@ function ProgramRow({
               className="snap-start shrink-0 w-64 group text-left"
             >
               <div className="relative aspect-video rounded-md overflow-hidden bg-muted">
-                <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                {p.cover ? (
+                  <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-primary/20 to-muted" />
+                )}
                 {p.ao_vivo && (
                   <span className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500 text-white text-[10px] font-bold">
                     <Radio className="size-2.5" /> LIVE
+                  </span>
+                )}
+                {showSchedule && p.data_inicio && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px] font-semibold">
+                    <Calendar className="size-2.5" /> {p.data_inicio}
                   </span>
                 )}
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
