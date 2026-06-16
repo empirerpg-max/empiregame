@@ -119,11 +119,17 @@ export interface ProgramaTV {
   subtitulo: string;
   categoria: string;
   ao_vivo: boolean;
+  finalizado?: boolean;
+  status?: string;
   espectadores: number;
   cover: string;
   stream_url: string;
-  data_inicio?: string; // ISO ou "DD/MM HH:mm"
+  data?: string;       // DD/MM/YYYY
+  horario?: string;    // HH:mm
+  data_inicio?: string;
   duracao_min?: number;
+  buff?: string;
+  topico_url?: string;
 }
 
 function qs(params: Record<string, string | number | undefined>) {
