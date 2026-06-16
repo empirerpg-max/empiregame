@@ -112,6 +112,19 @@ export interface BolsaLogItem {
   valor_apos: number;
 }
 
+// ---- Empire TV ----
+export interface ProgramaTV {
+  id: string;
+  titulo: string;
+  subtitulo: string;
+  categoria: string;
+  ao_vivo: boolean;
+  espectadores: number;
+  cover: string;
+  stream_url: string;
+  data_inicio?: string; // ISO ou "DD/MM HH:mm"
+}
+
 function qs(params: Record<string, string | number | undefined>) {
   const u = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
