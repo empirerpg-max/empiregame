@@ -82,8 +82,23 @@ function TvPage() {
 }
 
 // ---------- Netflix-style browse ----------
-function BrowseView({ onPlay }: { onPlay: (p: Programa) => void }) {
-  const featured = PROGRAMAS[0];
+function BrowseView({
+  programas, loading, onPlay,
+}: {
+  programas: Programa[]; loading: boolean; onPlay: (p: Programa) => void;
+}) {
+  const aoVivo = useMemo(() => programas.filter((p) => p.ao_vivo), [programas]);
+  const grade = useMemo(() => programas.filter((p) => !p.ao_vivo), [programas]);
+  const featured = aoVivo[0] || programas[0];
+
+  if (!featured) {
+    return (
+      <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+        {loading ? "Carregando programação..." : "Nenhum programa disponível."}
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       {/* Hero */}
@@ -116,7 +131,7 @@ function BrowseView({ onPlay }: { onPlay: (p: Programa) => void }) {
             <span className="flex items-center gap-1 text-muted-foreground">
               <Users className="size-3" /> {featured.espectadores.toLocaleString("pt-BR")}
             </span>
-            <span className="text-muted-foreground">• {featured.categoria}</span>
+            {featured.categoria && <span className="text-muted-foreground">• {featured.categoria}</span>}
           </div>
           <div className="mt-5 flex items-center gap-3">
             <button
@@ -131,8 +146,8 @@ function BrowseView({ onPlay }: { onPlay: (p: Programa) => void }) {
 
       {/* Rows */}
       <div className="px-4 py-6 space-y-8">
-        <ProgramRow title="No ar agora" programas={PROGRAMAS} onPlay={onPlay} />
-        <ProgramRow title="Em breve no Empire" programas={[]} onPlay={onPlay} />
+        <ProgramRow title="No ar agora" programas={aoVivo} onPlay={onPlay} />
+        <ProgramRow title="Grade — em breve" programas={grade} onPlay={onPlay} showSchedule />
       </div>
     </div>
   );
