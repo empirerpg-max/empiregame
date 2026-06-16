@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Radio, Users, Play, ArrowLeft, Calendar } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Send, Radio, Users, Play, ArrowLeft, Calendar, MessageSquare, Info, Archive, ListVideo } from "lucide-react";
 import logoIcon from "@/assets/logo-icon.png";
 import { useTelegramUser } from "@/lib/telegram";
 import { api, type ProgramaTV } from "@/lib/api";
@@ -41,6 +41,8 @@ interface ChatMessage {
   color: string;
 }
 
+type TabId = "chat" | "participantes" | "sobre" | "arquivo" | "grade";
+
 const NAME_COLORS = [
   "text-rose-400", "text-amber-400", "text-emerald-400", "text-sky-400",
   "text-violet-400", "text-pink-400", "text-orange-400", "text-teal-400",
@@ -73,7 +75,7 @@ function TvPage() {
       }`}
     >
       {watching ? (
-        <WatchView programa={watching} onBack={() => setWatching(null)} />
+        <WatchView programa={watching} programas={programas} onBack={() => setWatching(null)} onPlay={setWatching} />
       ) : (
         <BrowseView programas={programas} loading={loading} onPlay={setWatching} />
       )}
@@ -101,27 +103,17 @@ function BrowseView({
 
   return (
     <div className="h-full overflow-y-auto">
-      {/* Hero */}
       <div className="relative w-full h-[55vh] min-h-[320px] overflow-hidden">
-        <img
-          src={featured.cover}
-          alt={featured.titulo}
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+        <img src={featured.cover} alt={featured.titulo} className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/20" />
         <div className="absolute inset-0 bg-gradient-to-r from-background/80 to-transparent" />
-
         <div className="relative h-full flex flex-col justify-end p-6 max-w-2xl">
           <div className="flex items-center gap-2 mb-3">
             <img src={logoIcon} alt="Empire" className="size-7 rounded-md object-contain" />
-            <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
-              Empire TV
-            </span>
+            <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">Empire TV</span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-black tracking-tight">{featured.titulo}</h1>
-          <p className="mt-2 text-sm sm:text-base text-muted-foreground max-w-xl">
-            {featured.subtitulo}
-          </p>
+          <p className="mt-2 text-sm sm:text-base text-muted-foreground max-w-xl">{featured.subtitulo}</p>
           <div className="mt-3 flex items-center gap-3 text-xs">
             {featured.ao_vivo && (
               <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/20 text-red-400 font-bold">
@@ -134,17 +126,13 @@ function BrowseView({
             {featured.categoria && <span className="text-muted-foreground">• {featured.categoria}</span>}
           </div>
           <div className="mt-5 flex items-center gap-3">
-            <button
-              onClick={() => onPlay(featured)}
-              className="h-11 px-6 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center gap-2 hover:bg-primary/90 transition"
-            >
+            <button onClick={() => onPlay(featured)} className="h-11 px-6 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center gap-2 hover:bg-primary/90 transition">
               <Play className="size-4 fill-current" /> Assistir agora
             </button>
           </div>
         </div>
       </div>
 
-      {/* Rows */}
       <div className="px-4 py-6 space-y-8">
         <ProgramRow title="No ar agora" programas={aoVivo} onPlay={onPlay} />
         <ProgramRow title="Grade — em breve" programas={grade} onPlay={onPlay} showSchedule />
@@ -160,19 +148,13 @@ function ProgramRow({
 }) {
   return (
     <section>
-      <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
-        {title}
-      </h2>
+      <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">{title}</h2>
       {programas.length === 0 ? (
         <div className="text-xs text-muted-foreground italic">Em breve.</div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x">
           {programas.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => onPlay(p)}
-              className="snap-start shrink-0 w-64 group text-left"
-            >
+            <button key={p.id} onClick={() => onPlay(p)} className="snap-start shrink-0 w-64 group text-left">
               <div className="relative aspect-video rounded-md overflow-hidden bg-muted">
                 {p.cover ? (
                   <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -203,31 +185,82 @@ function ProgramRow({
   );
 }
 
-// ---------- Twitch-style watch view ----------
-function WatchView({ programa, onBack }: { programa: Programa; onBack: () => void }) {
+// ---------- Watch view com tabs ----------
+function WatchView({ programa, programas, onBack, onPlay }: {
+  programa: Programa; programas: Programa[]; onBack: () => void; onPlay: (p: Programa) => void;
+}) {
+  const { user } = useTelegramUser();
+  const [tab, setTab] = useState<TabId>("chat");
+
+  // ---- Heartbeat de presença ----
+  useEffect(() => {
+    if (!user?.id) return;
+    const start = Date.now();
+    let accumulated = 0;
+    let lastTick = start;
+    let visible = !document.hidden;
+
+    const onVis = () => {
+      if (document.hidden) {
+        if (visible) accumulated += Math.floor((Date.now() - lastTick) / 1000);
+        visible = false;
+      } else {
+        visible = true;
+        lastTick = Date.now();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    const send = (extraSeconds = 0) => {
+      const total = accumulated + extraSeconds;
+      if (total < 5) return;
+      api.registrarPresencaTV({
+        programa_id: programa.id,
+        telegram_id: user.id,
+        nome: user.name || "Anônimo",
+        watched_seconds: total,
+      }).catch(() => {});
+    };
+
+    const interval = setInterval(() => {
+      if (visible) {
+        const now = Date.now();
+        accumulated += Math.floor((now - lastTick) / 1000);
+        lastTick = now;
+        send();
+      }
+    }, 30_000);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVis);
+      const extra = visible ? Math.floor((Date.now() - lastTick) / 1000) : 0;
+      send(extra);
+    };
+  }, [programa.id, user?.id, user?.name]);
+
+  const tabs: { id: TabId; label: string; icon: typeof MessageSquare }[] = [
+    { id: "chat", label: "Chat", icon: MessageSquare },
+    { id: "participantes", label: "Participantes", icon: Users },
+    { id: "sobre", label: "Sobre", icon: Info },
+    { id: "arquivo", label: "Arquivo", icon: Archive },
+    { id: "grade", label: "Grade", icon: ListVideo },
+  ];
+
   return (
     <div className="h-full flex flex-col lg:flex-row">
-      {/* Video + meta column */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Clean top bar: back + title + viewers */}
         <div className="flex items-center gap-3 px-4 h-12 border-b border-border/60 bg-background/90 backdrop-blur shrink-0">
-          <button
-            onClick={onBack}
-            className="size-8 rounded-md hover:bg-muted flex items-center justify-center"
-            aria-label="Voltar"
-          >
+          <button onClick={onBack} className="size-8 rounded-md hover:bg-muted flex items-center justify-center" aria-label="Voltar">
             <ArrowLeft className="size-4" />
           </button>
-          <div className="min-w-0 flex-1 truncate text-sm font-semibold">
-            {programa.titulo}
-          </div>
+          <div className="min-w-0 flex-1 truncate text-sm font-semibold">{programa.titulo}</div>
           <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
             <Users className="size-3" />
             {programa.espectadores.toLocaleString("pt-BR")}
           </span>
         </div>
 
-        {/* Video (16:9) */}
         <div className="w-full bg-black" style={{ aspectRatio: "16 / 9" }}>
           <iframe
             src={programa.stream_url}
@@ -239,7 +272,6 @@ function WatchView({ programa, onBack }: { programa: Programa; onBack: () => voi
           />
         </div>
 
-        {/* Mobile-only meta below video */}
         <div className="lg:hidden px-4 py-3 border-b border-border/60">
           <div className="text-sm font-semibold">{programa.titulo}</div>
           <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
@@ -249,14 +281,40 @@ function WatchView({ programa, onBack }: { programa: Programa; onBack: () => voi
         </div>
       </div>
 
-      {/* Chat (sidebar on desktop, stacked on mobile) */}
-      <div className="flex-1 lg:flex-none lg:w-[340px] border-t lg:border-t-0 lg:border-l border-border flex flex-col min-h-0 bg-card/30">
-        <ChatPanel programaId={programa.id} />
+      {/* Painel lateral com tabs */}
+      <div className="flex-1 lg:flex-none lg:w-[360px] border-t lg:border-t-0 lg:border-l border-border flex flex-col min-h-0 bg-card/30">
+        <div className="flex items-center gap-1 px-2 h-10 border-b border-border shrink-0 overflow-x-auto">
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`shrink-0 h-8 px-2.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition ${
+                  active ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <Icon className="size-3.5" />
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex-1 min-h-0 flex flex-col">
+          {tab === "chat" && <ChatPanel programaId={programa.id} />}
+          {tab === "participantes" && <ParticipantesPanel programa={programa} />}
+          {tab === "sobre" && <SobrePanel programa={programa} />}
+          {tab === "arquivo" && <ArquivoPanel />}
+          {tab === "grade" && <GradePanel programas={programas} atualId={programa.id} onPlay={onPlay} />}
+        </div>
       </div>
     </div>
   );
 }
 
+// ---------- Chat ----------
 function ChatPanel({ programaId }: { programaId: string }) {
   const { user } = useTelegramUser();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -264,6 +322,7 @@ function ChatPanel({ programaId }: { programaId: string }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const displayName = user?.name || "Anônimo";
   const storageKey = `${CHAT_STORAGE_KEY}_${programaId}`;
+  const lastSavedCount = useRef(0);
 
   useEffect(() => {
     try {
@@ -278,6 +337,23 @@ function ChatPanel({ programaId }: { programaId: string }) {
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, storageKey]);
+
+  // Debounce: salva chat na planilha a cada 10 mensagens novas
+  const flush = useCallback(() => {
+    if (messages.length === 0 || messages.length === lastSavedCount.current) return;
+    lastSavedCount.current = messages.length;
+    api.salvarChatTV({
+      programa_id: programaId,
+      total_msgs: messages.length,
+      mensagens: messages.map((m) => ({ user: m.user, text: m.text, ts: m.ts })),
+    }).catch(() => {});
+  }, [messages, programaId]);
+
+  useEffect(() => {
+    if (messages.length - lastSavedCount.current >= 10) flush();
+  }, [messages, flush]);
+
+  useEffect(() => () => { flush(); }, [flush]);
 
   const send = () => {
     const t = text.trim();
@@ -295,13 +371,6 @@ function ChatPanel({ programaId }: { programaId: string }) {
 
   return (
     <>
-      <div className="px-3 py-2 border-b border-border flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Chat do programa
-        </span>
-        <span className="text-[10px] text-muted-foreground">{displayName}</span>
-      </div>
-
       <div ref={scrollerRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 text-sm">
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-muted-foreground text-xs text-center px-6">
@@ -338,5 +407,150 @@ function ChatPanel({ programaId }: { programaId: string }) {
         </button>
       </form>
     </>
+  );
+}
+
+// ---------- Participantes ----------
+function ParticipantesPanel({ programa }: { programa: Programa }) {
+  const [rows, setRows] = useState<Array<{ telegram_id: string; nome: string; watched_seconds: number; percentual: number }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      api.listarPresencaTV(programa.id)
+        .then((r) => { if (alive) setRows(r); })
+        .catch(() => {})
+        .finally(() => { if (alive) setLoading(false); });
+    };
+    load();
+    const t = setInterval(load, 30_000);
+    return () => { alive = false; clearInterval(t); };
+  }, [programa.id]);
+
+  const sorted = useMemo(() => [...rows].sort((a, b) => b.watched_seconds - a.watched_seconds), [rows]);
+
+  return (
+    <div className="flex-1 overflow-y-auto p-3">
+      {loading && rows.length === 0 ? (
+        <div className="text-xs text-muted-foreground">Carregando...</div>
+      ) : sorted.length === 0 ? (
+        <div className="text-xs text-muted-foreground italic">Ninguém registrado ainda.</div>
+      ) : (
+        <ul className="space-y-1.5">
+          {sorted.map((p) => (
+            <li key={p.telegram_id} className="flex items-center justify-between text-sm">
+              <span className={`font-semibold truncate ${colorFor(p.nome)}`}>{p.nome}</span>
+              <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                {p.percentual > 0 ? `${p.percentual.toFixed(0)}%` : fmtMin(p.watched_seconds)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function fmtMin(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}min` : `${s}s`;
+}
+
+// ---------- Sobre ----------
+function SobrePanel({ programa }: { programa: Programa }) {
+  return (
+    <div className="flex-1 overflow-y-auto p-4 space-y-3 text-sm">
+      <h3 className="text-base font-bold">{programa.titulo}</h3>
+      {programa.categoria && (
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">{programa.categoria}</div>
+      )}
+      {programa.subtitulo && <p className="text-muted-foreground">{programa.subtitulo}</p>}
+      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+        {programa.ao_vivo && (
+          <span className="flex items-center gap-1 px-2 py-1 rounded bg-red-500/15 text-red-400 font-bold">
+            <Radio className="size-3 animate-pulse" /> AO VIVO
+          </span>
+        )}
+        <span className="flex items-center gap-1 px-2 py-1 rounded bg-muted">
+          <Users className="size-3" /> {programa.espectadores.toLocaleString("pt-BR")} viewers
+        </span>
+        {programa.data_inicio && (
+          <span className="flex items-center gap-1 px-2 py-1 rounded bg-muted">
+            <Calendar className="size-3" /> {programa.data_inicio}
+          </span>
+        )}
+        {programa.duracao_min ? (
+          <span className="px-2 py-1 rounded bg-muted">{programa.duracao_min} min</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Arquivo ----------
+function ArquivoPanel() {
+  const [rows, setRows] = useState<Array<{ data: string; hora: string; sala: string; total_msgs: number }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    api.listarArquivoTV()
+      .then((r) => { if (alive) setRows(r); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  return (
+    <div className="flex-1 overflow-y-auto p-3">
+      {loading ? (
+        <div className="text-xs text-muted-foreground">Carregando...</div>
+      ) : rows.length === 0 ? (
+        <div className="text-xs text-muted-foreground italic">Sem transmissões arquivadas.</div>
+      ) : (
+        <ul className="space-y-1.5 text-sm">
+          {rows.map((r, i) => (
+            <li key={i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-muted">
+              <div className="min-w-0">
+                <div className="font-semibold truncate">{r.sala}</div>
+                <div className="text-[11px] text-muted-foreground">{r.data} {r.hora}</div>
+              </div>
+              <span className="shrink-0 text-xs text-muted-foreground">{r.total_msgs} msgs</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ---------- Grade ----------
+function GradePanel({ programas, atualId, onPlay }: { programas: Programa[]; atualId: string; onPlay: (p: Programa) => void }) {
+  const proximos = useMemo(() => programas.filter((p) => p.id !== atualId), [programas, atualId]);
+  return (
+    <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      {proximos.length === 0 ? (
+        <div className="text-xs text-muted-foreground italic">Sem próximos programas.</div>
+      ) : proximos.map((p) => (
+        <button
+          key={p.id}
+          onClick={() => onPlay(p)}
+          className="w-full flex gap-2 p-2 rounded hover:bg-muted text-left"
+        >
+          <div className="w-20 aspect-video rounded overflow-hidden bg-muted shrink-0">
+            {p.cover && <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold truncate">{p.titulo}</div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              {p.ao_vivo ? "AO VIVO" : p.data_inicio || "Em breve"}
+              {p.categoria ? ` • ${p.categoria}` : ""}
+            </div>
+          </div>
+        </button>
+      ))}
+    </div>
   );
 }
