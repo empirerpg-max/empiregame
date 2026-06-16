@@ -64,7 +64,11 @@ function TvPage() {
   const [watching, setWatching] = useState<Programa | null>(null);
 
   return (
-    <div className="fixed inset-0 top-[calc(4rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))] bg-background text-foreground overflow-hidden">
+    <div
+      className={`fixed inset-0 bg-background text-foreground overflow-hidden transition-all ${
+        watching ? "z-[70]" : "top-[calc(4rem+env(safe-area-inset-top))] bottom-[calc(4rem+env(safe-area-inset-bottom))]"
+      }`}
+    >
       {watching ? (
         <WatchView programa={watching} onBack={() => setWatching(null)} />
       ) : (
