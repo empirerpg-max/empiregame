@@ -89,8 +89,8 @@ function BrowseView({ programas, loading, onPlay }: { programas: Programa[]; loa
     return programas
       .filter((p) => !p.ao_vivo && !p.finalizado)
       .map((p) => ({ p, d: parseProgramDate(p) }))
-      .filter((x) => x.d && x.d.getTime() > agora)
-      .sort((a, b) => a.d!.getTime() - b.d!.getTime())
+      .filter((x) => !x.d || x.d.getTime() > agora)
+      .sort((a, b) => (a.d?.getTime() || 0) - (b.d?.getTime() || 0))
       .map((x) => x.p);
   }, [programas, agora]);
   const finalizados = useMemo(() => {
@@ -101,8 +101,25 @@ function BrowseView({ programas, loading, onPlay }: { programas: Programa[]; loa
       .map((x) => x.p);
   }, [programas]);
 
-  const featured = aoVivo[0] || futuros[0];
-  const isNextOnly = !aoVivo[0] && !!futuros[0];
+  // por categoria (pra montar as fileiras tipo "catálogo")
+  const porCategoria = useMemo(() => {
+    const map = new Map<string, Programa[]>();
+    for (const p of programas) {
+      const k = (p.categoria || "Outros").trim() || "Outros";
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(p);
+    }
+    return Array.from(map.entries()).filter(([, arr]) => arr.length > 0);
+  }, [programas]);
+
+  const featured = aoVivo[0] || futuros[0] || finalizados[0] || programas[0] || null;
+  const featuredKind: "live" | "next" | "past" | null = !featured
+    ? null
+    : aoVivo[0]
+    ? "live"
+    : futuros[0]
+    ? "next"
+    : "past";
 
   const tabs: { id: HomeTab; label: string; icon: typeof MessageSquare }[] = [
     { id: "home", label: "Início", icon: Play },
@@ -112,7 +129,6 @@ function BrowseView({ programas, loading, onPlay }: { programas: Programa[]; loa
 
   return (
     <div className="h-full flex flex-col">
-      {/* Tabs do topo */}
       <div className="flex items-center gap-1 px-3 h-11 border-b border-border/60 shrink-0 overflow-x-auto bg-background/95 backdrop-blur">
         <img src={logoIcon} alt="Empire" className="size-6 rounded object-contain mr-1" />
         <span className="text-xs uppercase tracking-[0.18em] font-bold text-muted-foreground mr-2">Empire TV</span>
@@ -133,10 +149,12 @@ function BrowseView({ programas, loading, onPlay }: { programas: Programa[]; loa
         {tab === "home" && (
           <HomeTabView
             loading={loading}
-            featured={featured || null}
-            isNextOnly={isNextOnly}
+            featured={featured}
+            featuredKind={featuredKind}
             aoVivo={aoVivo}
             futuros={futuros}
+            finalizados={finalizados}
+            porCategoria={porCategoria}
             onPlay={onPlay}
           />
         )}
@@ -148,21 +166,35 @@ function BrowseView({ programas, loading, onPlay }: { programas: Programa[]; loa
 }
 
 function HomeTabView({
-  loading, featured, isNextOnly, aoVivo, futuros, onPlay,
+  loading, featured, featuredKind, aoVivo, futuros, finalizados, porCategoria, onPlay,
 }: {
   loading: boolean;
   featured: Programa | null;
-  isNextOnly: boolean;
+  featuredKind: "live" | "next" | "past" | null;
   aoVivo: Programa[];
   futuros: Programa[];
+  finalizados: Programa[];
+  porCategoria: Array<[string, Programa[]]>;
   onPlay: (p: Programa) => void;
 }) {
   if (loading && !featured) {
-    return <div className="h-full flex items-center justify-center text-sm text-muted-foreground p-10">Carregando programação...</div>;
+    return <div className="h-full flex items-center justify-center text-sm text-muted-foreground p-10">Carregando catálogo...</div>;
   }
   if (!featured) {
-    return <div className="h-full flex items-center justify-center text-sm text-muted-foreground p-10">Nenhum programa na Agenda_TV.</div>;
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-sm text-muted-foreground p-10 text-center gap-2">
+        <span>O catálogo ainda não chegou.</span>
+        <span className="text-xs">Verifique se o Apps Script foi republicado com a ação <code>listar_programas_tv</code>.</span>
+      </div>
+    );
   }
+
+  const badge =
+    featuredKind === "live"
+      ? { cls: "bg-red-500/20 text-red-400", icon: <Radio className="size-3 animate-pulse" />, label: "AO VIVO" }
+      : featuredKind === "next"
+      ? { cls: "bg-amber-500/20 text-amber-400", icon: <Clock className="size-3" />, label: "PRÓXIMA ATRAÇÃO" }
+      : { cls: "bg-zinc-500/20 text-zinc-300", icon: <Archive className="size-3" />, label: "EM CATÁLOGO" };
 
   return (
     <>
@@ -175,25 +207,19 @@ function HomeTabView({
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/20" />
         <div className="absolute inset-0 bg-gradient-to-r from-background/80 to-transparent" />
         <div className="relative h-full flex flex-col justify-end p-6 max-w-2xl">
-          {isNextOnly ? (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/20 text-amber-400 text-[11px] font-bold w-fit mb-2">
-              <Clock className="size-3" /> PRÓXIMA ATRAÇÃO
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/20 text-red-400 text-[11px] font-bold w-fit mb-2">
-              <Radio className="size-3 animate-pulse" /> AO VIVO
-            </span>
-          )}
+          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold w-fit mb-2 ${badge.cls}`}>
+            {badge.icon} {badge.label}
+          </span>
           <h1 className="text-4xl sm:text-5xl font-black tracking-tight">{featured.titulo}</h1>
           {featured.subtitulo && <p className="mt-2 text-sm sm:text-base text-muted-foreground max-w-xl">{featured.subtitulo}</p>}
           <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
             {featured.categoria && <span>{featured.categoria}</span>}
             {featured.data_inicio && (<><span>•</span><span className="flex items-center gap-1"><Calendar className="size-3" /> {featured.data_inicio}</span></>)}
           </div>
-          {!isNextOnly && (
+          {featuredKind !== "next" && (
             <div className="mt-5 flex items-center gap-3">
               <button onClick={() => onPlay(featured)} className="h-11 px-6 rounded-md bg-primary text-primary-foreground font-bold text-sm flex items-center gap-2 hover:bg-primary/90 transition">
-                <Play className="size-4 fill-current" /> Assistir agora
+                <Play className="size-4 fill-current" /> {featuredKind === "live" ? "Assistir agora" : "Assistir"}
               </button>
             </div>
           )}
@@ -201,8 +227,12 @@ function HomeTabView({
       </div>
 
       <div className="px-4 py-6 space-y-8">
-        <ProgramRow title="No ar agora" programas={aoVivo} onPlay={onPlay} emptyText="Nada ao vivo agora." />
-        <ProgramRow title="Em breve" programas={futuros} onPlay={onPlay} showSchedule emptyText="Sem agendamentos futuros." />
+        {aoVivo.length > 0 && <ProgramRow title="No ar agora" programas={aoVivo} onPlay={onPlay} />}
+        {futuros.length > 0 && <ProgramRow title="Em breve" programas={futuros} onPlay={onPlay} showSchedule />}
+        {finalizados.length > 0 && <ProgramRow title="Já passou" programas={finalizados} onPlay={onPlay} showSchedule />}
+        {porCategoria.map(([cat, arr]) => (
+          <ProgramRow key={cat} title={cat} programas={arr} onPlay={onPlay} />
+        ))}
       </div>
     </>
   );
