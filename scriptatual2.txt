@@ -1,7 +1,7 @@
 // =============================================================
 // EMPIRE TV — Handlers para o Apps Script
 // =============================================================
-// Adicione no switch do doGet/doPost, junto com as outras ações:
+// No switch do doGet/doPost, adicione:
 //
 //   case "listar_programas_tv":   return _json(listarProgramasTV());
 //   case "registrar_presenca_tv": return _json(registrarPresencaTV(e));
@@ -10,19 +10,18 @@
 //   case "listar_arquivo_tv":     return _json(listarArquivoTV());
 //
 // =============================================================
-// ABAS NECESSÁRIAS NA PLANILHA
+// ABAS DA PLANILHA
 // =============================================================
 //
-// 1) Agenda_TV  (já existe) — colunas (header linha 1):
-//    id | titulo | subtitulo | categoria | ao_vivo | espectadores | cover | stream_url | data_inicio | duracao_min
-//    - ao_vivo: TRUE / FALSE
-//    - duracao_min: número (minutos) — usado para calcular % de presença
+// 1) Agenda_TV (já existe) — colunas exatas:
+//    Programa | Tipo | Material | Buff | Data | Horario | Capa_URL | Status | Topico_ID | Topico_URL
+//    - Status: "Ao Vivo" / "Agendado" / "Finalizado"
+//    - Data: DD/MM/YYYY ; Horario: HH:mm
 //
-// 2) Presenca_TV  (criar) — colunas (header linha 1):
+// 2) Presenca_TV (criada automaticamente):
 //    programa_id | telegram_id | nome | watched_seconds | last_seen
-//    - Uma linha por jogador por programa (upsert)
 //
-// 3) Chat_Arquivos  (já existe) — colunas:
+// 3) Chat_Arquivos (já existe):
 //    Data | Hora | Sala | Total_Msgs | JSON_Completo
 //
 // =============================================================
@@ -36,37 +35,76 @@ function _param(e, k) {
   return "";
 }
 
-// ---------- Agenda ----------
+function _fmtData(d) {
+  if (!d) return "";
+  if (d instanceof Date) {
+    var tz = Session.getScriptTimeZone();
+    return Utilities.formatDate(d, tz, "dd/MM/yyyy");
+  }
+  return String(d);
+}
+function _fmtHora(h) {
+  if (!h) return "";
+  if (h instanceof Date) {
+    var tz = Session.getScriptTimeZone();
+    return Utilities.formatDate(h, tz, "HH:mm");
+  }
+  return String(h);
+}
+
+// ---------- Agenda_TV ----------
 function listarProgramasTV() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName("Agenda_TV");
   if (!sh) return [];
   const values = sh.getDataRange().getValues();
   if (values.length < 2) return [];
-  const headers = values[0].map(function (h) { return String(h || "").trim().toLowerCase(); });
+
   const out = [];
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
-    const obj = {};
-    for (let c = 0; c < headers.length; c++) obj[headers[c]] = row[c];
-    if (!obj.titulo) continue;
+    const programa = String(row[0] || "").trim();
+    if (!programa) continue;
+
+    const tipo      = String(row[1] || "").trim();
+    const material  = String(row[2] || "").trim();
+    const buff      = String(row[3] || "").trim();
+    const dataStr   = _fmtData(row[4]);
+    const horaStr   = _fmtHora(row[5]);
+    const capa      = String(row[6] || "").trim();
+    const status    = String(row[7] || "").trim();
+    const topicoId  = String(row[8] || "").trim();
+    const topicoUrl = String(row[9] || "").trim();
+
+    const statusLow = status.toLowerCase();
+    const aoVivo = statusLow === "ao vivo" || statusLow === "transmitindo" || statusLow === "live";
+    const finalizado = statusLow === "finalizado";
+
+    const id = topicoId || (programa + "_" + dataStr + "_" + horaStr).replace(/\s+/g, "_");
+
     out.push({
-      id: String(obj.id || obj.titulo),
-      titulo: String(obj.titulo || ""),
-      subtitulo: String(obj.subtitulo || ""),
-      categoria: String(obj.categoria || ""),
-      ao_vivo: obj.ao_vivo === true || String(obj.ao_vivo).toUpperCase() === "TRUE" || String(obj.ao_vivo) === "1",
-      espectadores: Number(obj.espectadores || 0),
-      cover: String(obj.cover || ""),
-      stream_url: String(obj.stream_url || ""),
-      data_inicio: obj.data_inicio ? String(obj.data_inicio) : "",
-      duracao_min: Number(obj.duracao_min || 0)
+      id: id,
+      titulo: programa,
+      subtitulo: material || tipo,
+      categoria: tipo,
+      ao_vivo: aoVivo,
+      finalizado: finalizado,
+      status: status,
+      espectadores: 0,
+      cover: capa,
+      stream_url: topicoUrl,
+      data: dataStr,
+      horario: horaStr,
+      data_inicio: (dataStr + " " + horaStr).trim(),
+      buff: buff,
+      topico_id: topicoId,
+      topico_url: topicoUrl
     });
   }
   return out;
 }
 
-// ---------- Presença ----------
+// ---------- Presenca_TV ----------
 function _getOrCreatePresencaSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName("Presenca_TV");
@@ -89,7 +127,6 @@ function registrarPresencaTV(e) {
   const now = new Date();
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]) === programa_id && String(data[i][1]) === telegram_id) {
-      // upsert — mantém o MAIOR tempo assistido
       const prev = Number(data[i][3] || 0);
       sh.getRange(i + 1, 3).setValue(nome);
       sh.getRange(i + 1, 4).setValue(Math.max(prev, watched));
@@ -107,11 +144,13 @@ function listarPresencaTV(e) {
   const sh = _getOrCreatePresencaSheet();
   const data = sh.getDataRange().getValues();
 
-  // pega duracao_min do Agenda_TV pra calcular %
-  let duracaoSeg = 0;
-  const programas = listarProgramasTV();
-  for (let i = 0; i < programas.length; i++) {
-    if (programas[i].id === programa_id) { duracaoSeg = Number(programas[i].duracao_min || 0) * 60; break; }
+  // duração estimada = max(watched_seconds) entre os participantes (não há coluna duracao em Agenda_TV)
+  let maxWatched = 0;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === programa_id) {
+      const w = Number(data[i][3] || 0);
+      if (w > maxWatched) maxWatched = w;
+    }
   }
 
   const out = [];
@@ -122,15 +161,15 @@ function listarPresencaTV(e) {
       telegram_id: String(data[i][1] || ""),
       nome: String(data[i][2] || "Anônimo"),
       watched_seconds: watched,
-      percentual: duracaoSeg > 0 ? Math.min(100, (watched / duracaoSeg) * 100) : 0
+      percentual: maxWatched > 0 ? Math.min(100, (watched / maxWatched) * 100) : 0
     });
   }
   return out;
 }
 
-// ---------- Chat Arquivos ----------
+// ---------- Chat_Arquivos ----------
 function salvarChatTV(e) {
-  const sala = String(_param(e, "sala") || "");
+  const sala = String(_param(e, "sala") || _param(e, "programa_id") || "");
   const total = Number(_param(e, "total_msgs") || 0);
   const json = String(_param(e, "json") || "[]");
   if (!sala) return { ok: false, error: "sala" };
@@ -142,7 +181,6 @@ function salvarChatTV(e) {
     sh.getRange(1, 1, 1, 5).setValues([["Data", "Hora", "Sala", "Total_Msgs", "JSON_Completo"]]);
   }
 
-  // upsert por sala (Sala = programa_id): mantém uma linha por sala e atualiza
   const data = sh.getDataRange().getValues();
   const tz = Session.getScriptTimeZone();
   const now = new Date();
@@ -175,6 +213,5 @@ function listarArquivoTV() {
       total_msgs: Number(data[i][3] || 0)
     });
   }
-  // mais recentes primeiro
   return out.reverse();
 }
