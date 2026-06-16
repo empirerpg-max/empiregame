@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { Send, Radio, Users, Play, ArrowLeft } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Send, Radio, Users, Play, ArrowLeft, Calendar } from "lucide-react";
 import logoIcon from "@/assets/logo-icon.png";
 import { useTelegramUser } from "@/lib/telegram";
+import { api, type ProgramaTV } from "@/lib/api";
 
 export const Route = createFileRoute("/tv")({
   head: () => ({
@@ -16,18 +17,9 @@ export const Route = createFileRoute("/tv")({
 
 const CHAT_STORAGE_KEY = "empire_tv_chat_v1";
 
-interface Programa {
-  id: string;
-  titulo: string;
-  subtitulo: string;
-  categoria: string;
-  ao_vivo: boolean;
-  espectadores: number;
-  cover: string;
-  stream_url: string;
-}
+type Programa = ProgramaTV;
 
-const PROGRAMAS: Programa[] = [
+const FALLBACK: Programa[] = [
   {
     id: "empire-live",
     titulo: "Empire ao Vivo",
@@ -62,6 +54,17 @@ function colorFor(name: string) {
 
 function TvPage() {
   const [watching, setWatching] = useState<Programa | null>(null);
+  const [programas, setProgramas] = useState<Programa[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    api.listarProgramasTV()
+      .then((list) => alive && setProgramas(list.length > 0 ? list : FALLBACK))
+      .catch(() => alive && setProgramas(FALLBACK))
+      .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, []);
 
   return (
     <div
@@ -72,15 +75,30 @@ function TvPage() {
       {watching ? (
         <WatchView programa={watching} onBack={() => setWatching(null)} />
       ) : (
-        <BrowseView onPlay={setWatching} />
+        <BrowseView programas={programas} loading={loading} onPlay={setWatching} />
       )}
     </div>
   );
 }
 
 // ---------- Netflix-style browse ----------
-function BrowseView({ onPlay }: { onPlay: (p: Programa) => void }) {
-  const featured = PROGRAMAS[0];
+function BrowseView({
+  programas, loading, onPlay,
+}: {
+  programas: Programa[]; loading: boolean; onPlay: (p: Programa) => void;
+}) {
+  const aoVivo = useMemo(() => programas.filter((p) => p.ao_vivo), [programas]);
+  const grade = useMemo(() => programas.filter((p) => !p.ao_vivo), [programas]);
+  const featured = aoVivo[0] || programas[0];
+
+  if (!featured) {
+    return (
+      <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+        {loading ? "Carregando programação..." : "Nenhum programa disponível."}
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       {/* Hero */}
@@ -113,7 +131,7 @@ function BrowseView({ onPlay }: { onPlay: (p: Programa) => void }) {
             <span className="flex items-center gap-1 text-muted-foreground">
               <Users className="size-3" /> {featured.espectadores.toLocaleString("pt-BR")}
             </span>
-            <span className="text-muted-foreground">• {featured.categoria}</span>
+            {featured.categoria && <span className="text-muted-foreground">• {featured.categoria}</span>}
           </div>
           <div className="mt-5 flex items-center gap-3">
             <button
@@ -128,17 +146,17 @@ function BrowseView({ onPlay }: { onPlay: (p: Programa) => void }) {
 
       {/* Rows */}
       <div className="px-4 py-6 space-y-8">
-        <ProgramRow title="No ar agora" programas={PROGRAMAS} onPlay={onPlay} />
-        <ProgramRow title="Em breve no Empire" programas={[]} onPlay={onPlay} />
+        <ProgramRow title="No ar agora" programas={aoVivo} onPlay={onPlay} />
+        <ProgramRow title="Grade — em breve" programas={grade} onPlay={onPlay} showSchedule />
       </div>
     </div>
   );
 }
 
 function ProgramRow({
-  title, programas, onPlay,
+  title, programas, onPlay, showSchedule,
 }: {
-  title: string; programas: Programa[]; onPlay: (p: Programa) => void;
+  title: string; programas: Programa[]; onPlay: (p: Programa) => void; showSchedule?: boolean;
 }) {
   return (
     <section>
@@ -156,10 +174,19 @@ function ProgramRow({
               className="snap-start shrink-0 w-64 group text-left"
             >
               <div className="relative aspect-video rounded-md overflow-hidden bg-muted">
-                <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                {p.cover ? (
+                  <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-primary/20 to-muted" />
+                )}
                 {p.ao_vivo && (
                   <span className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500 text-white text-[10px] font-bold">
                     <Radio className="size-2.5" /> LIVE
+                  </span>
+                )}
+                {showSchedule && p.data_inicio && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px] font-semibold">
+                    <Calendar className="size-2.5" /> {p.data_inicio}
                   </span>
                 )}
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
