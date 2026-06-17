@@ -4,6 +4,10 @@
 export const SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbwxbkUndhZPtFvtK1uIFTkPNN-m6WeiFVMU3IDzuahsC0oQp8Ba2GLQFOAPkWv8eiA3/exec";
 
+// Empire TV usa um Apps Script separado (planilha Agenda_TV)
+export const TV_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycby7OeFYuai1QoTEXD427-Kn_2KBvh3nakD4iKSuOji9-i3x7sK8DD59BHRBRc5Ow1YB/exec";
+
 export interface Artist {
   nome: string;
   foto: string;
