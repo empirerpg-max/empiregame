@@ -55,17 +55,67 @@ function parseProgramDate(p: Programa): Date | null {
 
 function TvPage() {
   const [watching, setWatching] = useState<Programa | null>(null);
-  const [programas, setProgramas] = useState<Programa[]>([]);
+  const [programasRaw, setProgramasRaw] = useState<Programa[]>([]);
   const [loading, setLoading] = useState(true);
+  const [liveChannels, setLiveChannels] = useState<Record<string, { viewers?: number; title?: string }>>({});
+  const fetchKick = useServerFn(getKickStatus);
 
   useEffect(() => {
     let alive = true;
     api.listarProgramasTV()
-      .then((list) => alive && setProgramas(list))
-      .catch(() => alive && setProgramas([]))
+      .then((list) => alive && setProgramasRaw(list))
+      .catch(() => alive && setProgramasRaw([]))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
   }, []);
+
+  // Detecta ao vivo direto pela API do Kick (fonte da verdade).
+  useEffect(() => {
+    let alive = true;
+    const channels = new Set<string>();
+    for (const p of programasRaw) {
+      const slug = kickChannelFromUrl(p.stream_url);
+      if (slug) channels.add(slug);
+    }
+    if (channels.size === 0) { setLiveChannels({}); return; }
+
+    const tick = async () => {
+      const entries = await Promise.all(
+        Array.from(channels).map(async (ch) => {
+          try {
+            const r = await fetchKick({ data: { channel: ch } });
+            return [ch, r] as const;
+          } catch { return [ch, { live: false, channel: ch }] as const; }
+        })
+      );
+      if (!alive) return;
+      const next: Record<string, { viewers?: number; title?: string }> = {};
+      for (const [ch, r] of entries) if (r.live) next[ch] = { viewers: r.viewers, title: r.title };
+      setLiveChannels(next);
+    };
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => { alive = false; clearInterval(id); };
+  }, [programasRaw, fetchKick]);
+
+  // Mescla: força ao_vivo=true (e tira finalizado) para qualquer programa cujo canal Kick esteja ao vivo agora.
+  const programas = useMemo<Programa[]>(() => {
+    return programasRaw.map((p) => {
+      const slug = kickChannelFromUrl(p.stream_url);
+      const live = slug ? liveChannels[slug] : undefined;
+      if (!live) return p;
+      return { ...p, ao_vivo: true, finalizado: false, espectadores: live.viewers ?? p.espectadores };
+    });
+  }, [programasRaw, liveChannels]);
+
+  // Mantém o programa em exibição sincronizado quando o status ao vivo muda.
+  useEffect(() => {
+    if (!watching) return;
+    const updated = programas.find((p) => p.id === watching.id);
+    if (updated && (updated.ao_vivo !== watching.ao_vivo || updated.espectadores !== watching.espectadores)) {
+      setWatching(updated);
+    }
+  }, [programas, watching]);
 
   return (
     <div
@@ -81,6 +131,18 @@ function TvPage() {
     </div>
   );
 }
+
+function kickChannelFromUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url.trim());
+    const host = u.hostname.replace(/^www\./, "");
+    if (host !== "kick.com" && host !== "player.kick.com") return null;
+    const seg = u.pathname.split("/").filter(Boolean);
+    return seg[0]?.toLowerCase() || null;
+  } catch { return null; }
+}
+
 
 // ---------- BrowseView (home + arquivo + grade) ----------
 function BrowseView({ programas, loading, onPlay }: { programas: Programa[]; loading: boolean; onPlay: (p: Programa) => void }) {
