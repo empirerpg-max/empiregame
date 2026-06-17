@@ -349,37 +349,44 @@ function BottomNav() {
   ];
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-40 border-t border-white/5 bg-background/90 backdrop-blur-xl"
+      className="fixed inset-x-0 z-40 pointer-events-none"
+      style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       role="navigation"
       aria-label="Navegação principal"
     >
-      <div className="mx-auto max-w-md flex items-stretch justify-around px-1 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        {items.map((it) => {
-          const active = pathname === it.to || (it.to !== "/" && pathname.startsWith(it.to));
-          const Icon = it.icon;
-          return (
-            <Link
-              key={it.to}
-              to={it.to}
-              search={it.search}
-              preload="intent"
-              onClick={() => haptic.selection()}
-              aria-label={it.label}
-              aria-current={active ? "page" : undefined}
-              className={`relative flex flex-col items-center justify-center gap-0.5 min-h-11 flex-1 rounded-2xl transition-colors ${
-                active ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              {active && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-primary" />
-              )}
-              <Icon className="size-[18px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
-              <span className={`text-[9px] font-bold uppercase tracking-tight ${active ? "opacity-100" : "opacity-80"}`}>
-                {it.label}
-              </span>
-            </Link>
-          );
-        })}
+      <div className="mx-auto w-fit max-w-[calc(100%-1rem)] pointer-events-auto">
+        <div
+          className="relative flex items-stretch gap-0.5 rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-1 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)]"
+          style={{ backdropFilter: "blur(28px) saturate(180%)" }}
+        >
+          {/* Glow gradient interno */}
+          <span className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/[0.06] to-transparent" />
+          {items.map((it) => {
+            const active = pathname === it.to || (it.to !== "/" && pathname.startsWith(it.to));
+            const Icon = it.icon;
+            return (
+              <Link
+                key={it.to}
+                to={it.to}
+                search={it.search}
+                preload="intent"
+                onClick={() => haptic.selection()}
+                aria-label={it.label}
+                aria-current={active ? "page" : undefined}
+                className={`relative flex flex-col items-center justify-center gap-0.5 h-12 w-14 rounded-full transition-all ${
+                  active
+                    ? "text-primary-foreground bg-primary shadow-[0_8px_24px_-6px_rgba(var(--primary-rgb),0.7)]"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                }`}
+              >
+                <Icon className="size-[18px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+                <span className="text-[9px] font-bold uppercase tracking-tight leading-none">
+                  {it.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
