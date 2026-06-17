@@ -387,11 +387,23 @@ export const api = {
 
   // ---- Empire TV ----
   async listarProgramasTV(): Promise<ProgramaTV[]> {
-    const r = await call<Record<string, unknown>[]>({ acao: "listar_programas_tv" }, { cache: true, tv: true });
+    // Em paralelo:
+    //  - listar_programas_tv: catálogo completo (passado/agendado/ao vivo por status)
+    //  - buildPayload (sem acao): detecta o que está broadcasting AGORA pelo horário
+    //    e grava "Transmitindo" na planilha como efeito colateral.
+    const [r, live] = await Promise.all([
+      call<Record<string, unknown>[]>({ acao: "listar_programas_tv" }, { cache: true, tv: true }),
+      call<Record<string, unknown>>({}, { tv: true }).catch(() => ({} as Record<string, unknown>)),
+    ]);
     if (!Array.isArray(r)) return [];
+
+    const current = (live && typeof live === "object" ? (live as any).current : null) || null;
+    const liveRowNum = current && current.status === "broadcasting" ? String(current.rowNum ?? "") : "";
+    const liveKey = current && current.status === "broadcasting"
+      ? `${String(current.programa || "").trim()}|${String(current.data || "")}|${String(current.horarioStr || "")}`
+      : "";
+
     return r.map((x) => {
-      // Suporta tanto o formato novo do script TV (programa/tipo/capaUrl/...)
-      // quanto o formato antigo (titulo/categoria/cover/...).
       const titulo    = String(x.titulo    ?? x.programa  ?? "");
       const categoria = String(x.categoria ?? x.tipo      ?? "");
       const subtitulo = String(x.subtitulo ?? x.material  ?? "");
@@ -403,16 +415,24 @@ export const api = {
       const dataInicio = x.data_inicio
         ? String(x.data_inicio)
         : (data && horario ? `${data} ${horario}` : undefined);
-      const aoVivo = estado === "ao_vivo"
+      const rowNum = String(x.rowNum ?? "");
+      const key = `${titulo.trim()}|${data || ""}|${horario || ""}`;
+      const isLiveFromPayload = !!liveKey && (
+        (liveRowNum && rowNum && liveRowNum === rowNum) || key === liveKey
+      );
+      const aoVivo = isLiveFromPayload
+        || estado === "ao_vivo"
         || x.ao_vivo === true
         || String(x.ao_vivo || "").toLowerCase() === "true"
         || String(x.ao_vivo || "") === "1"
         || String(x.ao_vivo || "").toLowerCase() === "sim";
-      const finalizado = estado === "arquivo"
+      const finalizado = !aoVivo && (
+        estado === "arquivo"
         || String(x.status || "").toLowerCase() === "finalizado"
         || String(x.status || "").toLowerCase() === "concluido"
         || String(x.status || "").toLowerCase() === "concluído"
-        || String(x.status || "").toLowerCase() === "transmitido";
+        || String(x.status || "").toLowerCase() === "transmitido"
+      );
       return {
         id: String(x.id ?? x.rowNum ?? titulo ?? Math.random().toString(36).slice(2)),
         titulo,
@@ -420,7 +440,7 @@ export const api = {
         categoria,
         ao_vivo: aoVivo,
         finalizado,
-        status: x.status ? String(x.status) : undefined,
+        status: aoVivo ? "transmitindo" : (x.status ? String(x.status) : undefined),
         espectadores: Number(x.espectadores || 0),
         cover,
         stream_url: stream,
@@ -433,6 +453,7 @@ export const api = {
       };
     });
   },
+
   async registrarPresencaTV(p: {
     programa_id: string; telegram_id: string; nome: string; watched_seconds: number;
   }): Promise<CommonResponse> {
