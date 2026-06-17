@@ -4,6 +4,10 @@
 export const SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbwxbkUndhZPtFvtK1uIFTkPNN-m6WeiFVMU3IDzuahsC0oQp8Ba2GLQFOAPkWv8eiA3/exec";
 
+// Empire TV usa um Apps Script separado (planilha Agenda_TV)
+export const TV_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycby7OeFYuai1QoTEXD427-Kn_2KBvh3nakD4iKSuOji9-i3x7sK8DD59BHRBRc5Ow1YB/exec";
+
 export interface Artist {
   nome: string;
   foto: string;
@@ -148,11 +152,11 @@ const CACHE_FRESH = 60_000;
 const CACHE_STALE = 5 * 60_000;
 const inflight = new Map<string, Promise<unknown>>();
 
-async function rawCall<T = unknown>(params: Record<string, unknown>): Promise<T> {
+async function rawCall<T = unknown>(params: Record<string, unknown>, base: string = SCRIPT_URL): Promise<T> {
   const isPost = params.payload || JSON.stringify(params).length > 1000;
   const options: RequestInit = { method: isPost ? "POST" : "GET" };
   if (isPost) options.body = JSON.stringify(params);
-  const url = isPost ? SCRIPT_URL : `${SCRIPT_URL}?${qs(params as Record<string, string | number | undefined>)}`;
+  const url = isPost ? base : `${base}?${qs(params as Record<string, string | number | undefined>)}`;
   const res = await fetch(url, options);
   const text = await res.text();
   try {
@@ -162,8 +166,8 @@ async function rawCall<T = unknown>(params: Record<string, unknown>): Promise<T>
   }
 }
 
-function fetchAndStore<T>(key: string, params: Record<string, unknown>): Promise<T> {
-  const p = rawCall<T>(params)
+function fetchAndStore<T>(key: string, params: Record<string, unknown>, base: string): Promise<T> {
+  const p = rawCall<T>(params, base)
     .then((data) => {
       cache.set(key, { data, ts: Date.now() });
       inflight.delete(key);
@@ -177,18 +181,19 @@ function fetchAndStore<T>(key: string, params: Record<string, unknown>): Promise
   return p;
 }
 
-async function call<T = unknown>(params: Record<string, unknown>, opts: { cache?: boolean } = {}): Promise<T> {
-  if (!opts.cache) return rawCall<T>(params);
-  const key = JSON.stringify(params);
+async function call<T = unknown>(params: Record<string, unknown>, opts: { cache?: boolean; tv?: boolean } = {}): Promise<T> {
+  const base = opts.tv ? TV_SCRIPT_URL : SCRIPT_URL;
+  if (!opts.cache) return rawCall<T>(params, base);
+  const key = (opts.tv ? "TV::" : "HUB::") + JSON.stringify(params);
   const hit = cache.get(key);
   const age = hit ? Date.now() - hit.ts : Infinity;
   if (hit && age < CACHE_FRESH) return hit.data as T;
   if (hit && age < CACHE_STALE) {
-    if (!inflight.has(key)) fetchAndStore<T>(key, params).catch(() => {});
+    if (!inflight.has(key)) fetchAndStore<T>(key, params, base).catch(() => {});
     return hit.data as T;
   }
   if (inflight.has(key)) return inflight.get(key)! as Promise<T>;
-  return fetchAndStore<T>(key, params);
+  return fetchAndStore<T>(key, params, base);
 }
 
 export function invalidateCache() {
@@ -382,7 +387,7 @@ export const api = {
 
   // ---- Empire TV ----
   async listarProgramasTV(): Promise<ProgramaTV[]> {
-    const r = await call<Record<string, unknown>[]>({ acao: "listar_programas_tv" }, { cache: true });
+    const r = await call<Record<string, unknown>[]>({ acao: "listar_programas_tv" }, { cache: true, tv: true });
     if (!Array.isArray(r)) return [];
     return r.map((x) => ({
       id: String(x.id || x.titulo || Math.random().toString(36).slice(2)),
@@ -400,10 +405,10 @@ export const api = {
   async registrarPresencaTV(p: {
     programa_id: string; telegram_id: string; nome: string; watched_seconds: number;
   }): Promise<CommonResponse> {
-    return call<CommonResponse>({ acao: "registrar_presenca_tv", ...p, watched_seconds: String(p.watched_seconds) });
+    return call<CommonResponse>({ acao: "registrar_presenca_tv", ...p, watched_seconds: String(p.watched_seconds) }, { tv: true });
   },
   async listarPresencaTV(programa_id: string): Promise<Array<{ telegram_id: string; nome: string; watched_seconds: number; percentual: number }>> {
-    const r = await call<any[]>({ acao: "listar_presenca_tv", programa_id });
+    const r = await call<any[]>({ acao: "listar_presenca_tv", programa_id }, { tv: true });
     return Array.isArray(r) ? r.map((x) => ({
       telegram_id: String(x.telegram_id || ""),
       nome: String(x.nome || "Anônimo"),
@@ -417,10 +422,10 @@ export const api = {
       sala: p.programa_id,
       total_msgs: String(p.total_msgs),
       json: JSON.stringify(p.mensagens),
-    });
+    }, { tv: true });
   },
   async listarArquivoTV(): Promise<Array<{ data: string; hora: string; sala: string; total_msgs: number }>> {
-    const r = await call<any[]>({ acao: "listar_arquivo_tv" }, { cache: true });
+    const r = await call<any[]>({ acao: "listar_arquivo_tv" }, { cache: true, tv: true });
     return Array.isArray(r) ? r.map((x) => ({
       data: String(x.data || ""),
       hora: String(x.hora || ""),
