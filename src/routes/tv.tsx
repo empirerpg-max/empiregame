@@ -606,9 +606,19 @@ function WatchView({ programa, onBack }: { programa: Programa; onBack: () => voi
                 />
               );
             }
+            const hasKick = !!programa.stream_url && /kick\.com/.test(programa.stream_url);
+            const waiting = hasKick && !programa.ao_vivo;
             return (
-              <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
-                Sem vídeo.
+              <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-center px-4">
+                {waiting ? (
+                  <>
+                    <div className="size-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                    <span className="text-sm text-foreground font-semibold">Aguardando início da transmissão</span>
+                    <span className="text-xs text-muted-foreground">O player será ativado quando o canal estiver ao vivo.</span>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Sem vídeo.</span>
+                )}
               </div>
             );
           })()}
