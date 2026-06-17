@@ -389,18 +389,49 @@ export const api = {
   async listarProgramasTV(): Promise<ProgramaTV[]> {
     const r = await call<Record<string, unknown>[]>({ acao: "listar_programas_tv" }, { cache: true, tv: true });
     if (!Array.isArray(r)) return [];
-    return r.map((x) => ({
-      id: String(x.id || x.titulo || Math.random().toString(36).slice(2)),
-      titulo: String(x.titulo || ""),
-      subtitulo: String(x.subtitulo || ""),
-      categoria: String(x.categoria || ""),
-      ao_vivo: x.ao_vivo === true || String(x.ao_vivo || "").toUpperCase() === "TRUE" || String(x.ao_vivo || "") === "1" || String(x.ao_vivo || "").toLowerCase() === "sim",
-      espectadores: Number(x.espectadores || 0),
-      cover: String(x.cover || ""),
-      stream_url: String(x.stream_url || ""),
-      data_inicio: x.data_inicio ? String(x.data_inicio) : undefined,
-      duracao_min: x.duracao_min ? Number(x.duracao_min) : undefined,
-    }));
+    return r.map((x) => {
+      // Suporta tanto o formato novo do script TV (programa/tipo/capaUrl/...)
+      // quanto o formato antigo (titulo/categoria/cover/...).
+      const titulo    = String(x.titulo    ?? x.programa  ?? "");
+      const categoria = String(x.categoria ?? x.tipo      ?? "");
+      const subtitulo = String(x.subtitulo ?? x.material  ?? "");
+      const cover     = driveImg(String(x.cover ?? x.capaUrl ?? "")) || String(x.cover ?? x.capaUrl ?? "");
+      const stream    = String(x.stream_url ?? x.topicoUrl ?? "");
+      const estado    = String(x.estado    ?? "").toLowerCase();
+      const data      = x.data      ? String(x.data)      : undefined;
+      const horario   = x.horarioStr ? String(x.horarioStr) : (x.horario ? String(x.horario) : undefined);
+      const dataInicio = x.data_inicio
+        ? String(x.data_inicio)
+        : (data && horario ? `${data} ${horario}` : undefined);
+      const aoVivo = estado === "ao_vivo"
+        || x.ao_vivo === true
+        || String(x.ao_vivo || "").toLowerCase() === "true"
+        || String(x.ao_vivo || "") === "1"
+        || String(x.ao_vivo || "").toLowerCase() === "sim";
+      const finalizado = estado === "arquivo"
+        || String(x.status || "").toLowerCase() === "finalizado"
+        || String(x.status || "").toLowerCase() === "concluido"
+        || String(x.status || "").toLowerCase() === "concluído"
+        || String(x.status || "").toLowerCase() === "transmitido";
+      return {
+        id: String(x.id ?? x.rowNum ?? titulo ?? Math.random().toString(36).slice(2)),
+        titulo,
+        subtitulo,
+        categoria,
+        ao_vivo: aoVivo,
+        finalizado,
+        status: x.status ? String(x.status) : undefined,
+        espectadores: Number(x.espectadores || 0),
+        cover,
+        stream_url: stream,
+        data,
+        horario,
+        data_inicio: dataInicio,
+        duracao_min: x.duracao_min ? Number(x.duracao_min) : undefined,
+        buff: x.buff ? String(x.buff) : undefined,
+        topico_url: stream || undefined,
+      };
+    });
   },
   async registrarPresencaTV(p: {
     programa_id: string; telegram_id: string; nome: string; watched_seconds: number;
