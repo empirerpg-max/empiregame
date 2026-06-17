@@ -152,11 +152,11 @@ const CACHE_FRESH = 60_000;
 const CACHE_STALE = 5 * 60_000;
 const inflight = new Map<string, Promise<unknown>>();
 
-async function rawCall<T = unknown>(params: Record<string, unknown>): Promise<T> {
+async function rawCall<T = unknown>(params: Record<string, unknown>, base: string = SCRIPT_URL): Promise<T> {
   const isPost = params.payload || JSON.stringify(params).length > 1000;
   const options: RequestInit = { method: isPost ? "POST" : "GET" };
   if (isPost) options.body = JSON.stringify(params);
-  const url = isPost ? SCRIPT_URL : `${SCRIPT_URL}?${qs(params as Record<string, string | number | undefined>)}`;
+  const url = isPost ? base : `${base}?${qs(params as Record<string, string | number | undefined>)}`;
   const res = await fetch(url, options);
   const text = await res.text();
   try {
@@ -166,8 +166,8 @@ async function rawCall<T = unknown>(params: Record<string, unknown>): Promise<T>
   }
 }
 
-function fetchAndStore<T>(key: string, params: Record<string, unknown>): Promise<T> {
-  const p = rawCall<T>(params)
+function fetchAndStore<T>(key: string, params: Record<string, unknown>, base: string): Promise<T> {
+  const p = rawCall<T>(params, base)
     .then((data) => {
       cache.set(key, { data, ts: Date.now() });
       inflight.delete(key);
@@ -181,18 +181,19 @@ function fetchAndStore<T>(key: string, params: Record<string, unknown>): Promise
   return p;
 }
 
-async function call<T = unknown>(params: Record<string, unknown>, opts: { cache?: boolean } = {}): Promise<T> {
-  if (!opts.cache) return rawCall<T>(params);
-  const key = JSON.stringify(params);
+async function call<T = unknown>(params: Record<string, unknown>, opts: { cache?: boolean; tv?: boolean } = {}): Promise<T> {
+  const base = opts.tv ? TV_SCRIPT_URL : SCRIPT_URL;
+  if (!opts.cache) return rawCall<T>(params, base);
+  const key = (opts.tv ? "TV::" : "HUB::") + JSON.stringify(params);
   const hit = cache.get(key);
   const age = hit ? Date.now() - hit.ts : Infinity;
   if (hit && age < CACHE_FRESH) return hit.data as T;
   if (hit && age < CACHE_STALE) {
-    if (!inflight.has(key)) fetchAndStore<T>(key, params).catch(() => {});
+    if (!inflight.has(key)) fetchAndStore<T>(key, params, base).catch(() => {});
     return hit.data as T;
   }
   if (inflight.has(key)) return inflight.get(key)! as Promise<T>;
-  return fetchAndStore<T>(key, params);
+  return fetchAndStore<T>(key, params, base);
 }
 
 export function invalidateCache() {
