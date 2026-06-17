@@ -456,19 +456,33 @@ function RootInner() {
   return (
     <div className="min-h-screen flex flex-col bg-background pb-24" style={{ paddingTop: "calc(4rem + env(safe-area-inset-top))" }}>
       {/* Top Bar */}
-      <nav className="fixed top-0 inset-x-0 z-[60] bg-background/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 h-16 pt-[env(safe-area-inset-top)]" style={{ height: "calc(4rem + env(safe-area-inset-top))" }}>
-         <Link to="/" className="flex items-center gap-2" onClick={() => haptic.selection()}>
-            <img src={logoIcon} alt="Empire" className="size-8 rounded-lg object-contain" />
-            <span className="font-black italic uppercase tracking-tighter text-base">Empire Hub</span>
-         </Link>
-         <button 
-           onClick={() => { haptic.light(); setIsOpen(!isOpen); }}
-           aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
-           aria-expanded={isOpen}
-           className="min-h-11 min-w-11 -mr-2 grid place-items-center text-foreground active:scale-95 transition-transform"
-         >
-           {isOpen ? <X className="size-6 text-primary" /> : <Menu className="size-6" />}
-         </button>
+      <nav
+        className="fixed top-0 inset-x-0 z-[60] flex items-center justify-between px-5 sm:px-6 border-b border-white/[0.06] bg-gradient-to-b from-background/85 via-background/70 to-background/40 pt-[env(safe-area-inset-top)]"
+        style={{ height: "calc(4rem + env(safe-area-inset-top))", backdropFilter: "blur(28px) saturate(180%)" }}
+      >
+        {/* highlight superior */}
+        <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+        {/* glow do primário no rodapé */}
+        <span className="pointer-events-none absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+
+        <Link to="/" className="flex items-center gap-2.5 relative" onClick={() => haptic.selection()}>
+          <div className="relative">
+            <img src={logoIcon} alt="Empire" className="size-9 rounded-xl object-contain relative z-10" />
+            <span className="absolute inset-0 rounded-xl bg-primary/40 blur-lg opacity-60" />
+          </div>
+          <span className="font-black italic uppercase tracking-tighter text-base leading-none">
+            <span className="bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">Empire</span>
+            <span className="text-primary"> Hub</span>
+          </span>
+        </Link>
+        <button
+          onClick={() => { haptic.light(); setIsOpen(!isOpen); }}
+          aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
+          aria-expanded={isOpen}
+          className="relative size-11 -mr-1 grid place-items-center rounded-full border border-white/10 bg-white/[0.04] text-foreground active:scale-95 transition-all hover:bg-white/[0.08] hover:border-primary/30"
+        >
+          {isOpen ? <X className="size-5 text-primary" /> : <Menu className="size-5" />}
+        </button>
       </nav>
 
       {/* Hamburger Overlay Menu */}
