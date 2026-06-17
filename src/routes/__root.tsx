@@ -349,37 +349,44 @@ function BottomNav() {
   ];
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-40 border-t border-white/5 bg-background/90 backdrop-blur-xl"
+      className="fixed inset-x-0 z-40 pointer-events-none"
+      style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       role="navigation"
       aria-label="Navegação principal"
     >
-      <div className="mx-auto max-w-md flex items-stretch justify-around px-1 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        {items.map((it) => {
-          const active = pathname === it.to || (it.to !== "/" && pathname.startsWith(it.to));
-          const Icon = it.icon;
-          return (
-            <Link
-              key={it.to}
-              to={it.to}
-              search={it.search}
-              preload="intent"
-              onClick={() => haptic.selection()}
-              aria-label={it.label}
-              aria-current={active ? "page" : undefined}
-              className={`relative flex flex-col items-center justify-center gap-0.5 min-h-11 flex-1 rounded-2xl transition-colors ${
-                active ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              {active && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-primary" />
-              )}
-              <Icon className="size-[18px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
-              <span className={`text-[9px] font-bold uppercase tracking-tight ${active ? "opacity-100" : "opacity-80"}`}>
-                {it.label}
-              </span>
-            </Link>
-          );
-        })}
+      <div className="mx-auto w-fit max-w-[calc(100%-1rem)] pointer-events-auto">
+        <div
+          className="relative flex items-stretch gap-0.5 rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-1 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)]"
+          style={{ backdropFilter: "blur(28px) saturate(180%)" }}
+        >
+          {/* Glow gradient interno */}
+          <span className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/[0.06] to-transparent" />
+          {items.map((it) => {
+            const active = pathname === it.to || (it.to !== "/" && pathname.startsWith(it.to));
+            const Icon = it.icon;
+            return (
+              <Link
+                key={it.to}
+                to={it.to}
+                search={it.search}
+                preload="intent"
+                onClick={() => haptic.selection()}
+                aria-label={it.label}
+                aria-current={active ? "page" : undefined}
+                className={`relative flex flex-col items-center justify-center gap-0.5 h-12 w-14 rounded-full transition-all ${
+                  active
+                    ? "text-primary-foreground bg-primary shadow-[0_8px_24px_-6px_rgba(var(--primary-rgb),0.7)]"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                }`}
+              >
+                <Icon className="size-[18px]" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
+                <span className="text-[9px] font-bold uppercase tracking-tight leading-none">
+                  {it.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
@@ -449,19 +456,33 @@ function RootInner() {
   return (
     <div className="min-h-screen flex flex-col bg-background pb-24" style={{ paddingTop: "calc(4rem + env(safe-area-inset-top))" }}>
       {/* Top Bar */}
-      <nav className="fixed top-0 inset-x-0 z-[60] bg-background/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-6 h-16 pt-[env(safe-area-inset-top)]" style={{ height: "calc(4rem + env(safe-area-inset-top))" }}>
-         <Link to="/" className="flex items-center gap-2" onClick={() => haptic.selection()}>
-            <img src={logoIcon} alt="Empire" className="size-8 rounded-lg object-contain" />
-            <span className="font-black italic uppercase tracking-tighter text-base">Empire Hub</span>
-         </Link>
-         <button 
-           onClick={() => { haptic.light(); setIsOpen(!isOpen); }}
-           aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
-           aria-expanded={isOpen}
-           className="min-h-11 min-w-11 -mr-2 grid place-items-center text-foreground active:scale-95 transition-transform"
-         >
-           {isOpen ? <X className="size-6 text-primary" /> : <Menu className="size-6" />}
-         </button>
+      <nav
+        className="fixed top-0 inset-x-0 z-[60] flex items-center justify-between px-5 sm:px-6 border-b border-white/[0.06] bg-gradient-to-b from-background/85 via-background/70 to-background/40 pt-[env(safe-area-inset-top)]"
+        style={{ height: "calc(4rem + env(safe-area-inset-top))", backdropFilter: "blur(28px) saturate(180%)" }}
+      >
+        {/* highlight superior */}
+        <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+        {/* glow do primário no rodapé */}
+        <span className="pointer-events-none absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+
+        <Link to="/" className="flex items-center gap-2.5 relative" onClick={() => haptic.selection()}>
+          <div className="relative">
+            <img src={logoIcon} alt="Empire" className="size-9 rounded-xl object-contain relative z-10" />
+            <span className="absolute inset-0 rounded-xl bg-primary/40 blur-lg opacity-60" />
+          </div>
+          <span className="font-black italic uppercase tracking-tighter text-base leading-none">
+            <span className="bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">Empire</span>
+            <span className="text-primary"> Hub</span>
+          </span>
+        </Link>
+        <button
+          onClick={() => { haptic.light(); setIsOpen(!isOpen); }}
+          aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
+          aria-expanded={isOpen}
+          className="relative size-11 -mr-1 grid place-items-center rounded-full border border-white/10 bg-white/[0.04] text-foreground active:scale-95 transition-all hover:bg-white/[0.08] hover:border-primary/30"
+        >
+          {isOpen ? <X className="size-5 text-primary" /> : <Menu className="size-5" />}
+        </button>
       </nav>
 
       {/* Hamburger Overlay Menu */}
