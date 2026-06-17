@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Send, Radio, Users, Play, ArrowLeft, Calendar, MessageSquare, Info, Archive, ListVideo, Clock, X, Reply, Menu } from "lucide-react";
+import { Send, Radio, Users, Play, ArrowLeft, Calendar, MessageSquare, Info, Archive, ListVideo, Clock, X, Reply, Menu, ChevronLeft, ChevronRight } from "lucide-react";
 import logoIcon from "@/assets/logo-icon.png";
 import { useTelegramUser } from "@/lib/telegram";
 import { api, type ProgramaTV } from "@/lib/api";
@@ -315,40 +315,142 @@ function HomeTabView({
 function ProgramRow({ title, programas, onPlay, showSchedule, emptyText }: {
   title: string; programas: Programa[]; onPlay: (p: Programa) => void; showSchedule?: boolean; emptyText?: string;
 }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  const updateArrows = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 4);
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    updateArrows();
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateArrows, { passive: true });
+    const ro = new ResizeObserver(updateArrows);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", updateArrows); ro.disconnect(); };
+  }, [updateArrows, programas.length]);
+
+  const scrollBy = (dir: 1 | -1) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.85), behavior: "smooth" });
+  };
+
   return (
     <section>
       <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">{title}</h2>
       {programas.length === 0 ? (
         <div className="text-xs text-muted-foreground italic">{emptyText || "Em breve."}</div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x">
-          {programas.map((p) => (
-            <button key={p.id} onClick={() => onPlay(p)} className="snap-start shrink-0 w-64 group text-left">
-              <div className="relative aspect-video rounded-md overflow-hidden bg-muted">
-                {p.cover ? (
-                  <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-primary/20 to-muted" />
-                )}
-                {p.ao_vivo && (
-                  <span className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500 text-white text-[10px] font-bold">
-                    <Radio className="size-2.5" /> LIVE
-                  </span>
-                )}
-                {showSchedule && p.data_inicio && (
-                  <span className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px] font-semibold">
-                    <Calendar className="size-2.5" /> {p.data_inicio}
-                  </span>
-                )}
-              </div>
-              <div className="mt-2 text-sm font-semibold truncate">{p.titulo}</div>
-              <div className="text-xs text-muted-foreground truncate">{p.categoria}</div>
-            </button>
-          ))}
+        <div className="relative group/row -mx-1">
+          {/* fades nas bordas */}
+          <div className={`pointer-events-none absolute top-0 bottom-2 left-0 w-10 bg-gradient-to-r from-background to-transparent z-10 transition-opacity ${canLeft ? "opacity-100" : "opacity-0"}`} />
+          <div className={`pointer-events-none absolute top-0 bottom-2 right-0 w-10 bg-gradient-to-l from-background to-transparent z-10 transition-opacity ${canRight ? "opacity-100" : "opacity-0"}`} />
+
+          {/* seta esquerda */}
+          <button
+            type="button"
+            onClick={() => scrollBy(-1)}
+            aria-label="Anterior"
+            className={`hidden sm:flex absolute left-1 top-1/2 -translate-y-1/2 z-20 size-9 rounded-full items-center justify-center border border-white/10 bg-background/60 backdrop-blur-md text-foreground shadow-lg transition-all ${canLeft ? "opacity-0 group-hover/row:opacity-100" : "opacity-0 pointer-events-none"} hover:bg-background/80 hover:scale-105`}
+          >
+            <ChevronLeft className="size-5" />
+          </button>
+          {/* seta direita */}
+          <button
+            type="button"
+            onClick={() => scrollBy(1)}
+            aria-label="Próximo"
+            className={`hidden sm:flex absolute right-1 top-1/2 -translate-y-1/2 z-20 size-9 rounded-full items-center justify-center border border-white/10 bg-background/60 backdrop-blur-md text-foreground shadow-lg transition-all ${canRight ? "opacity-0 group-hover/row:opacity-100" : "opacity-0 pointer-events-none"} hover:bg-background/80 hover:scale-105`}
+          >
+            <ChevronRight className="size-5" />
+          </button>
+
+          <div
+            ref={scrollerRef}
+            className="flex gap-3 overflow-x-auto pb-2 px-1 snap-x scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {programas.map((p) => (
+              <button key={p.id} onClick={() => onPlay(p)} className="snap-start shrink-0 w-64 group text-left">
+                <div className="relative aspect-video rounded-md overflow-hidden bg-muted">
+                  {p.cover ? (
+                    <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-primary/20 to-muted" />
+                  )}
+                  {p.ao_vivo && (
+                    <span className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500 text-white text-[10px] font-bold">
+                      <Radio className="size-2.5" /> LIVE
+                    </span>
+                  )}
+                  {showSchedule && p.data_inicio && (
+                    <span className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px] font-semibold">
+                      <Calendar className="size-2.5" /> {p.data_inicio}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 text-sm font-semibold truncate">{p.titulo}</div>
+                <div className="text-xs text-muted-foreground truncate">{p.categoria}</div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </section>
   );
+}
+
+// Converte stream_url da planilha em URL embeddável quando possível.
+// - Kick canal (kick.com/<canal>): só embeda se ao_vivo, via player.kick.com
+// - YouTube watch/short: converte para youtube.com/embed
+// - URLs já embeddáveis (player.kick.com, youtube.com/embed, vimeo player, iframe): usa como está
+// - Telegram (t.me/...) ou nada: sem embed
+function resolveStreamEmbed(url: string | undefined, aoVivo: boolean): string | null {
+  if (!url) return null;
+  const u = url.trim();
+  if (!u) return null;
+  try {
+    const parsed = new URL(u);
+    const host = parsed.hostname.replace(/^www\./, "");
+
+    if (host === "t.me" || host === "telegram.me") return null;
+
+    if (host === "player.kick.com") return u;
+    if (host === "kick.com") {
+      const seg = parsed.pathname.split("/").filter(Boolean);
+      if (seg.length === 1 && aoVivo) return `https://player.kick.com/${seg[0]}`;
+      return null; // canal offline ou rota não-embeddável
+    }
+
+    if (host === "youtu.be") {
+      const id = parsed.pathname.slice(1);
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    if (host.endsWith("youtube.com")) {
+      if (parsed.pathname === "/watch") {
+        const id = parsed.searchParams.get("v");
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      if (parsed.pathname.startsWith("/embed/") || parsed.pathname.startsWith("/live/")) return u;
+      return null;
+    }
+
+    if (host.includes("vimeo.com")) {
+      if (host === "player.vimeo.com") return u;
+      const id = parsed.pathname.split("/").filter(Boolean).pop();
+      return id && /^\d+$/.test(id) ? `https://player.vimeo.com/video/${id}` : null;
+    }
+
+    return u; // assume embeddável
+  } catch {
+    return null;
+  }
 }
 
 function GradeFull({ programas, onPlay, loading }: { programas: Programa[]; onPlay: (p: Programa) => void; loading: boolean }) {
@@ -490,20 +592,26 @@ function WatchView({ programa, onBack }: { programa: Programa; onBack: () => voi
         </div>
 
         <div className="w-full bg-black" style={{ aspectRatio: "16 / 9" }}>
-          {programa.stream_url ? (
-            <iframe
-              src={programa.stream_url}
-              title={programa.titulo}
-              className="w-full h-full border-0 block"
-              allow="autoplay; camera; microphone; fullscreen; encrypted-media; picture-in-picture"
-              allowFullScreen
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
-              Sem URL de transmissão.
-            </div>
-          )}
+          {(() => {
+            const embed = resolveStreamEmbed(programa.stream_url, !!programa.ao_vivo);
+            if (embed) {
+              return (
+                <iframe
+                  src={embed}
+                  title={programa.titulo}
+                  className="w-full h-full border-0 block"
+                  allow="autoplay; camera; microphone; fullscreen; encrypted-media; picture-in-picture"
+                  allowFullScreen
+                  loading="lazy"
+                />
+              );
+            }
+            return (
+              <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
+                Sem vídeo.
+              </div>
+            );
+          })()}
         </div>
 
         <div className="lg:hidden px-4 py-3 border-b border-border/60">
