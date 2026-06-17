@@ -592,20 +592,26 @@ function WatchView({ programa, onBack }: { programa: Programa; onBack: () => voi
         </div>
 
         <div className="w-full bg-black" style={{ aspectRatio: "16 / 9" }}>
-          {programa.stream_url ? (
-            <iframe
-              src={programa.stream_url}
-              title={programa.titulo}
-              className="w-full h-full border-0 block"
-              allow="autoplay; camera; microphone; fullscreen; encrypted-media; picture-in-picture"
-              allowFullScreen
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
-              Sem URL de transmissão.
-            </div>
-          )}
+          {(() => {
+            const embed = resolveStreamEmbed(programa.stream_url, !!programa.ao_vivo);
+            if (embed) {
+              return (
+                <iframe
+                  src={embed}
+                  title={programa.titulo}
+                  className="w-full h-full border-0 block"
+                  allow="autoplay; camera; microphone; fullscreen; encrypted-media; picture-in-picture"
+                  allowFullScreen
+                  loading="lazy"
+                />
+              );
+            }
+            return (
+              <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
+                Sem vídeo.
+              </div>
+            );
+          })()}
         </div>
 
         <div className="lg:hidden px-4 py-3 border-b border-border/60">
