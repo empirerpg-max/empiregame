@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Send, Radio, Users, Play, ArrowLeft, Calendar, MessageSquare, Info, Archive, ListVideo, Clock, X, Reply } from "lucide-react";
+import { Send, Radio, Users, Play, ArrowLeft, Calendar, MessageSquare, Info, Archive, ListVideo, Clock, X, Reply, Menu } from "lucide-react";
 import logoIcon from "@/assets/logo-icon.png";
 import { useTelegramUser } from "@/lib/telegram";
 import { api, type ProgramaTV } from "@/lib/api";
@@ -128,40 +128,114 @@ function BrowseView({ programas, loading, onPlay }: { programas: Programa[]; loa
   ];
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center gap-1 px-3 h-11 border-b border-border/60 shrink-0 overflow-x-auto bg-background/95 backdrop-blur">
-        <img src={logoIcon} alt="Empire" className="size-6 rounded object-contain mr-1" />
-        <span className="text-xs uppercase tracking-[0.18em] font-bold text-muted-foreground mr-2">Empire TV</span>
-        <div className="ml-auto flex items-center gap-1">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button key={t.id} onClick={() => setTab(t.id)} className={`h-8 px-2.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition ${active ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
-                <Icon className="size-3.5" /> {t.label}
-              </button>
-            );
-          })}
+    <div className="h-full flex">
+      {/* Rail lateral estilo Twitch */}
+      <TwitchRail tabs={tabs} active={tab} onChange={setTab} aoVivo={aoVivo} onPlay={onPlay} />
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 overflow-y-auto">
+          {tab === "home" && (
+            <HomeTabView
+              loading={loading}
+              featured={featured}
+              featuredKind={featuredKind}
+              aoVivo={aoVivo}
+              futuros={futuros}
+              finalizados={finalizados}
+              porCategoria={porCategoria}
+              onPlay={onPlay}
+            />
+          )}
+          {tab === "grade" && <GradeFull programas={futuros} onPlay={onPlay} loading={loading} />}
+          {tab === "arquivo" && <ArquivoFull finalizados={finalizados} loading={loading} />}
         </div>
       </div>
-
-      <div className="flex-1 overflow-y-auto">
-        {tab === "home" && (
-          <HomeTabView
-            loading={loading}
-            featured={featured}
-            featuredKind={featuredKind}
-            aoVivo={aoVivo}
-            futuros={futuros}
-            finalizados={finalizados}
-            porCategoria={porCategoria}
-            onPlay={onPlay}
-          />
-        )}
-        {tab === "grade" && <GradeFull programas={futuros} onPlay={onPlay} loading={loading} />}
-        {tab === "arquivo" && <ArquivoFull finalizados={finalizados} loading={loading} />}
-      </div>
     </div>
+  );
+}
+
+function TwitchRail({
+  tabs, active, onChange, aoVivo, onPlay,
+}: {
+  tabs: { id: HomeTab; label: string; icon: typeof MessageSquare }[];
+  active: HomeTab;
+  onChange: (id: HomeTab) => void;
+  aoVivo: Programa[];
+  onPlay: (p: Programa) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <aside
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+      className={`h-full shrink-0 border-r border-border/60 bg-background/95 backdrop-blur flex flex-col transition-[width] duration-200 ease-out ${expanded ? "w-56" : "w-14"}`}
+    >
+      <div className="h-12 flex items-center gap-2 px-3 border-b border-border/60 shrink-0">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="size-8 rounded-md hover:bg-muted flex items-center justify-center shrink-0"
+          aria-label={expanded ? "Recolher menu" : "Expandir menu"}
+        >
+          {expanded ? <X className="size-4" /> : <Menu className="size-4" />}
+        </button>
+        {expanded && <span className="text-[11px] uppercase tracking-[0.18em] font-black text-muted-foreground truncate">Empire TV</span>}
+      </div>
+
+      <nav className="py-2 flex flex-col gap-0.5">
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          const isActive = active === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => onChange(t.id)}
+              title={t.label}
+              className={`mx-1 h-10 rounded-md flex items-center gap-3 px-2.5 text-sm font-semibold transition relative ${
+                isActive ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {isActive && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-primary" />}
+              <Icon className="size-[18px] shrink-0" />
+              {expanded && <span className="truncate">{t.label}</span>}
+            </button>
+          );
+        })}
+      </nav>
+
+      {aoVivo.length > 0 && (
+        <div className="mt-3 border-t border-border/60 pt-3 flex-1 overflow-y-auto">
+          {expanded && (
+            <div className="px-3 mb-2 text-[10px] uppercase tracking-widest font-black text-muted-foreground flex items-center gap-1.5">
+              <Radio className="size-3 text-red-400 animate-pulse" /> No ar
+            </div>
+          )}
+          <div className="flex flex-col gap-0.5">
+            {aoVivo.slice(0, 8).map((p) => (
+              <button
+                key={p.id}
+                onClick={() => onPlay(p)}
+                title={p.titulo}
+                className="mx-1 h-10 rounded-md flex items-center gap-3 px-1.5 hover:bg-muted text-left transition"
+              >
+                <div className="size-7 rounded-full overflow-hidden bg-muted shrink-0 grid place-items-center">
+                  {p.cover ? (
+                    <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover" />
+                  ) : (
+                    <Radio className="size-3 text-muted-foreground" />
+                  )}
+                </div>
+                {expanded && (
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold truncate">{p.titulo}</div>
+                    <div className="text-[10px] text-red-400 flex items-center gap-1"><span className="size-1.5 rounded-full bg-red-500 animate-pulse" /> ao vivo</div>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </aside>
   );
 }
 
