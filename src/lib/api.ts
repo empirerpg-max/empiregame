@@ -387,7 +387,7 @@ export const api = {
 
   // ---- Empire TV ----
   async listarProgramasTV(): Promise<ProgramaTV[]> {
-    const r = await call<Record<string, unknown>[]>({ acao: "listar_programas_tv" }, { cache: true });
+    const r = await call<Record<string, unknown>[]>({ acao: "listar_programas_tv" }, { cache: true, tv: true });
     if (!Array.isArray(r)) return [];
     return r.map((x) => ({
       id: String(x.id || x.titulo || Math.random().toString(36).slice(2)),
@@ -405,10 +405,10 @@ export const api = {
   async registrarPresencaTV(p: {
     programa_id: string; telegram_id: string; nome: string; watched_seconds: number;
   }): Promise<CommonResponse> {
-    return call<CommonResponse>({ acao: "registrar_presenca_tv", ...p, watched_seconds: String(p.watched_seconds) });
+    return call<CommonResponse>({ acao: "registrar_presenca_tv", ...p, watched_seconds: String(p.watched_seconds) }, { tv: true });
   },
   async listarPresencaTV(programa_id: string): Promise<Array<{ telegram_id: string; nome: string; watched_seconds: number; percentual: number }>> {
-    const r = await call<any[]>({ acao: "listar_presenca_tv", programa_id });
+    const r = await call<any[]>({ acao: "listar_presenca_tv", programa_id }, { tv: true });
     return Array.isArray(r) ? r.map((x) => ({
       telegram_id: String(x.telegram_id || ""),
       nome: String(x.nome || "Anônimo"),
@@ -422,10 +422,10 @@ export const api = {
       sala: p.programa_id,
       total_msgs: String(p.total_msgs),
       json: JSON.stringify(p.mensagens),
-    });
+    }, { tv: true });
   },
   async listarArquivoTV(): Promise<Array<{ data: string; hora: string; sala: string; total_msgs: number }>> {
-    const r = await call<any[]>({ acao: "listar_arquivo_tv" }, { cache: true });
+    const r = await call<any[]>({ acao: "listar_arquivo_tv" }, { cache: true, tv: true });
     return Array.isArray(r) ? r.map((x) => ({
       data: String(x.data || ""),
       hora: String(x.hora || ""),
