@@ -18,7 +18,7 @@ export const Route = createFileRoute("/tv")({
   component: TvPage,
 });
 
-const CHAT_STORAGE_KEY = "empire_tv_chat_v1";
+
 
 type Programa = ProgramaTV;
 
@@ -267,39 +267,51 @@ function TwitchRail({
         })}
       </nav>
 
-      {aoVivo.length > 0 && (
-        <div className="mt-3 border-t border-border/60 pt-3 flex-1 overflow-y-auto">
-          {expanded && (
-            <div className="px-3 mb-2 text-[10px] uppercase tracking-widest font-black text-muted-foreground flex items-center gap-1.5">
-              <Radio className="size-3 text-red-400 animate-pulse" /> No ar
-            </div>
-          )}
-          <div className="flex flex-col gap-0.5">
-            {aoVivo.slice(0, 8).map((p) => (
-              <button
-                key={p.id}
-                onClick={() => onPlay(p)}
-                title={p.titulo}
-                className="mx-1 h-10 rounded-md flex items-center gap-3 px-1.5 hover:bg-muted text-left transition"
-              >
-                <div className="size-7 rounded-full overflow-hidden bg-muted shrink-0 grid place-items-center">
-                  {p.cover ? (
-                    <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover" />
-                  ) : (
-                    <Radio className="size-3 text-muted-foreground" />
-                  )}
-                </div>
-                {expanded && (
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold truncate">{p.titulo}</div>
-                    <div className="text-[10px] text-red-400 flex items-center gap-1"><span className="size-1.5 rounded-full bg-red-500 animate-pulse" /> ao vivo</div>
+      {(() => {
+        // dedup por canal Kick — uma transmissão = um ícone no rail
+        const seen = new Set<string>();
+        const uniqueLive: Programa[] = [];
+        for (const p of aoVivo) {
+          const slug = kickChannelFromUrl(p.stream_url) || `id:${p.id}`;
+          if (seen.has(slug)) continue;
+          seen.add(slug);
+          uniqueLive.push(p);
+        }
+        if (uniqueLive.length === 0) return null;
+        return (
+          <div className="mt-3 border-t border-border/60 pt-3 flex-1 overflow-y-auto">
+            {expanded && (
+              <div className="px-3 mb-2 text-[10px] uppercase tracking-widest font-black text-muted-foreground flex items-center gap-1.5">
+                <Radio className="size-3 text-red-400 animate-pulse" /> No ar
+              </div>
+            )}
+            <div className="flex flex-col gap-0.5">
+              {uniqueLive.slice(0, 8).map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => onPlay(p)}
+                  title={p.titulo}
+                  className="mx-1 h-10 rounded-md flex items-center gap-3 px-1.5 hover:bg-muted text-left transition"
+                >
+                  <div className="size-7 rounded-full overflow-hidden bg-muted shrink-0 grid place-items-center">
+                    {p.cover ? (
+                      <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover" />
+                    ) : (
+                      <Radio className="size-3 text-muted-foreground" />
+                    )}
                   </div>
-                )}
-              </button>
-            ))}
+                  {expanded && (
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold truncate">{p.titulo}</div>
+                      <div className="text-[10px] text-red-400 flex items-center gap-1"><span className="size-1.5 rounded-full bg-red-500 animate-pulse" /> ao vivo</div>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </aside>
   );
 }
@@ -718,67 +730,114 @@ function WatchView({ programa, onBack }: { programa: Programa; onBack: () => voi
   );
 }
 
-// ---------- Chat (com reply) ----------
+// ---------- Chat (realtime via Lovable Cloud) ----------
 function ChatPanel({ programaId }: { programaId: string }) {
   const { user } = useTelegramUser();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [sending, setSending] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const displayName = user?.name || "Anônimo";
-  const storageKey = `${CHAT_STORAGE_KEY}_${programaId}`;
-  const lastSavedCount = useRef(0);
 
+  // Histórico inicial + subscrição realtime
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) setMessages(JSON.parse(raw));
-      else setMessages([]);
-    } catch { /* ignore */ }
-  }, [storageKey]);
+    let alive = true;
+    setMessages([]);
 
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase
+        .from("tv_chat_messages")
+        .select("id,user_name,text,reply_to,created_at")
+        .eq("programa_id", programaId)
+        .order("created_at", { ascending: true })
+        .limit(300);
+      if (!alive || !data) return;
+      setMessages(
+        data.map((r: any) => ({
+          id: r.id,
+          user: r.user_name,
+          text: r.text,
+          ts: new Date(r.created_at).getTime(),
+          color: colorFor(r.user_name),
+          reply_to: r.reply_to || undefined,
+        }))
+      );
+    })();
+
+    let channel: any;
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      channel = supabase
+        .channel(`tv_chat_${programaId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "tv_chat_messages", filter: `programa_id=eq.${programaId}` },
+          (payload: any) => {
+            const r = payload.new;
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === r.id)) return prev;
+              return [
+                ...prev,
+                {
+                  id: r.id,
+                  user: r.user_name,
+                  text: r.text,
+                  ts: new Date(r.created_at).getTime(),
+                  color: colorFor(r.user_name),
+                  reply_to: r.reply_to || undefined,
+                },
+              ];
+            });
+          }
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      alive = false;
+      (async () => {
+        if (!channel) return;
+        const { supabase } = await import("@/integrations/supabase/client");
+        supabase.removeChannel(channel);
+      })();
+    };
+  }, [programaId]);
+
+  // auto-scroll
   useEffect(() => {
-    try { localStorage.setItem(storageKey, JSON.stringify(messages.slice(-200))); } catch { /* ignore */ }
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, storageKey]);
-
-  const flush = useCallback(() => {
-    if (messages.length === 0 || messages.length === lastSavedCount.current) return;
-    lastSavedCount.current = messages.length;
-    api.salvarChatTV({
-      programa_id: programaId,
-      total_msgs: messages.length,
-      mensagens: messages.map((m) => ({ user: m.user, text: m.text, ts: m.ts, reply_to: m.reply_to })),
-    }).catch(() => {});
-  }, [messages, programaId]);
-
-  useEffect(() => {
-    if (messages.length - lastSavedCount.current >= 10) flush();
-  }, [messages, flush]);
-
-  useEffect(() => () => { flush(); }, [flush]);
+  }, [messages]);
 
   const startReply = (m: ChatMessage) => {
     setReplyTo(m);
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  const send = () => {
+  const send = async () => {
     const t = text.trim();
-    if (!t) return;
-    const msg: ChatMessage = {
-      id: Math.random().toString(36).slice(2),
-      user: displayName,
-      text: t.slice(0, 300),
-      ts: Date.now(),
-      color: colorFor(displayName),
-      reply_to: replyTo ? { id: replyTo.id, user: replyTo.user, text: replyTo.text.slice(0, 80) } : undefined,
+    if (!t || sending) return;
+    setSending(true);
+    const payload = {
+      programa_id: programaId,
+      user_name: displayName.slice(0, 60),
+      text: t.slice(0, 500),
+      reply_to: replyTo ? { id: replyTo.id, user: replyTo.user, text: replyTo.text.slice(0, 80) } : null,
     };
-    setMessages((m) => [...m, msg]);
     setText("");
     setReplyTo(null);
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      await supabase.from("tv_chat_messages").insert(payload);
+    } catch {
+      // restaura texto se falhar
+      setText(t);
+    } finally {
+      setSending(false);
+    }
   };
 
   const scrollToMsg = (id: string) => {
