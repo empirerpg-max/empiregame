@@ -18,7 +18,7 @@ export const Route = createFileRoute("/tv")({
   component: TvPage,
 });
 
-const CHAT_STORAGE_KEY = "empire_tv_chat_v1";
+
 
 type Programa = ProgramaTV;
 
