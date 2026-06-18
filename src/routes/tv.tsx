@@ -718,67 +718,114 @@ function WatchView({ programa, onBack }: { programa: Programa; onBack: () => voi
   );
 }
 
-// ---------- Chat (com reply) ----------
+// ---------- Chat (realtime via Lovable Cloud) ----------
 function ChatPanel({ programaId }: { programaId: string }) {
   const { user } = useTelegramUser();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [sending, setSending] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const displayName = user?.name || "Anônimo";
-  const storageKey = `${CHAT_STORAGE_KEY}_${programaId}`;
-  const lastSavedCount = useRef(0);
 
+  // Histórico inicial + subscrição realtime
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) setMessages(JSON.parse(raw));
-      else setMessages([]);
-    } catch { /* ignore */ }
-  }, [storageKey]);
+    let alive = true;
+    setMessages([]);
 
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase
+        .from("tv_chat_messages")
+        .select("id,user_name,text,reply_to,created_at")
+        .eq("programa_id", programaId)
+        .order("created_at", { ascending: true })
+        .limit(300);
+      if (!alive || !data) return;
+      setMessages(
+        data.map((r: any) => ({
+          id: r.id,
+          user: r.user_name,
+          text: r.text,
+          ts: new Date(r.created_at).getTime(),
+          color: colorFor(r.user_name),
+          reply_to: r.reply_to || undefined,
+        }))
+      );
+    })();
+
+    let channel: any;
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      channel = supabase
+        .channel(`tv_chat_${programaId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "tv_chat_messages", filter: `programa_id=eq.${programaId}` },
+          (payload: any) => {
+            const r = payload.new;
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === r.id)) return prev;
+              return [
+                ...prev,
+                {
+                  id: r.id,
+                  user: r.user_name,
+                  text: r.text,
+                  ts: new Date(r.created_at).getTime(),
+                  color: colorFor(r.user_name),
+                  reply_to: r.reply_to || undefined,
+                },
+              ];
+            });
+          }
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      alive = false;
+      (async () => {
+        if (!channel) return;
+        const { supabase } = await import("@/integrations/supabase/client");
+        supabase.removeChannel(channel);
+      })();
+    };
+  }, [programaId]);
+
+  // auto-scroll
   useEffect(() => {
-    try { localStorage.setItem(storageKey, JSON.stringify(messages.slice(-200))); } catch { /* ignore */ }
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, storageKey]);
-
-  const flush = useCallback(() => {
-    if (messages.length === 0 || messages.length === lastSavedCount.current) return;
-    lastSavedCount.current = messages.length;
-    api.salvarChatTV({
-      programa_id: programaId,
-      total_msgs: messages.length,
-      mensagens: messages.map((m) => ({ user: m.user, text: m.text, ts: m.ts, reply_to: m.reply_to })),
-    }).catch(() => {});
-  }, [messages, programaId]);
-
-  useEffect(() => {
-    if (messages.length - lastSavedCount.current >= 10) flush();
-  }, [messages, flush]);
-
-  useEffect(() => () => { flush(); }, [flush]);
+  }, [messages]);
 
   const startReply = (m: ChatMessage) => {
     setReplyTo(m);
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  const send = () => {
+  const send = async () => {
     const t = text.trim();
-    if (!t) return;
-    const msg: ChatMessage = {
-      id: Math.random().toString(36).slice(2),
-      user: displayName,
-      text: t.slice(0, 300),
-      ts: Date.now(),
-      color: colorFor(displayName),
-      reply_to: replyTo ? { id: replyTo.id, user: replyTo.user, text: replyTo.text.slice(0, 80) } : undefined,
+    if (!t || sending) return;
+    setSending(true);
+    const payload = {
+      programa_id: programaId,
+      user_name: displayName.slice(0, 60),
+      text: t.slice(0, 500),
+      reply_to: replyTo ? { id: replyTo.id, user: replyTo.user, text: replyTo.text.slice(0, 80) } : null,
     };
-    setMessages((m) => [...m, msg]);
     setText("");
     setReplyTo(null);
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      await supabase.from("tv_chat_messages").insert(payload);
+    } catch {
+      // restaura texto se falhar
+      setText(t);
+    } finally {
+      setSending(false);
+    }
   };
 
   const scrollToMsg = (id: string) => {
