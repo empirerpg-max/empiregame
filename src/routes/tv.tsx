@@ -267,39 +267,51 @@ function TwitchRail({
         })}
       </nav>
 
-      {aoVivo.length > 0 && (
-        <div className="mt-3 border-t border-border/60 pt-3 flex-1 overflow-y-auto">
-          {expanded && (
-            <div className="px-3 mb-2 text-[10px] uppercase tracking-widest font-black text-muted-foreground flex items-center gap-1.5">
-              <Radio className="size-3 text-red-400 animate-pulse" /> No ar
-            </div>
-          )}
-          <div className="flex flex-col gap-0.5">
-            {aoVivo.slice(0, 8).map((p) => (
-              <button
-                key={p.id}
-                onClick={() => onPlay(p)}
-                title={p.titulo}
-                className="mx-1 h-10 rounded-md flex items-center gap-3 px-1.5 hover:bg-muted text-left transition"
-              >
-                <div className="size-7 rounded-full overflow-hidden bg-muted shrink-0 grid place-items-center">
-                  {p.cover ? (
-                    <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover" />
-                  ) : (
-                    <Radio className="size-3 text-muted-foreground" />
-                  )}
-                </div>
-                {expanded && (
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold truncate">{p.titulo}</div>
-                    <div className="text-[10px] text-red-400 flex items-center gap-1"><span className="size-1.5 rounded-full bg-red-500 animate-pulse" /> ao vivo</div>
+      {(() => {
+        // dedup por canal Kick — uma transmissão = um ícone no rail
+        const seen = new Set<string>();
+        const uniqueLive: Programa[] = [];
+        for (const p of aoVivo) {
+          const slug = kickChannelFromUrl(p.stream_url) || `id:${p.id}`;
+          if (seen.has(slug)) continue;
+          seen.add(slug);
+          uniqueLive.push(p);
+        }
+        if (uniqueLive.length === 0) return null;
+        return (
+          <div className="mt-3 border-t border-border/60 pt-3 flex-1 overflow-y-auto">
+            {expanded && (
+              <div className="px-3 mb-2 text-[10px] uppercase tracking-widest font-black text-muted-foreground flex items-center gap-1.5">
+                <Radio className="size-3 text-red-400 animate-pulse" /> No ar
+              </div>
+            )}
+            <div className="flex flex-col gap-0.5">
+              {uniqueLive.slice(0, 8).map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => onPlay(p)}
+                  title={p.titulo}
+                  className="mx-1 h-10 rounded-md flex items-center gap-3 px-1.5 hover:bg-muted text-left transition"
+                >
+                  <div className="size-7 rounded-full overflow-hidden bg-muted shrink-0 grid place-items-center">
+                    {p.cover ? (
+                      <img src={p.cover} alt={p.titulo} className="w-full h-full object-cover" />
+                    ) : (
+                      <Radio className="size-3 text-muted-foreground" />
+                    )}
                   </div>
-                )}
-              </button>
-            ))}
+                  {expanded && (
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold truncate">{p.titulo}</div>
+                      <div className="text-[10px] text-red-400 flex items-center gap-1"><span className="size-1.5 rounded-full bg-red-500 animate-pulse" /> ao vivo</div>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </aside>
   );
 }
