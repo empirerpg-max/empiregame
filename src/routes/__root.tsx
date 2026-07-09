@@ -341,7 +341,8 @@ function BottomNav() {
   const { pathname } = useLocation();
   const items = [
     { to: "/", label: "Hub", icon: Home },
-    { to: "/artistas", search: { filter: "mine" }, label: "Artistas", icon: Library },
+    // Artistas agora abre o diretório completo (filter=all)
+    { to: "/artistas", search: { filter: "all" }, label: "Artistas", icon: Library },
     { to: "/charts", label: "Charts", icon: TrendingUp },
     { to: "/ponto", label: "Ponto", icon: Target },
     { to: "/social", label: "Social", icon: Share2 },
