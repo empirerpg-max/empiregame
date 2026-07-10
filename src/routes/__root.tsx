@@ -36,12 +36,15 @@ import {
   Tv,
   Send,
   Target,
+  Music2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { useTelegramUser, haptic, useTelegramBackButton } from "@/lib/telegram";
 import { api, driveImg, type Artist } from "@/lib/api";
+import { PlayProvider } from "@/lib/playContext";
+import { MiniPlayer } from "@/components/MiniPlayer";
 
 function GlobalLinkModal({ onClose }: { onClose: () => void }) {
   const { user } = useTelegramUser();
@@ -397,7 +400,9 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <RootInner />
+      <PlayProvider>
+        <RootInner />
+      </PlayProvider>
     </QueryClientProvider>
   );
 }
@@ -547,6 +552,7 @@ function RootInner() {
                   title="Empire Extras" 
                   icon={Radio}
                   items={[
+                    { to: "/play", label: "Empire Play", icon: Music2 },
                     { to: "/bolsa", label: "Bolsa de Valores", icon: TrendingUp },
                     { to: "/radar", label: "Radar Feed", icon: Radio },
                     { to: "/filantropia", label: "Filantropia", icon: HandHeart },
@@ -636,6 +642,8 @@ function RootInner() {
 
       <RouteTransitionOverlay />
       <Outlet />
+      {/* MiniPlayer flutuante — renderiza acima da BottomNav (z-40 + bottom-16) */}
+      <MiniPlayer />
       <BottomNav />
       <Toaster position="top-center" richColors closeButton offset={80} />
     </div>
