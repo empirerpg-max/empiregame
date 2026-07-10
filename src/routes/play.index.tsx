@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")(({
+export const Route = createFileRoute("/play/")((({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -26,13 +26,13 @@ export const Route = createFileRoute("/play/")(({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-}));
+})));
 
 // ─── API URLs ──────────────────────────────────────────────────────────────────
 const API_URL =
   "https://script.google.com/macros/s/AKfycby1S1mIBXdj4hLqc9RYv1ZJjL7d5ct6to18FNPmpJn1KOnZrYCKJKPNe2LP0dPW-G8HOg/exec";
 
-// Planilha dos Charts (Spotify, Apple Music, YouTube)
+// Planilha dos Charts (abas: Top 50 Global / Top Songs / Top Videos)
 const CHARTS_SHEET_ID = "1ThRhljmAS41JmVBPkPtYwe0JQHRx9Pih2PQAPT2ebyA";
 // Planilha principal Empire Play (Musicas)
 const PLAY_SHEET_ID = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
@@ -44,6 +44,44 @@ const CHARTS_API = (aba: string) =>
 
 const PLAY_API = (aba: string) =>
   `https://sheets.googleapis.com/v4/spreadsheets/${PLAY_SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
+
+// ─── Configuração dos Charts ───────────────────────────────────────────────────
+//
+// Cada chart define:
+//   abasPossiveis: lista de nomes de aba a tentar (em ordem de prioridade).
+//                 O primeiro que retornar dados válidos é usado.
+//   nome:         nome exibido na UI (ex: "Spotify")
+//   subtitulo:    subtítulo exibido na UI (ex: "Top 50 Global")
+//   icone:        emoji
+//   cor:          classe de cor Tailwind
+//   isVideo:      true = categoria musicvideo; false = musica
+
+const CHARTS_CONFIG = [
+  {
+    abasPossiveis: ["Top 50 Global", "SPOTIFY", "Spotify", "TOP 50 GLOBAL"],
+    nome: "Spotify",
+    subtitulo: "Top 50 Global",
+    icone: "🟢",
+    cor: "text-green-400",
+    isVideo: false,
+  },
+  {
+    abasPossiveis: ["Top Songs", "APPLE MUSIC", "Apple Music", "TOP SONGS"],
+    nome: "Apple Music",
+    subtitulo: "Top Songs",
+    icone: "🎵",
+    cor: "text-red-400",
+    isVideo: false,
+  },
+  {
+    abasPossiveis: ["Top Videos", "YOUTUBE", "YouTube", "TOP VIDEOS"],
+    nome: "YouTube",
+    subtitulo: "Top Videos",
+    icone: "📹",
+    cor: "text-red-500",
+    isVideo: true,
+  },
+] as const;
 
 type Tab = "home" | "musicas" | "clipes" | "videos" | "forum";
 type SheetItem = Record<string, string>;
@@ -162,9 +200,26 @@ function sheetRowsToObjects(values: string[][]): SheetItem[] {
   });
 }
 
+// ─── fetchFirstValid ───────────────────────────────────────────────────────────
+// Tenta cada aba na ordem; retorna os values da primeira que tiver dados.
+async function fetchFirstValid(abas: readonly string[]): Promise<string[][]> {
+  for (const aba of abas) {
+    try {
+      const res = await fetch(CHARTS_API(aba));
+      if (!res.ok) continue;
+      const json = await res.json();
+      const values: string[][] = json.values || [];
+      if (values.length > 1) return values; // tem dados além do header
+    } catch {
+      // tenta próxima aba
+    }
+  }
+  return [];
+}
+
 // ─── Lógica de charts — mapeamento real das colunas ───────────────────────────
 //
-// Planilha Charts (abas SPOTIFY / APPLE MUSIC / YOUTUBE) — linha 0 = header:
+// Planilha Charts (abas Top 50 Global / Top Songs / Top Videos) — linha 0 = header:
 //   col[0]  = CHART          (ignorado)
 //   col[1]  = DATA           → parseDate() para encontrar a mais recente
 //   col[2]  = POSIÇÃO        → parseInt()
@@ -177,15 +232,6 @@ function sheetRowsToObjects(values: string[][]): SheetItem[] {
 //   col[2]  = ID do arquivo  → audioSrc para o player
 //   col[3]  = Capa da música (fallback se chart não tiver capa)
 //   col[7]  = Nome da música → chave de cruzamento (norm)
-//
-// Fluxo:
-//   1. Pular linha 0 (header). Encontrar a data mais recente em col[1].
-//   2. Filtrar só as linhas dessa data.
-//   3. Para cada linha: ler posição (col[2]), título (col[3]), artista (col[6]),
-//      status (col[11]), capa (col[13]).
-//   4. Tentar cruzar título com col[7] da planilha Musicas para pegar audioSrc.
-//      Se não encontrar: entry aparece normalmente mas play fica desabilitado.
-//   5. Ordenar por posição crescente, retornar até 50.
 
 function processChart(
   chartValues: string[][],    // valores brutos da aba de chart (linha 0 = header)
@@ -934,24 +980,28 @@ export default function PlayHomePage() {
     }).catch(console.error);
   }, []);
 
-  // 3. Charts — aguarda rawMusicasValues estar pronto
+  // 3. Charts — aguarda rawMusicasValues; tenta cada aba em ordem de prioridade
   useEffect(() => {
     if (!rawMusicasValues.length) return;
 
-    Promise.all([
-      fetch(CHARTS_API("SPOTIFY")).then((r) => r.json()).catch(() => ({ values: [] })),
-      fetch(CHARTS_API("APPLE MUSIC")).then((r) => r.json()).catch(() => ({ values: [] })),
-      fetch(CHARTS_API("YOUTUBE")).then((r) => r.json()).catch(() => ({ values: [] })),
-    ]).then(([spotify, apple, youtube]) => {
-      const spotifyResult = processChart(spotify.values || [], rawMusicasValues, false);
-      const appleResult   = processChart(apple.values   || [], rawMusicasValues, false);
-      const youtubeResult = processChart(youtube.values || [], rawMusicasValues, true);
-
-      setCharts([
-        { nome: "Spotify",     subtitulo: "Top 50 Global", icone: "🟢", cor: "text-green-400", capaDaPlaylist: spotifyResult.capaDaPlaylist, entries: spotifyResult.entries },
-        { nome: "Apple Music", subtitulo: "Top Songs",     icone: "🎵", cor: "text-red-400",   capaDaPlaylist: appleResult.capaDaPlaylist,   entries: appleResult.entries   },
-        { nome: "YouTube",     subtitulo: "Top Videos",    icone: "📹", cor: "text-red-500",   capaDaPlaylist: youtubeResult.capaDaPlaylist, entries: youtubeResult.entries },
-      ]);
+    Promise.all(
+      CHARTS_CONFIG.map((cfg) => fetchFirstValid(cfg.abasPossiveis))
+    ).then((results) => {
+      const built: ChartData[] = results
+        .map((values, i) => {
+          const cfg = CHARTS_CONFIG[i];
+          const { entries, capaDaPlaylist } = processChart(values, rawMusicasValues, cfg.isVideo);
+          return {
+            nome: cfg.nome,
+            subtitulo: cfg.subtitulo,
+            icone: cfg.icone,
+            cor: cfg.cor,
+            capaDaPlaylist,
+            entries,
+          } as ChartData;
+        })
+        .filter((c) => c.entries.length > 0);
+      setCharts(built);
     }).catch(console.error).finally(() => setChartsLoading(false));
   }, [rawMusicasValues]);
 
