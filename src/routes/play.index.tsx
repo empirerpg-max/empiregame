@@ -3,18 +3,20 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import {
   Radio,
   Play,
-  TrendingUp,
   Music,
   Tv,
-  ListMusic,
   MessageSquare,
   Send,
   ChevronRight,
-  Star,
   Home,
-  Mic2,
   Clapperboard,
   ChevronLeft,
+  TrendingUp,
+  Sparkles,
+  ArrowUp,
+  ArrowDown,
+  Minus,
+  Star,
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
@@ -29,8 +31,20 @@ export const Route = createFileRoute("/play/")({
   }),
 });
 
+// ─── API URLs ──────────────────────────────────────────────────────────────────
 const API_URL =
   "https://script.google.com/macros/s/AKfycby1S1mIBXdj4hLqc9RYv1ZJjL7d5ct6to18FNPmpJn1KOnZrYCKJKPNe2LP0dPW-G8HOg/exec";
+
+// Planilha dos Charts (Spotify, Apple Music, YouTube)
+const CHARTS_SHEET_ID = "1ThRhljmAS41JmVBPkPtYwe0JQHRx9Pih2PQAPT2ebyA";
+// Planilha principal Empire Play (Musicas e Music Videos)
+const PLAY_SHEET_ID = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
+
+const CHARTS_API = (aba: string) =>
+  `https://sheets.googleapis.com/v4/spreadsheets/${CHARTS_SHEET_ID}/values/${encodeURIComponent(aba)}?key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
+
+const PLAY_API = (aba: string) =>
+  `https://sheets.googleapis.com/v4/spreadsheets/${PLAY_SHEET_ID}/values/${encodeURIComponent(aba)}?key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
 
 type Tab = "home" | "musicas" | "clipes" | "videos" | "forum";
 type SheetItem = Record<string, string>;
@@ -43,8 +57,26 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "forum",   label: "F\u00f3rum",   icon: MessageSquare },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Tipos dos Charts ──────────────────────────────────────────────────────────
+export type ChartEntry = {
+  posicao: number;
+  titulo: string;        // da planilha de charts
+  artistas: string;      // ARTISTA 1..5 concatenados
+  status: string;        // NEW / subida / queda / estabilidade
+  capa: string;          // coluna Capa
+  playItem?: PlayItem;   // preenchido se encontrado em Empire Play
+};
 
+export type ChartData = {
+  nome: string;
+  subtitulo: string;
+  icone: string;         // emoji
+  cor: string;           // cor tailwind para destaque
+  capaDaPlaylist: string;
+  entries: ChartEntry[];
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function norm(s: string) {
   return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 }
@@ -83,6 +115,23 @@ function parseDataLancamento(item: SheetItem): number {
   return isNaN(t) ? 0 : t;
 }
 
+function parseDate(s: string): number {
+  if (!s) return 0;
+  // aceita DD/MM/YYYY, YYYY-MM-DD, etc.
+  const parts = s.trim().split(/[\/\-.]/);
+  if (parts.length === 3) {
+    // DD/MM/YYYY
+    if (parts[0].length <= 2) {
+      const t = new Date(`${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`).getTime();
+      if (!isNaN(t)) return t;
+    }
+    // YYYY-MM-DD
+    const t2 = new Date(s).getTime();
+    if (!isNaN(t2)) return t2;
+  }
+  return new Date(s).getTime() || 0;
+}
+
 function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
   const idTopico = getField(m, "id_do_topico", "idtopico", "id_topico");
   const audioSrc = getField(m, "id_do_arquivo", "idarquivo", "id_arquivo", "arquivo", "link", "url");
@@ -101,8 +150,72 @@ function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
   };
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
+// Converte array de arrays (sheets API) em array de objetos
+function sheetRowsToObjects(values: string[][]): SheetItem[] {
+  if (!values || values.length < 2) return [];
+  const headers = values[0].map((h) => String(h).trim());
+  return values.slice(1).map((row) => {
+    const obj: SheetItem = {};
+    headers.forEach((h, i) => { obj[h] = String(row[i] ?? "").trim(); });
+    return obj;
+  });
+}
 
+// Processa planilha de chart e retorna top 50 da data mais recente
+function processChartSheet(rows: SheetItem[], playMusicas: SheetItem[], isMusicVideo = false): ChartEntry[] {
+  if (!rows.length) return [];
+
+  // 1. Encontrar a data mais recente
+  const dates = rows.map((r) => parseDate(getField(r, "DATA", "data")));
+  const maxDate = Math.max(...dates.filter(Boolean));
+
+  // 2. Filtrar apenas linhas da data mais recente
+  const recentes = rows.filter((r) => {
+    const d = parseDate(getField(r, "DATA", "data"));
+    return d === maxDate;
+  });
+
+  // 3. Pegar capa da playlist (coluna P / Capa da primeira linha do chart)
+  // (cada chart tem uma capa geral na coluna ÍCONES ou Capa)
+
+  // 4. Montar entries
+  return recentes
+    .map((r) => {
+      const posicao = parseInt(getField(r, "POSI\u00c7\u00c3O", "POSICAO", "posicao")) || 0;
+      const titulo = getField(r, "M\u00daSICA/ALBUM", "MUSICA/ALBUM", "musicaalbum", "musica", "album", "titulo");
+      const artistas = [
+        getField(r, "ARTISTA 1", "artista1"),
+        getField(r, "ARTISTA 2", "artista2"),
+        getField(r, "ARTISTA 3", "artista3"),
+        getField(r, "ARTISTA 4", "artista4"),
+        getField(r, "ARTISTA 5", "artista5"),
+      ].filter(Boolean).join(", ");
+      const status = getField(r, "Status", "STATUS", "status");
+      const capa = getField(r, "Capa", "CAPA", "capa");
+
+      // Buscar PlayItem correspondente
+      let playItem: PlayItem | undefined;
+      if (titulo) {
+        const normTitulo = norm(titulo);
+        const source = isMusicVideo ? playMusicas : playMusicas;
+        const found = source.find((m) => {
+          const nomeCampos = [
+            getField(m, "nome_da_musica", "nomedamusica", "nome", "titulo"),
+            getField(m, "tipo_de_clipe", "tipodeclipe", "tipo"),
+          ];
+          return nomeCampos.some((n) => n && norm(n) === normTitulo);
+        });
+        if (found) playItem = toPlayItem(found, isMusicVideo ? "musicvideo" : "musica");
+      }
+
+      return { posicao, titulo, artistas, status, capa, playItem };
+    })
+    .filter((e) => e.posicao > 0 && e.titulo)
+    .sort((a, b) => a.posicao - b.posicao)
+    .slice(0, 50);
+}
+
+// ─── Skeleton ────────────────────────────────────────────────────────────────
 function SkeletonGrid({ cols = 3, rows = 2 }: { cols?: number; rows?: number }) {
   return (
     <div className={`grid grid-cols-${cols} gap-3`}>
@@ -133,14 +246,31 @@ function SkeletonList({ rows = 4 }: { rows?: number }) {
   );
 }
 
-// ─── Card Components ──────────────────────────────────────────────────────────
+function SkeletonChartRow({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="space-y-1">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+          <div className="w-5 h-3 rounded-full bg-white/[0.04] animate-pulse" />
+          <div className="size-10 rounded-xl bg-white/[0.05] animate-pulse flex-shrink-0" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3 w-2/3 rounded-full bg-white/[0.04] animate-pulse" />
+            <div className="h-2 w-1/2 rounded-full bg-white/[0.03] animate-pulse" />
+          </div>
+          <div className="size-4 rounded-full bg-white/[0.03] animate-pulse" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
+// ─── Card Components ──────────────────────────────────────────────────────────
 function SongCard({ item, queue, idx }: { item: PlayItem; queue: PlayItem[]; idx: number }) {
   const { play, state } = usePlay();
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
   return (
     <button onClick={() => play(item, queue)} className="flex flex-col gap-2 text-left group w-full">
-      <div className={`relative aspect-square w-full rounded-2xl overflow-hidden bg-primary/10 ${isActive ? "ring-2 ring-primary" : ""}  transition-all`}>
+      <div className={`relative aspect-square w-full rounded-2xl overflow-hidden bg-primary/10 ${isActive ? "ring-2 ring-primary" : ""} transition-all`}>
         {item.capa ? (
           <img src={driveThumb(item.capa, 300)} alt={item.titulo} className="w-full h-full object-cover" loading="lazy" decoding="async" />
         ) : (
@@ -172,7 +302,7 @@ function VideoCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
   return (
     <button onClick={() => play(item, queue)} className="flex flex-col gap-2 text-left group w-full">
-      <div className={`relative w-full rounded-2xl overflow-hidden bg-primary/10 aspect-video ${isActive ? "ring-2 ring-primary" : ""}  transition-all`}>
+      <div className={`relative w-full rounded-2xl overflow-hidden bg-primary/10 aspect-video ${isActive ? "ring-2 ring-primary" : ""} transition-all`}>
         {item.capa ? (
           <img src={driveThumb(item.capa, 400)} alt={item.titulo} className="w-full h-full object-cover" loading="lazy" decoding="async" />
         ) : (
@@ -229,8 +359,81 @@ function RowTrack({ item, queue, num }: { item: PlayItem; queue: PlayItem[]; num
   );
 }
 
-// ─── Section Header ───────────────────────────────────────────────────────────
+// ─── Status Icon ──────────────────────────────────────────────────────────────
+function StatusIcon({ status }: { status: string }) {
+  const s = norm(status);
+  if (s === "new" || s === "novo") return <span className="text-[8px] font-black bg-primary/20 text-primary px-1.5 py-0.5 rounded-full tracking-widest">NEW</span>;
+  if (s.includes("subida") || s === "up" || s === "+") return <ArrowUp className="size-3 text-green-400" />;
+  if (s.includes("queda") || s === "down" || s === "-") return <ArrowDown className="size-3 text-red-400" />;
+  return <Minus className="size-3 text-muted-foreground/40" />;
+}
 
+// ─── Chart Row ────────────────────────────────────────────────────────────────
+function ChartRow({ entry, queue, allEntries }: { entry: ChartEntry; queue: PlayItem[]; allEntries: ChartEntry[] }) {
+  const { play, state } = usePlay();
+  const isActive = entry.playItem && state.currentIdx !== null && state.queue[state.currentIdx]?.id === entry.playItem.id;
+  const canPlay = !!entry.playItem;
+
+  const handleClick = () => {
+    if (!entry.playItem) return;
+    play(entry.playItem, queue);
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={!canPlay}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all text-left ${
+        isActive
+          ? "bg-primary/10 border border-primary/30"
+          : canPlay
+          ? "border border-transparent active:bg-white/[0.04]"
+          : "border border-transparent opacity-50 cursor-default"
+      }`}
+    >
+      {/* Posição */}
+      <div className="w-5 flex-shrink-0 text-center">
+        {isActive ? (
+          <div className="flex gap-0.5 items-end justify-center">
+            {[3, 5, 4].map((h, i) => (
+              <div key={i} className="w-0.5 bg-primary rounded-full animate-bounce" style={{ height: `${h * 2}px`, animationDelay: `${i * 100}ms` }} />
+            ))}
+          </div>
+        ) : (
+          <span className={`text-[10px] font-black ${ entry.posicao <= 3 ? "text-primary" : "text-muted-foreground/50" }`}>
+            {entry.posicao}
+          </span>
+        )}
+      </div>
+
+      {/* Capa */}
+      <div className="size-10 rounded-xl overflow-hidden bg-white/[0.05] flex-shrink-0">
+        {entry.playItem?.capa ? (
+          <img src={driveThumb(entry.playItem.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+        ) : entry.capa ? (
+          <img src={driveThumb(entry.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+        ) : (
+          <div className="w-full h-full grid place-items-center"><Music className="size-4 text-white/10" /></div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="min-w-0 flex-1">
+        <p className={`text-xs font-black truncate uppercase tracking-tight ${ isActive ? "text-primary" : canPlay ? "" : "text-muted-foreground" }`}>
+          {entry.titulo}
+        </p>
+        <p className="text-[10px] text-muted-foreground truncate">{entry.artistas}</p>
+      </div>
+
+      {/* Status */}
+      <div className="flex-shrink-0">
+        <StatusIcon status={entry.status} />
+      </div>
+    </button>
+  );
+}
+
+// ─── Section Header ───────────────────────────────────────────────────────────
 function SectionHeader({ icon, title, onMore }: { icon: React.ReactNode; title: string; onMore?: () => void }) {
   return (
     <div className="flex items-center justify-between mb-3">
@@ -246,60 +449,201 @@ function SectionHeader({ icon, title, onMore }: { icon: React.ReactNode; title: 
   );
 }
 
-// ─── Tab Views ────────────────────────────────────────────────────────────────
+// ─── Chart Card (mini — para home) ───────────────────────────────────────────
+function ChartMiniCard({
+  chart,
+  onOpen,
+}: {
+  chart: ChartData;
+  onOpen: () => void;
+}) {
+  const top3 = chart.entries.slice(0, 3);
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full text-left bg-white/[0.03] border border-white/[0.06] rounded-[1.5rem] overflow-hidden active:border-primary/30 transition-all"
+    >
+      {/* Capa da playlist */}
+      <div className="relative w-full aspect-square">
+        {chart.capaDaPlaylist ? (
+          <img src={driveThumb(chart.capaDaPlaylist, 400)} alt={chart.nome} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+        ) : (
+          <div className="w-full h-full bg-white/[0.05] grid place-items-center">
+            <span className="text-4xl">{chart.icone}</span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <div className="absolute bottom-3 left-3 right-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-white/60 mb-0.5">{chart.icone} {chart.nome}</p>
+          <p className="text-xs font-black text-white leading-tight">{chart.subtitulo}</p>
+        </div>
+      </div>
+      {/* Top 3 preview */}
+      <div className="px-3 py-2.5 space-y-1.5">
+        {top3.map((e, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="text-[10px] font-black text-muted-foreground/50 w-3">{e.posicao}</span>
+            <p className="text-[10px] font-black truncate flex-1 uppercase tracking-tight">{e.titulo}</p>
+            <StatusIcon status={e.status} />
+          </div>
+        ))}
+        <p className="text-[9px] text-muted-foreground/40 pt-0.5 text-right">Ver top 50 →</p>
+      </div>
+    </button>
+  );
+}
 
-function HomeTab({ musicasDB, musicVideosDB, videosDB, loading, onTabChange }: {
+// ─── Chart Detail View ────────────────────────────────────────────────────────
+function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => void }) {
+  const queue = chart.entries.filter((e) => e.playItem).map((e) => e.playItem!) as PlayItem[];
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground active:text-primary transition-colors">
+        <ChevronLeft className="size-4" /> Charts
+      </button>
+
+      {/* Header do chart */}
+      <div className="flex items-center gap-4 p-4 bg-white/[0.03] border border-white/[0.06] rounded-[1.5rem]">
+        <div className="size-16 rounded-2xl overflow-hidden bg-white/[0.05] flex-shrink-0">
+          {chart.capaDaPlaylist ? (
+            <img src={driveThumb(chart.capaDaPlaylist, 120)} alt={chart.nome} className="w-full h-full object-cover" loading="lazy" />
+          ) : (
+            <div className="w-full h-full grid place-items-center text-3xl">{chart.icone}</div>
+          )}
+        </div>
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">{chart.icone} {chart.nome}</p>
+          <p className="text-base font-black tracking-tight">{chart.subtitulo}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{chart.entries.length} m\u00fasicas</p>
+        </div>
+      </div>
+
+      {/* Lista */}
+      <div className="space-y-0.5">
+        {chart.entries.map((entry) => (
+          <ChartRow key={entry.posicao} entry={entry} queue={queue} allEntries={chart.entries} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Home Tab ─────────────────────────────────────────────────────────────────
+function HomeTab({
+  musicasDB,
+  musicVideosDB,
+  videosDB,
+  charts,
+  chartsLoading,
+  loading,
+  onTabChange,
+}: {
   musicasDB: SheetItem[];
   musicVideosDB: SheetItem[];
   videosDB: SheetItem[];
+  charts: ChartData[];
+  chartsLoading: boolean;
   loading: boolean;
   onTabChange: (t: Tab) => void;
 }) {
-  const destaques = useMemo<PlayItem[]>(
-    () => [...musicasDB].sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a)).slice(0, 6).map((m) => toPlayItem(m, "musica")),
+  const [openChart, setOpenChart] = useState<ChartData | null>(null);
+  const [homeSection, setHomeSection] = useState<"charts" | "lancamentos">("charts");
+
+  // 5 músicas mais recentes
+  const lancMusicas = useMemo<PlayItem[]>(
+    () =>
+      [...musicasDB]
+        .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
+        .slice(0, 5)
+        .map((m) => toPlayItem(m, "musica")),
     [musicasDB]
   );
-  const novosClipes = useMemo<PlayItem[]>(
-    () => [...musicVideosDB].sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a)).slice(0, 4).map((m) => toPlayItem(m, "musicvideo")),
+  // 5 music videos mais recentes
+  const lancVideos = useMemo<PlayItem[]>(
+    () =>
+      [...musicVideosDB]
+        .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
+        .slice(0, 5)
+        .map((m) => toPlayItem(m, "musicvideo")),
     [musicVideosDB]
   );
-  const novosVideos = useMemo<PlayItem[]>(
-    () => [...videosDB].sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a)).slice(0, 4).map((m) => toPlayItem(m, "video")),
-    [videosDB]
-  );
 
-  if (loading) return <div className="space-y-8"><SkeletonGrid /><SkeletonGrid cols={2} /></div>;
+  if (openChart) return <ChartDetailView chart={openChart} onBack={() => setOpenChart(null)} />;
 
   return (
-    <div className="space-y-8">
-      {destaques.length > 0 && (
-        <section>
-          <SectionHeader icon={<Star className="size-4 text-primary" />} title="Destaques" onMore={() => onTabChange("musicas")} />
-          <div className="grid grid-cols-3 gap-3">
-            {destaques.map((item, i) => <SongCard key={item.id} item={item} queue={destaques} idx={i} />)}
-          </div>
+    <div className="space-y-6">
+      {/* Sub-toggle: Top Charts / Lançamentos */}
+      <div className="grid grid-cols-2 gap-2 p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
+        {(["charts", "lancamentos"] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setHomeSection(s)}
+            className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              homeSection === s ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
+            }`}
+          >
+            {s === "charts" ? "\uD83C\uDFC6 Top Charts" : "\u2728 Lan\u00e7amentos"}
+          </button>
+        ))}
+      </div>
+
+      {/* Top Charts */}
+      {homeSection === "charts" && (
+        <section className="space-y-4">
+          {chartsLoading ? (
+            <SkeletonGrid cols={3} rows={1} />
+          ) : charts.length === 0 ? (
+            <p className="text-center text-xs text-muted-foreground py-8 opacity-40">Nenhum chart dispon\u00edvel.</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              {charts.map((c) => (
+                <ChartMiniCard key={c.nome} chart={c} onOpen={() => setOpenChart(c)} />
+              ))}
+            </div>
+          )}
         </section>
       )}
-      {novosClipes.length > 0 && (
-        <section>
-          <SectionHeader icon={<Clapperboard className="size-4 text-primary" />} title="Novos Clipes" onMore={() => onTabChange("clipes")} />
-          <div className="grid grid-cols-2 gap-3">
-            {novosClipes.map((item) => <VideoCard key={item.id} item={item} queue={novosClipes} />)}
-          </div>
-        </section>
-      )}
-      {novosVideos.length > 0 && (
-        <section>
-          <SectionHeader icon={<Tv className="size-4 text-primary" />} title="V\u00eddeos" onMore={() => onTabChange("videos")} />
-          <div className="grid grid-cols-2 gap-3">
-            {novosVideos.map((item) => <VideoCard key={item.id} item={item} queue={novosVideos} />)}
-          </div>
+
+      {/* Lançamentos */}
+      {homeSection === "lancamentos" && (
+        <section className="space-y-6">
+          {loading ? (
+            <><SkeletonList rows={5} /><SkeletonList rows={5} /></>
+          ) : (
+            <>
+              {lancMusicas.length > 0 && (
+                <div>
+                  <SectionHeader
+                    icon={<Music className="size-4 text-primary" />}
+                    title="\u00daltimas M\u00fasicas"
+                    onMore={() => onTabChange("musicas")}
+                  />
+                  <div className="space-y-1">
+                    {lancMusicas.map((item, i) => <RowTrack key={item.id} item={item} queue={lancMusicas} num={i + 1} />)}
+                  </div>
+                </div>
+              )}
+              {lancVideos.length > 0 && (
+                <div>
+                  <SectionHeader
+                    icon={<Clapperboard className="size-4 text-primary" />}
+                    title="\u00daltimos Clipes"
+                    onMore={() => onTabChange("clipes")}
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    {lancVideos.map((item) => <VideoCard key={item.id} item={item} queue={lancVideos} />)}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </section>
       )}
     </div>
   );
 }
 
+// ─── Músicas Tab ───────────────────────────────────────────────────────────────
 function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: boolean }) {
   const [subTab, setSubTab] = useState<"lancamentos" | "top" | "albuns">("lancamentos");
 
@@ -324,7 +668,6 @@ function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: b
 
   return (
     <div className="space-y-5">
-      {/* Sub-tabs */}
       <div className="grid grid-cols-3 gap-2 p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
         {(["lancamentos", "top", "albuns"] as const).map((t) => (
           <button
@@ -338,19 +681,16 @@ function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: b
           </button>
         ))}
       </div>
-
       {subTab === "lancamentos" && (
         <div className="space-y-1">
           {lancamentos.map((item, i) => <RowTrack key={item.id} item={item} queue={lancamentos} num={i + 1} />)}
         </div>
       )}
-
       {subTab === "top" && (
         <div className="space-y-1">
           {top.map((item, i) => <RowTrack key={item.id} item={item} queue={top} num={i + 1} />)}
         </div>
       )}
-
       {subTab === "albuns" && (
         <div className="grid grid-cols-2 gap-3">
           {albuns.map((a) => (
@@ -374,6 +714,7 @@ function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: b
   );
 }
 
+// ─── Clipes Tab ────────────────────────────────────────────────────────────────
 function ClipesTab({ musicVideosDB, loading }: { musicVideosDB: SheetItem[]; loading: boolean }) {
   const [subTab, setSubTab] = useState<"novos" | "top">("novos");
   const novos = useMemo<PlayItem[]>(
@@ -407,6 +748,7 @@ function ClipesTab({ musicVideosDB, loading }: { musicVideosDB: SheetItem[]; loa
   );
 }
 
+// ─── Vídeos Tab ────────────────────────────────────────────────────────────────
 function VideosTab({ videosDB, loading }: { videosDB: SheetItem[]; loading: boolean }) {
   const list = useMemo<PlayItem[]>(
     () => [...videosDB].sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a)).map((m) => toPlayItem(m, "video")),
@@ -424,7 +766,6 @@ function VideosTab({ videosDB, loading }: { videosDB: SheetItem[]; loading: bool
 }
 
 // ─── Forum Tab ─────────────────────────────────────────────────────────────────
-
 type Comentario = { nome: string; texto: string };
 
 function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categoria: string; onBack: () => void }) {
@@ -456,7 +797,6 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
       <button onClick={onBack} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground active:text-primary transition-colors">
         <ChevronLeft className="size-4" /> T\u00f3picos
       </button>
-
       <div className="flex items-start gap-3 p-4 bg-white/[0.03] border border-white/5 rounded-[1.5rem]">
         <div className="size-14 rounded-2xl overflow-hidden bg-primary/10 flex-shrink-0">
           {item.capa ? <img src={driveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full grid place-items-center"><Music className="size-5 text-primary/40" /></div>}
@@ -469,14 +809,12 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
           </button>
         </div>
       </div>
-
       {item.letra && (
         <details className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
           <summary className="text-[10px] font-black uppercase tracking-widest cursor-pointer text-primary">Ver Letra</summary>
           <pre className="mt-3 whitespace-pre-wrap text-xs font-sans text-foreground/80">{item.letra}</pre>
         </details>
       )}
-
       <div className="space-y-2">
         {comentarios === null
           ? Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-14 rounded-2xl bg-white/[0.03] animate-pulse" />)
@@ -490,7 +828,6 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
           ))
         }
       </div>
-
       <div className="flex gap-2 pt-2">
         <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Seu nome" className="h-10 flex-[0.4] bg-white/5 border border-white/10 rounded-2xl px-3 text-xs font-bold uppercase tracking-tight outline-none focus:border-primary/40" />
         <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Comentar..." className="h-10 flex-1 bg-white/5 border border-white/10 rounded-2xl px-3 text-xs font-bold outline-none focus:border-primary/40" onKeyDown={(e) => e.key === "Enter" && enviar()} />
@@ -511,7 +848,6 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
   }, [cat, musicasDB, musicVideosDB, videosDB]);
 
   if (loading) return <SkeletonList rows={5} />;
-
   if (detalhe) return <ForumTopicoDetalhe item={detalhe.item} categoria={detalhe.cat} onBack={() => setDetalhe(null)} />;
 
   return (
@@ -549,35 +885,109 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-
 export default function PlayHomePage() {
   const [musicasDB, setMusicasDB] = useState<SheetItem[]>([]);
   const [musicVideosDB, setMusicVideosDB] = useState<SheetItem[]>([]);
   const [videosDB, setVideosDB] = useState<SheetItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Charts
+  const [charts, setCharts] = useState<ChartData[]>([]);
+  const [chartsLoading, setChartsLoading] = useState(true);
+  // Play DB para cruzar com os charts
+  const [playMusicasDB, setPlayMusicasDB] = useState<SheetItem[]>([]);
+  const [playMusicVideosDB, setPlayMusicVideosDB] = useState<SheetItem[]>([]);
+
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const tabsRef = useRef<HTMLDivElement>(null);
 
+  // Fetch Empire Play data (API do empireplay)
   useEffect(() => {
     Promise.all([
       fetch(`${API_URL}?action=conteudo&categoria=musicas`).then((r) => r.json()),
       fetch(`${API_URL}?action=conteudo&categoria=musicvideos`).then((r) => r.json()),
       fetch(`${API_URL}?action=conteudo&categoria=videos`).then((r) => r.json()),
     ])
-      .then(([rm, rmv, rv]) => { setMusicasDB(rm.data || []); setMusicVideosDB(rmv.data || []); setVideosDB(rv.data || []); })
+      .then(([rm, rmv, rv]) => {
+        setMusicasDB(rm.data || []);
+        setMusicVideosDB(rmv.data || []);
+        setVideosDB(rv.data || []);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
+  // Fetch planilha principal Empire Play (para cruzar com charts)
+  useEffect(() => {
+    Promise.all([
+      fetch(PLAY_API("Musicas")).then((r) => r.json()).catch(() => ({ values: [] })),
+      fetch(PLAY_API("Music Videos")).then((r) => r.json()).catch(() => ({ values: [] })),
+    ]).then(([rm, rmv]) => {
+      setPlayMusicasDB(sheetRowsToObjects(rm.values || []));
+      setPlayMusicVideosDB(sheetRowsToObjects(rmv.values || []));
+    }).catch(console.error);
+  }, []);
+
+  // Fetch Charts
+  useEffect(() => {
+    Promise.all([
+      fetch(CHARTS_API("SPOTIFY")).then((r) => r.json()).catch(() => ({ values: [] })),
+      fetch(CHARTS_API("APPLE MUSIC")).then((r) => r.json()).catch(() => ({ values: [] })),
+      fetch(CHARTS_API("YOUTUBE")).then((r) => r.json()).catch(() => ({ values: [] })),
+    ]).then(([spotify, apple, youtube]) => {
+      const spotifyRows = sheetRowsToObjects(spotify.values || []);
+      const appleRows = sheetRowsToObjects(apple.values || []);
+      const youtubeRows = sheetRowsToObjects(youtube.values || []);
+
+      // Capa da playlist = coluna "P" ou "ÍCONES" da primeira linha do chart mais recente
+      const getCapaPlaylist = (rows: SheetItem[]): string => {
+        if (!rows.length) return "";
+        const dates = rows.map((r) => parseDate(getField(r, "DATA", "data")));
+        const maxDate = Math.max(...dates.filter(Boolean));
+        const firstRecente = rows.find((r) => parseDate(getField(r, "DATA", "data")) === maxDate);
+        if (!firstRecente) return "";
+        return getField(firstRecente, "P", "\u00cdCONES", "icones", "icone", "capa") || "";
+      };
+
+      const builtCharts: ChartData[] = [
+        {
+          nome: "Spotify",
+          subtitulo: "Top Global 50",
+          icone: "\uD83D\uDFE2",
+          cor: "text-green-400",
+          capaDaPlaylist: getCapaPlaylist(spotifyRows),
+          entries: processChartSheet(spotifyRows, playMusicasDB, false),
+        },
+        {
+          nome: "Apple Music",
+          subtitulo: "Top Songs 50",
+          icone: "\uD83C\uDFB5",
+          cor: "text-red-400",
+          capaDaPlaylist: getCapaPlaylist(appleRows),
+          entries: processChartSheet(appleRows, playMusicasDB, false),
+        },
+        {
+          nome: "YouTube",
+          subtitulo: "Top Videos 50",
+          icone: "\uD83D\uDCF9",
+          cor: "text-red-500",
+          capaDaPlaylist: getCapaPlaylist(youtubeRows),
+          entries: processChartSheet(youtubeRows, playMusicVideosDB, true),
+        },
+      ];
+
+      setCharts(builtCharts);
+    }).catch(console.error).finally(() => setChartsLoading(false));
+  }, [playMusicasDB, playMusicVideosDB]);
+
   const handleTabChange = (t: Tab) => {
     setActiveTab(t);
-    // Scroll tab bar into view on mobile
     tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
 
   return (
     <main className="flex-1 pb-40">
-      {/* ── Hero ─────────────────────────────────── */}
+      {/* Hero */}
       <div
         className="px-4 pt-6 pb-6"
         style={{ background: "linear-gradient(180deg, oklch(0.22 0.10 280 / 0.55), oklch(0.12 0 0) 100%)" }}
@@ -586,11 +996,11 @@ export default function PlayHomePage() {
           <Radio className="size-4 text-primary" />
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Empire Play</p>
         </div>
-        <h1 className="text-2xl font-black tracking-tighter">Ouça agora</h1>
-        <p className="text-xs text-muted-foreground mt-1">Músicas, clipes e vídeos do universo Empire</p>
+        <h1 className="text-2xl font-black tracking-tighter">Ou\u00e7a agora</h1>
+        <p className="text-xs text-muted-foreground mt-1">M\u00fasicas, clipes e v\u00eddeos do universo Empire</p>
       </div>
 
-      {/* ── Tab Bar (sticky) ─────────────────────── */}
+      {/* Tab Bar sticky */}
       <div
         ref={tabsRef}
         className="sticky top-[calc(4rem+env(safe-area-inset-top))] z-30 bg-background/90 border-b border-white/[0.06]"
@@ -604,9 +1014,7 @@ export default function PlayHomePage() {
                 key={id}
                 onClick={() => handleTabChange(id)}
                 className={`flex items-center gap-1.5 px-4 py-3.5 text-[11px] font-black uppercase tracking-widest whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
-                  active
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground active:text-foreground"
+                  active ? "border-primary text-primary" : "border-transparent text-muted-foreground active:text-foreground"
                 }`}
               >
                 <Icon className="size-3.5" strokeWidth={active ? 2.5 : 2} />
@@ -617,23 +1025,23 @@ export default function PlayHomePage() {
         </div>
       </div>
 
-      {/* ── Tab Content ──────────────────────────── */}
+      {/* Tab Content */}
       <div className="px-4 pt-6">
         {activeTab === "home" && (
-          <HomeTab musicasDB={musicasDB} musicVideosDB={musicVideosDB} videosDB={videosDB} loading={loading} onTabChange={handleTabChange} />
+          <HomeTab
+            musicasDB={musicasDB}
+            musicVideosDB={musicVideosDB}
+            videosDB={videosDB}
+            charts={charts}
+            chartsLoading={chartsLoading}
+            loading={loading}
+            onTabChange={handleTabChange}
+          />
         )}
-        {activeTab === "musicas" && (
-          <MusicasTab musicasDB={musicasDB} loading={loading} />
-        )}
-        {activeTab === "clipes" && (
-          <ClipesTab musicVideosDB={musicVideosDB} loading={loading} />
-        )}
-        {activeTab === "videos" && (
-          <VideosTab videosDB={videosDB} loading={loading} />
-        )}
-        {activeTab === "forum" && (
-          <ForumTab musicasDB={musicasDB} musicVideosDB={musicVideosDB} videosDB={videosDB} loading={loading} />
-        )}
+        {activeTab === "musicas" && <MusicasTab musicasDB={musicasDB} loading={loading} />}
+        {activeTab === "clipes" && <ClipesTab musicVideosDB={musicVideosDB} loading={loading} />}
+        {activeTab === "videos" && <VideosTab videosDB={videosDB} loading={loading} />}
+        {activeTab === "forum" && <ForumTab musicasDB={musicasDB} musicVideosDB={musicVideosDB} videosDB={videosDB} loading={loading} />}
       </div>
     </main>
   );
