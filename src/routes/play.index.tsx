@@ -11,14 +11,11 @@ import {
   Home,
   Clapperboard,
   ChevronLeft,
-  ArrowUp,
-  ArrowDown,
-  Minus,
   AlertCircle,
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")(({
+export const Route = createFileRoute("/play/")({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -27,9 +24,9 @@ export const Route = createFileRoute("/play/")(({
       { property: "og:description", content: "Ou\u00e7a as m\u00fasicas, clipes e v\u00eddeos do Empire RPG." },
     ],
   }),
-}));
+});
 
-// \u2500\u2500\u2500 API URLs \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── API URLs ──────────────────────────────────────────────────────────────
 const API_URL =
   "https://script.google.com/macros/s/AKfycby1S1mIBXdj4hLqc9RYv1ZJjL7d5ct6to18FNPmpJn1KOnZrYCKJKPNe2LP0dPW-G8HOg/exec";
 
@@ -40,7 +37,7 @@ const SHEETS_KEY      = "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY";
 const PLAY_API = (aba: string) =>
   `https://sheets.googleapis.com/v4/spreadsheets/${PLAY_SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
 
-// \u2500\u2500\u2500 Configuracao dos Charts \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Configuracao dos Charts ───────────────────────────────────────────────
 const CHARTS_CONFIG = [
   {
     aba: "Top_50_Spotify",
@@ -97,7 +94,7 @@ export type ChartData = {
   entries: ChartEntry[];
 };
 
-// \u2500\u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Helpers ──────────────────────────────────────────────────────────────
 function norm(s: string) {
   return String(s)
     .toLowerCase()
@@ -168,7 +165,6 @@ function sheetRowsToObjects(values: string[][]): SheetItem[] {
   });
 }
 
-// Parseia CSV do gviz (cada celula pode estar entre aspas com escaping)
 function parseCSV(csv: string): string[][] {
   const rows: string[][] = [];
   for (const line of csv.split(/\r?\n/)) {
@@ -193,7 +189,6 @@ function parseCSV(csv: string): string[][] {
   return rows;
 }
 
-// Busca uma aba: tenta Sheets API v4 primeiro, cai para gviz se falhar
 async function fetchSheetValues(sheetId: string, aba: string, apiKey: string): Promise<{ values: string[][]; error?: string }> {
   const v4url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(aba)}?key=${apiKey}`;
   try {
@@ -218,22 +213,26 @@ async function fetchSheetValues(sheetId: string, aba: string, apiKey: string): P
   }
 }
 
-// \u2500\u2500\u2500 processChart \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-// Headers reais de todas as abas de chart:
-//   BRASIL | POS | PA\u00cdS | CHART | M\u00daSICA | STREAMS ESTIMADOS | DATA
+// ─── processChart ──────────────────────────────────────────────────────────
+// Headers reais das abas de chart:
+//
+//   Top_50_Spotify / Top_Songs_Apple_Music:
+//     Capa da música | ID do tópico | Link do áudio | ID do criador | Nome da música | Posição
+//
+//   Top_Videos_YT:
+//     Thumb | ID do tópico | Link do áudio | ID do criador | Nome do vídeo | Posição
 //
 // Mapeamento:
-//   POS              -> posicao
-//   M\u00daSICA           -> titulo
-//   BRASIL           -> artista (nome do artista brasileiro)
-//   PA\u00cdS             -> pais de origem
-//   STREAMS ESTIMADOS -> streams (exibido como subtitulo)
-//   DATA             -> data de entrada no chart
-//   (sem capa na planilha — usa placeholder)
+//   Posição          -> posicao
+//   Nome da música / Nome do vídeo -> titulo
+//   ID do tópico     -> id do PlayItem
+//   Link do áudio    -> audioSrc do PlayItem
+//   Capa da música / Thumb -> capa do PlayItem
+//   ID do criador    -> artista (exibido como "by <criador>")
 
 function processChart(
   chartValues: string[][],
-  _isVideo: boolean
+  isVideo: boolean
 ): { entries: ChartEntry[]; capaDaPlaylist: string } {
   if (!chartValues || chartValues.length < 2) return { entries: [], capaDaPlaylist: "" };
 
@@ -241,44 +240,60 @@ function processChart(
 
   const entries: ChartEntry[] = rows
     .map((row) => {
-      // Posicao: coluna "POS"
+      // Posição
       const posicao = parseInt(
-        getField(row, "POS", "pos", "posi\u00e7\u00e3o", "posicao", "position").replace(/\D/g, "")
+        getField(row, "Posição", "Posicao", "posição", "posicao", "position", "pos").replace(/\D/g, "")
       ) || 0;
 
-      // Titulo: coluna "M\u00daSICA"
-      const titulo = getField(row, "M\u00daSICA", "MUSICA", "musica", "m\u00fasica", "titulo", "nome", "song", "track");
+      // Título: "Nome da música" (Spotify/Apple) ou "Nome do vídeo" (YT)
+      const titulo = isVideo
+        ? getField(row, "Nome do vídeo", "Nome do video", "nomedovideo", "titulo", "nome")
+        : getField(row, "Nome da música", "Nome da musica", "nomedamusica", "titulo", "nome");
 
-      // Artista: coluna "BRASIL" (nome do artista/ato)
-      const artista = getField(row, "BRASIL", "brasil", "artista", "artist", "ato", "act");
+      // Capa: "Capa da música" (Spotify/Apple) ou "Thumb" (YT)
+      const capa = isVideo
+        ? getField(row, "Thumb", "thumb", "capa", "Capa da música", "Capa da musica")
+        : getField(row, "Capa da música", "Capa da musica", "capadamusica", "capa", "thumb");
 
-      // Streams: coluna "STREAMS ESTIMADOS" — usado como subtitulo secundario
-      const streams = getField(row, "STREAMS ESTIMADOS", "streamsestimados", "streams");
+      // ID do tópico e Link do áudio (para reprodução)
+      const idTopico  = getField(row, "ID do tópico", "ID do topico", "iddotopico", "id_topico");
+      const linkAudio = getField(row, "Link do áudio", "Link do audio", "linkdoaudio", "link", "audio");
 
-      // Pais: coluna "PA\u00cdS"
-      const pais = getField(row, "PA\u00cdS", "PAIS", "pais", "pa\u00eds", "country");
+      // ID do criador → exibido como artista
+      const criador = getField(row, "ID do criador", "ID do Criador", "iddocriador", "criador", "artista");
 
       if (!posicao || !titulo) return null;
+
+      const playItem: PlayItem = {
+        id: idTopico || `chart-${posicao}`,
+        titulo,
+        artista: criador,
+        capa,
+        audioSrc: linkAudio,
+        letra: "",
+        categoria: isVideo ? "musicvideo" : "musica",
+      };
 
       return {
         posicao,
         titulo,
-        // artistas: "BRASIL (PA\u00cdS)" se tiver pais, sen\u00e3o s\u00f3 BRASIL
-        artistas: pais && pais !== artista ? `${artista} \u2022 ${pais}` : artista,
-        // status: reutiliza streams como badge secundario
-        status: streams || "",
-        capa: "",
-        playItem: undefined,
+        artistas: criador,
+        status: "",
+        capa,
+        playItem,
       } as ChartEntry;
     })
     .filter((e): e is ChartEntry => e !== null && e.posicao > 0)
     .sort((a, b) => a.posicao - b.posicao)
     .slice(0, 50);
 
-  return { entries, capaDaPlaylist: "" };
+  // capa da playlist = capa da música #1
+  const capaDaPlaylist = entries[0]?.capa ?? "";
+
+  return { entries, capaDaPlaylist };
 }
 
-// \u2500\u2500\u2500 Skeleton \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Skeleton ──────────────────────────────────────────────────────────────
 function SkeletonGrid({ cols = 3, rows = 2 }: { cols?: number; rows?: number }) {
   return (
     <div className={`grid grid-cols-${cols} gap-3`}>
@@ -309,7 +324,7 @@ function SkeletonList({ rows = 4 }: { rows?: number }) {
   );
 }
 
-// \u2500\u2500\u2500 Card Components \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Card Components ───────────────────────────────────────────────────────
 function SongCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
   const { play, state } = usePlay();
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
@@ -404,21 +419,12 @@ function RowTrack({ item, queue, num }: { item: PlayItem; queue: PlayItem[]; num
   );
 }
 
-// \u2500\u2500\u2500 Status Icon \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-function StatusIcon({ status }: { status: string }) {
-  const s = norm(status);
-  if (s === "new" || s === "novo") return <span className="text-[8px] font-black bg-primary/20 text-primary px-1.5 py-0.5 rounded-full tracking-widest">NEW</span>;
-  if (s.includes("subida") || s === "up" || s === "+") return <ArrowUp className="size-3 text-green-400" />;
-  if (s.includes("queda") || s === "down" || s === "-") return <ArrowDown className="size-3 text-red-400" />;
-  return <Minus className="size-3 text-muted-foreground/40" />;
-}
-
-// \u2500\u2500\u2500 Chart Row \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Chart Row ──────────────────────────────────────────────────────────────
 function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
   const { play, state } = usePlay();
   const isActive =
     entry.playItem && state.currentIdx !== null && state.queue[state.currentIdx]?.id === entry.playItem.id;
-  const canPlay = !!entry.playItem;
+  const canPlay = !!entry.playItem?.audioSrc;
 
   return (
     <button
@@ -446,8 +452,12 @@ function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
         )}
       </div>
 
-      <div className="size-10 rounded-xl overflow-hidden bg-white/[0.05] flex-shrink-0 grid place-items-center">
-        <Music className="size-4 text-white/10" />
+      <div className="size-10 rounded-xl overflow-hidden bg-white/[0.05] flex-shrink-0">
+        {entry.capa ? (
+          <img src={driveThumb(entry.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+        ) : (
+          <div className="w-full h-full grid place-items-center"><Music className="size-4 text-white/10" /></div>
+        )}
       </div>
 
       <div className="min-w-0 flex-1">
@@ -456,15 +466,11 @@ function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
         </p>
         <p className="text-[10px] text-muted-foreground truncate">{entry.artistas}</p>
       </div>
-
-      <div className="flex-shrink-0 text-[9px] text-muted-foreground/50 font-mono max-w-[60px] truncate text-right">
-        {entry.status}
-      </div>
     </button>
   );
 }
 
-// \u2500\u2500\u2500 Section Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Section Header ────────────────────────────────────────────────────────
 function SectionHeader({ icon, title, onMore }: { icon: React.ReactNode; title: string; onMore?: () => void }) {
   return (
     <div className="flex items-center justify-between mb-3">
@@ -480,17 +486,21 @@ function SectionHeader({ icon, title, onMore }: { icon: React.ReactNode; title: 
   );
 }
 
-// \u2500\u2500\u2500 Chart Mini Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Chart Mini Card ───────────────────────────────────────────────────────
 function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void }) {
   const top3 = chart.entries.slice(0, 3);
+  const capaCover = chart.capaDaPlaylist;
   return (
     <button
       onClick={onOpen}
       className="w-full text-left bg-white/[0.03] border border-white/[0.06] rounded-[1.5rem] overflow-hidden active:border-primary/30 transition-all"
     >
-      {/* Sem capa na planilha: usa placeholder com icone do chart */}
       <div className="relative w-full aspect-square bg-white/[0.05] grid place-items-center">
-        <span className="text-5xl">{chart.icone}</span>
+        {capaCover ? (
+          <img src={driveThumb(capaCover, 300)} alt={chart.nome} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+        ) : (
+          <span className="text-5xl">{chart.icone}</span>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
         <div className="absolute bottom-3 left-3 right-3">
           <p className="text-[10px] font-black uppercase tracking-[0.15em] text-white/60 mb-0.5">{chart.icone} {chart.nome}</p>
@@ -510,9 +520,9 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
   );
 }
 
-// \u2500\u2500\u2500 Chart Detail View \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Chart Detail View ─────────────────────────────────────────────────────
 function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => void }) {
-  const queue = chart.entries.filter((e) => e.playItem).map((e) => e.playItem!) as PlayItem[];
+  const queue = chart.entries.filter((e) => e.playItem?.audioSrc).map((e) => e.playItem!) as PlayItem[];
   return (
     <div className="space-y-4">
       <button onClick={onBack} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground active:text-primary transition-colors">
@@ -520,8 +530,12 @@ function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => vo
       </button>
 
       <div className="flex items-center gap-4 p-4 bg-white/[0.03] border border-white/[0.06] rounded-[1.5rem]">
-        <div className="size-16 rounded-2xl overflow-hidden bg-white/[0.05] flex-shrink-0 grid place-items-center">
-          <span className="text-3xl">{chart.icone}</span>
+        <div className="size-16 rounded-2xl overflow-hidden bg-white/[0.05] flex-shrink-0">
+          {chart.capaDaPlaylist ? (
+            <img src={driveThumb(chart.capaDaPlaylist, 120)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+          ) : (
+            <div className="w-full h-full grid place-items-center"><span className="text-3xl">{chart.icone}</span></div>
+          )}
         </div>
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">{chart.icone} {chart.nome}</p>
@@ -539,7 +553,7 @@ function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => vo
   );
 }
 
-// \u2500\u2500\u2500 Home Tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Home Tab ──────────────────────────────────────────────────────────────
 function HomeTab({
   playMusicasDB,
   playMusicVideosDB,
@@ -658,7 +672,7 @@ function HomeTab({
   );
 }
 
-// \u2500\u2500\u2500 M\u00fasicas Tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Músicas Tab ───────────────────────────────────────────────────────────
 function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: boolean }) {
   const [subTab, setSubTab] = useState<"lancamentos" | "top" | "albuns">("lancamentos");
 
@@ -729,7 +743,7 @@ function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: b
   );
 }
 
-// \u2500\u2500\u2500 Clipes Tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Clipes Tab ────────────────────────────────────────────────────────────
 function ClipesTab({ musicVideosDB, loading }: { musicVideosDB: SheetItem[]; loading: boolean }) {
   const [subTab, setSubTab] = useState<"novos" | "top">("novos");
   const novos = useMemo<PlayItem[]>(
@@ -763,7 +777,7 @@ function ClipesTab({ musicVideosDB, loading }: { musicVideosDB: SheetItem[]; loa
   );
 }
 
-// \u2500\u2500\u2500 V\u00eddeos Tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Vídeos Tab ────────────────────────────────────────────────────────────
 function VideosTab({ videosDB, loading }: { videosDB: SheetItem[]; loading: boolean }) {
   const list = useMemo<PlayItem[]>(
     () => [...videosDB].sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a)).map((m) => toPlayItem(m, "video")),
@@ -780,7 +794,7 @@ function VideosTab({ videosDB, loading }: { videosDB: SheetItem[]; loading: bool
   );
 }
 
-// \u2500\u2500\u2500 Forum Tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Forum Tab ─────────────────────────────────────────────────────────────
 type Comentario = { nome: string; texto: string };
 
 function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categoria: string; onBack: () => void }) {
@@ -899,7 +913,7 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
   );
 }
 
-// \u2500\u2500\u2500 Main Page \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Main Page ─────────────────────────────────────────────────────────────
 export default function PlayHomePage() {
   const [musicasDB, setMusicasDB]         = useState<SheetItem[]>([]);
   const [musicVideosDB, setMusicVideosDB] = useState<SheetItem[]>([]);
@@ -916,7 +930,6 @@ export default function PlayHomePage() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const tabsRef = useRef<HTMLDivElement>(null);
 
-  // 1. Empire Play API \u2014 M\u00fasicas, Clipes, V\u00eddeos
   useEffect(() => {
     Promise.all([
       fetch(`${API_URL}?action=conteudo&categoria=musicas`).then((r) => r.json()),
@@ -932,7 +945,6 @@ export default function PlayHomePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // 2. Sheets API \u2014 planilha Empire Play (lancamentos) + Charts
   useEffect(() => {
     const playPromise = Promise.all([
       fetch(PLAY_API("Musicas")).then((r) => r.json()).catch(() => ({ values: [] })),
@@ -942,7 +954,6 @@ export default function PlayHomePage() {
       setPlayMusicVideosDB(sheetRowsToObjects(rmv.values || []));
     });
 
-    // Charts: fetchSheetValues tenta v4 -> gviz automaticamente
     const chartsPromise = Promise.all(
       CHARTS_CONFIG.map((cfg) =>
         fetchSheetValues(CHARTS_SHEET_ID, cfg.aba, SHEETS_KEY)
