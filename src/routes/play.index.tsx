@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")({
+export const Route = createFileRoute("/play/")(({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -26,7 +26,7 @@ export const Route = createFileRoute("/play/")({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-});
+}));
 
 // ─── API URLs ──────────────────────────────────────────────────────────────────
 const API_URL =
@@ -121,7 +121,6 @@ function parseDataLancamento(item: SheetItem): number {
 function parseDate(s: string): number {
   if (!s) return 0;
   const clean = s.trim();
-  // tenta DD/MM/YYYY ou DD-MM-YYYY ou DD.MM.YYYY
   const parts = clean.split(/[\/\-\.]/);
   if (parts.length === 3 && parts[0].length <= 2) {
     const t = new Date(
@@ -163,38 +162,41 @@ function sheetRowsToObjects(values: string[][]): SheetItem[] {
   });
 }
 
-// ─── NOVA lógica de charts — leitura por índice de coluna fixo ─────────────────
+// ─── Lógica de charts — mapeamento real das colunas ───────────────────────────
 //
-// Planilha Charts (1ThRhljmAS41JmVBPkPtYwe0JQHRx9Pih2PQAPT2ebyA), abas SPOTIFY / APPLE MUSIC / YOUTUBE:
-//   col B (idx 1) = data
-//   col C (idx 2) = posição
-//   col D (idx 3) = título (exibido)
+// Planilha Charts (abas SPOTIFY / APPLE MUSIC / YOUTUBE) — linha 0 = header:
+//   col[0]  = CHART          (ignorado)
+//   col[1]  = DATA           → parseDate() para encontrar a mais recente
+//   col[2]  = POSIÇÃO        → parseInt()
+//   col[3]  = MÚSICA/ALBUM   → título exibido na UI
+//   col[6]  = ARTISTA 1      → artista principal
+//   col[11] = Status         → status (subida/queda/new)
+//   col[13] = Capa           → capa lida direto do chart (sem cruzamento)
 //
-// Planilha Musicas (1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo), aba Musicas:
-//   col C (idx 2) = arquivo de áudio (ou vídeo para YouTube)
-//   col D (idx 3) = capa
-//   col H (idx 7) = título (para cruzamento)
+// Planilha Musicas (aba Musicas) — linha 0 = header:
+//   col[2]  = ID do arquivo  → audioSrc para o player
+//   col[3]  = Capa da música (fallback se chart não tiver capa)
+//   col[7]  = Nome da música → chave de cruzamento (norm)
 //
 // Fluxo:
-//   1. Nas linhas da aba de chart, encontrar a data mais recente (col B).
+//   1. Pular linha 0 (header). Encontrar a data mais recente em col[1].
 //   2. Filtrar só as linhas dessa data.
-//   3. Ordenar por posição (col C) crescente, pegar até 50.
-//   4. Para cada entrada, buscar o título (col D) na col H da planilha Musicas.
-//      Se encontrar → pegar capa (col D) e arquivo (col C) da planilha Musicas.
-//   5. Retornar entries + capaDaPlaylist (não usamos mais — fica vazia por padrão,
-//      pois a planilha de charts não tem essa coluna mapeada).
+//   3. Para cada linha: ler posição (col[2]), título (col[3]), artista (col[6]),
+//      status (col[11]), capa (col[13]).
+//   4. Tentar cruzar título com col[7] da planilha Musicas para pegar audioSrc.
+//      Se não encontrar: entry aparece normalmente mas play fica desabilitado.
+//   5. Ordenar por posição crescente, retornar até 50.
 
-function processChartByIndex(
-  chartValues: string[][],       // valores brutos da aba de chart (incluindo header)
-  musicasValues: string[][],     // valores brutos da aba Musicas (incluindo header)
-  isVideo: boolean               // true = YouTube (sem capa no playItem)
+function processChart(
+  chartValues: string[][],    // valores brutos da aba de chart (linha 0 = header)
+  musicasValues: string[][],  // valores brutos da aba Musicas (linha 0 = header)
+  isVideo: boolean
 ): { entries: ChartEntry[]; capaDaPlaylist: string } {
   if (!chartValues || chartValues.length < 2) return { entries: [], capaDaPlaylist: "" };
 
-  // Pular linha de header (linha 0), trabalhar a partir da linha 1
-  const dataRows = chartValues.slice(1);
+  const dataRows = chartValues.slice(1); // pular header
 
-  // 1. Encontrar a data mais recente na coluna B (índice 1)
+  // 1. Data mais recente em col[1]
   let maxDate = 0;
   for (const row of dataRows) {
     const d = parseDate(row[1] ?? "");
@@ -205,49 +207,48 @@ function processChartByIndex(
   // 2. Filtrar linhas da data mais recente
   const recentes = dataRows.filter((row) => parseDate(row[1] ?? "") === maxDate);
 
-  // 3. Construir mapa de título → { arquivo, capa } a partir da planilha Musicas
-  //    col H (idx 7) = título de cruzamento
-  //    col C (idx 2) = arquivo
-  //    col D (idx 3) = capa
-  const musicaMap = new Map<string, { arquivo: string; capa: string }>();
+  // 3. Mapa título normalizado → audioSrc (da planilha Musicas, col[7] → col[2])
+  const audioMap = new Map<string, string>();
   if (musicasValues && musicasValues.length > 1) {
     for (const row of musicasValues.slice(1)) {
-      const titulo = (row[7] ?? "").trim(); // coluna H
-      if (!titulo) continue;
-      const arquivo = (row[2] ?? "").trim(); // coluna C
-      const capa = (row[3] ?? "").trim();    // coluna D
-      musicaMap.set(norm(titulo), { arquivo, capa });
+      const titulo = (row[7] ?? "").trim(); // Nome da música
+      const arquivo = (row[2] ?? "").trim(); // ID do arquivo
+      if (titulo && arquivo) audioMap.set(norm(titulo), arquivo);
     }
   }
 
-  // 4. Processar entradas
+  // 4. Processar cada entry
   const entries: ChartEntry[] = recentes
     .map((row) => {
-      const posicao = parseInt((row[2] ?? "").trim()) || 0; // col C
-      const titulo = (row[3] ?? "").trim();                  // col D
+      const posicao = parseInt((row[2] ?? "").replace(/\D/g, "")) || 0; // col[2] = POSIÇÃO
+      const titulo  = (row[3]  ?? "").trim(); // col[3]  = MÚSICA/ALBUM
+      const artista = (row[6]  ?? "").trim(); // col[6]  = ARTISTA 1
+      const status  = (row[11] ?? "").trim(); // col[11] = Status
+      const capa    = (row[13] ?? "").trim(); // col[13] = Capa
+
       if (!posicao || !titulo) return null;
 
-      // cruzamento
-      const matched = musicaMap.get(norm(titulo));
-      let playItem: PlayItem | undefined;
-      if (matched) {
-        playItem = {
-          id: norm(titulo),
-          titulo,
-          artista: "",
-          capa: matched.capa,
-          audioSrc: matched.arquivo,
-          letra: "",
-          categoria: isVideo ? "musicvideo" : "musica",
-        };
-      }
+      // Tenta encontrar audioSrc pelo cruzamento de título
+      const audioSrc = audioMap.get(norm(titulo)) ?? "";
+
+      const playItem: PlayItem | undefined = audioSrc
+        ? {
+            id: norm(titulo),
+            titulo,
+            artista,
+            capa,
+            audioSrc,
+            letra: "",
+            categoria: isVideo ? "musicvideo" : "musica",
+          }
+        : undefined;
 
       return {
         posicao,
         titulo,
-        artistas: "",
-        status: "",
-        capa: matched?.capa ?? "",
+        artistas: artista,
+        status,
+        capa,
         playItem,
       } as ChartEntry;
     })
@@ -255,7 +256,10 @@ function processChartByIndex(
     .sort((a, b) => a.posicao - b.posicao)
     .slice(0, 50);
 
-  return { entries, capaDaPlaylist: "" };
+  // capaDaPlaylist: usa a capa da 1ª entry com capa disponível
+  const capaDaPlaylist = entries.find((e) => e.capa)?.capa ?? "";
+
+  return { entries, capaDaPlaylist };
 }
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
@@ -409,7 +413,7 @@ function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
           ? "bg-primary/10 border border-primary/30"
           : canPlay
           ? "border border-transparent active:bg-white/[0.04]"
-          : "border border-transparent opacity-50 cursor-default"
+          : "border border-transparent opacity-60 cursor-default"
       }`}
     >
       <div className="w-5 flex-shrink-0 text-center">
@@ -893,17 +897,14 @@ export default function PlayHomePage() {
   const [charts, setCharts] = useState<ChartData[]>([]);
   const [chartsLoading, setChartsLoading] = useState(true);
 
-  // Valores brutos das planilhas (para charts e lançamentos)
   const [playMusicasDB, setPlayMusicasDB] = useState<SheetItem[]>([]);
   const [playMusicVideosDB, setPlayMusicVideosDB] = useState<SheetItem[]>([]);
-
-  // Valores brutos da planilha Musicas para cruzamento por índice de coluna
   const [rawMusicasValues, setRawMusicasValues] = useState<string[][]>([]);
 
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const tabsRef = useRef<HTMLDivElement>(null);
 
-  // Carregar dados do Empire Play API (Músicas, Clipes, Vídeos, Fórum)
+  // 1. Empire Play API — Músicas, Clipes, Vídeos, Fórum
   useEffect(() => {
     Promise.all([
       fetch(`${API_URL}?action=conteudo&categoria=musicas`).then((r) => r.json()),
@@ -919,7 +920,7 @@ export default function PlayHomePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Carregar planilha Musicas diretamente (para lançamentos + cruzamento de charts por índice)
+  // 2. Sheets API — planilha Musicas (cruzamento audioSrc + lançamentos)
   useEffect(() => {
     Promise.all([
       fetch(PLAY_API("Musicas")).then((r) => r.json()).catch(() => ({ values: [] })),
@@ -933,7 +934,7 @@ export default function PlayHomePage() {
     }).catch(console.error);
   }, []);
 
-  // Carregar charts quando os dados brutos da planilha Musicas estiverem prontos
+  // 3. Charts — aguarda rawMusicasValues estar pronto
   useEffect(() => {
     if (!rawMusicasValues.length) return;
 
@@ -942,44 +943,15 @@ export default function PlayHomePage() {
       fetch(CHARTS_API("APPLE MUSIC")).then((r) => r.json()).catch(() => ({ values: [] })),
       fetch(CHARTS_API("YOUTUBE")).then((r) => r.json()).catch(() => ({ values: [] })),
     ]).then(([spotify, apple, youtube]) => {
-      const spotifyValues: string[][] = spotify.values || [];
-      const appleValues: string[][] = apple.values || [];
-      const youtubeValues: string[][] = youtube.values || [];
+      const spotifyResult = processChart(spotify.values || [], rawMusicasValues, false);
+      const appleResult   = processChart(apple.values   || [], rawMusicasValues, false);
+      const youtubeResult = processChart(youtube.values || [], rawMusicasValues, true);
 
-      // Spotify e Apple Music cruzam com aba Musicas (col H = título, col C = arquivo, col D = capa)
-      const spotifyResult = processChartByIndex(spotifyValues, rawMusicasValues, false);
-      const appleResult   = processChartByIndex(appleValues,   rawMusicasValues, false);
-      // YouTube também cruza com aba Musicas, mas isVideo=true (categoria musicvideo)
-      const youtubeResult = processChartByIndex(youtubeValues, rawMusicasValues, true);
-
-      const builtCharts: ChartData[] = [
-        {
-          nome: "Spotify",
-          subtitulo: "Top 50 Global",
-          icone: "🟢",
-          cor: "text-green-400",
-          capaDaPlaylist: spotifyResult.capaDaPlaylist,
-          entries: spotifyResult.entries,
-        },
-        {
-          nome: "Apple Music",
-          subtitulo: "Top Songs",
-          icone: "🎵",
-          cor: "text-red-400",
-          capaDaPlaylist: appleResult.capaDaPlaylist,
-          entries: appleResult.entries,
-        },
-        {
-          nome: "YouTube",
-          subtitulo: "Top Videos",
-          icone: "📹",
-          cor: "text-red-500",
-          capaDaPlaylist: youtubeResult.capaDaPlaylist,
-          entries: youtubeResult.entries,
-        },
-      ];
-
-      setCharts(builtCharts);
+      setCharts([
+        { nome: "Spotify",     subtitulo: "Top 50 Global", icone: "🟢", cor: "text-green-400", capaDaPlaylist: spotifyResult.capaDaPlaylist, entries: spotifyResult.entries },
+        { nome: "Apple Music", subtitulo: "Top Songs",     icone: "🎵", cor: "text-red-400",   capaDaPlaylist: appleResult.capaDaPlaylist,   entries: appleResult.entries   },
+        { nome: "YouTube",     subtitulo: "Top Videos",    icone: "📹", cor: "text-red-500",   capaDaPlaylist: youtubeResult.capaDaPlaylist, entries: youtubeResult.entries },
+      ]);
     }).catch(console.error).finally(() => setChartsLoading(false));
   }, [rawMusicasValues]);
 
