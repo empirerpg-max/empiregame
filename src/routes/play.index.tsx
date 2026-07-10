@@ -46,12 +46,6 @@ const PLAY_API = (aba: string) =>
   `https://sheets.googleapis.com/v4/spreadsheets/${PLAY_SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
 
 // ─── Configuração dos Charts ───────────────────────────────────────────────────
-// aba: nome exato da aba na planilha Charts
-// nome: label do serviço exibido na UI
-// subtitulo: título da playlist exibido na UI
-// icone / cor: visual
-// isVideo: true = categoria musicvideo
-
 const CHARTS_CONFIG = [
   {
     aba: "Top_50_Spotify",
@@ -230,7 +224,7 @@ function processChart(
   // 2. Somente linhas da semana mais recente
   const recentes = dataRows.filter((row) => parseDate(row[1] ?? "") === maxDate);
 
-  // 3. Mapa título normalizado → audioSrc (da planilha Musicas)
+  // 3. Mapa título normalizado → audioSrc (da planilha Musicas, pode estar vazio)
   const audioMap = new Map<string, string>();
   if (musicasValues && musicasValues.length > 1) {
     for (const row of musicasValues.slice(1)) {
@@ -916,7 +910,6 @@ export default function PlayHomePage() {
 
   const [playMusicasDB, setPlayMusicasDB] = useState<SheetItem[]>([]);
   const [playMusicVideosDB, setPlayMusicVideosDB] = useState<SheetItem[]>([]);
-  const [rawMusicasValues, setRawMusicasValues] = useState<string[][]>([]);
 
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -937,35 +930,34 @@ export default function PlayHomePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // 2. Sheets API — planilha Musicas (lançamentos + cruzamento audioSrc)
+  // 2. Sheets API — planilha Musicas (lançamentos) + Charts — rodam em paralelo, sem dependência entre si
   useEffect(() => {
-    Promise.all([
+    // Planilha Empire Play (Musicas + Music Videos)
+    const playPromise = Promise.all([
       fetch(PLAY_API("Musicas")).then((r) => r.json()).catch(() => ({ values: [] })),
       fetch(PLAY_API("Music Videos")).then((r) => r.json()).catch(() => ({ values: [] })),
     ]).then(([rm, rmv]) => {
       const musicasValues: string[][] = rm.values || [];
       const musicVideosValues: string[][] = rmv.values || [];
-      setRawMusicasValues(musicasValues);
       setPlayMusicasDB(sheetRowsToObjects(musicasValues));
       setPlayMusicVideosDB(sheetRowsToObjects(musicVideosValues));
-    }).catch(console.error);
-  }, []);
+      return musicasValues;
+    });
 
-  // 3. Charts — busca direta pelas abas corretas
-  useEffect(() => {
-    if (!rawMusicasValues.length) return;
-
-    Promise.all(
-      CHARTS_CONFIG.map((cfg) =>
+    // Charts — busca todas as abas em paralelo; usa musicasValues do playPromise para cruzar audioSrc
+    Promise.all([
+      playPromise,
+      ...CHARTS_CONFIG.map((cfg) =>
         fetch(CHARTS_API(cfg.aba))
           .then((r) => r.json())
           .then((j) => ({ cfg, values: (j.values || []) as string[][] }))
           .catch(() => ({ cfg, values: [] as string[][] }))
-      )
-    ).then((results) => {
-      const built: ChartData[] = results
+      ),
+    ]).then(([musicasValues, ...chartResults]) => {
+      const rawMusicas = musicasValues as string[][];
+      const built: ChartData[] = (chartResults as { cfg: typeof CHARTS_CONFIG[number]; values: string[][] }[])
         .map(({ cfg, values }) => {
-          const { entries, capaDaPlaylist } = processChart(values, rawMusicasValues, cfg.isVideo);
+          const { entries, capaDaPlaylist } = processChart(values, rawMusicas, cfg.isVideo);
           return {
             nome: cfg.nome,
             subtitulo: cfg.subtitulo,
@@ -978,7 +970,7 @@ export default function PlayHomePage() {
         .filter((c) => c.entries.length > 0);
       setCharts(built);
     }).catch(console.error).finally(() => setChartsLoading(false));
-  }, [rawMusicasValues]);
+  }, []);
 
   const handleTabChange = (t: Tab) => {
     setActiveTab(t);
