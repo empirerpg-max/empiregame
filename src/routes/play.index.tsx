@@ -30,39 +30,21 @@ export const Route = createFileRoute("/play/")({
 const API_URL =
   "https://script.google.com/macros/s/AKfycby1S1mIBXdj4hLqc9RYv1ZJjL7d5ct6to18FNPmpJn1KOnZrYCKJKPNe2LP0dPW-G8HOg/exec";
 
-const CHARTS_SHEET_ID = "1ThRhljmAS41JmVBPkPtYwe0JQHRx9Pih2PQAPT2ebyA";
-const PLAY_SHEET_ID   = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
-const SHEETS_KEY      = "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY";
+// Todas as abas (Musicas, Music Videos, Top_50_Spotify, etc.) estão na mesma planilha
+const SHEET_ID  = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
+const SHEETS_KEY = "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY";
 
-const PLAY_API = (aba: string) =>
-  `https://sheets.googleapis.com/v4/spreadsheets/${PLAY_SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
+const SHEET_API = (aba: string) =>
+  `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
 
 // ─── Configuracao dos Charts ───────────────────────────────────────────────
+// Headers reais (confirmados pela imagem da planilha):
+//   Capa da música | ID do tópico | Link do áudio | ID do criador | Nome da música | Posição
+//   (Top_Videos_YT usa "Thumb" no lugar de "Capa da música" e "Nome do vídeo" no lugar de "Nome da música")
 const CHARTS_CONFIG = [
-  {
-    aba: "Top_50_Spotify",
-    nome: "Spotify",
-    subtitulo: "Top 50 Spotify",
-    icone: "\ud83d\udfe2",
-    cor: "text-green-400",
-    isVideo: false,
-  },
-  {
-    aba: "Top_Songs_Apple_Music",
-    nome: "Apple Music",
-    subtitulo: "Top Songs Apple Music",
-    icone: "\ud83c\udfb5",
-    cor: "text-red-400",
-    isVideo: false,
-  },
-  {
-    aba: "Top_Videos_YT",
-    nome: "YouTube",
-    subtitulo: "Top Videos",
-    icone: "\ud83d\udcf9",
-    cor: "text-red-500",
-    isVideo: true,
-  },
+  { aba: "Top_50_Spotify",      nome: "Spotify",     subtitulo: "Top 50 Spotify",         icone: "\ud83d\udfe2", cor: "text-green-400", isVideo: false },
+  { aba: "Top_Songs_Apple_Music", nome: "Apple Music", subtitulo: "Top Songs Apple Music", icone: "\ud83c\udfb5", cor: "text-red-400",   isVideo: false },
+  { aba: "Top_Videos_YT",       nome: "YouTube",     subtitulo: "Top Videos",              icone: "\ud83d\udcf9", cor: "text-red-500",   isVideo: true  },
 ] as const;
 
 type Tab = "home" | "musicas" | "clipes" | "videos" | "forum";
@@ -80,7 +62,6 @@ export type ChartEntry = {
   posicao: number;
   titulo: string;
   artistas: string;
-  status: string;
   capa: string;
   playItem?: PlayItem;
 };
@@ -189,8 +170,8 @@ function parseCSV(csv: string): string[][] {
   return rows;
 }
 
-async function fetchSheetValues(sheetId: string, aba: string, apiKey: string): Promise<{ values: string[][]; error?: string }> {
-  const v4url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(aba)}?key=${apiKey}`;
+async function fetchSheetValues(aba: string): Promise<{ values: string[][]; error?: string }> {
+  const v4url = SHEET_API(aba);
   try {
     const res = await fetch(v4url);
     if (res.ok) {
@@ -199,7 +180,7 @@ async function fetchSheetValues(sheetId: string, aba: string, apiKey: string): P
       return { values: [], error: `v4 OK mas sem valores para aba "${aba}"` };
     }
     const errText = await res.text().catch(() => String(res.status));
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`;
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`;
     const gvizRes = await fetch(gvizUrl);
     if (gvizRes.ok) {
       const csv = await gvizRes.text();
@@ -214,21 +195,15 @@ async function fetchSheetValues(sheetId: string, aba: string, apiKey: string): P
 }
 
 // ─── processChart ──────────────────────────────────────────────────────────
-// Headers reais das abas de chart:
+// Headers reais confirmados (imagem da planilha):
+//   Col A: Capa da música   → capa
+//   Col B: ID do tópico     → id do PlayItem
+//   Col C: Link do áudio    → audioSrc do PlayItem
+//   Col D: ID do criador    → artista
+//   Col E: Nome da música   → titulo  (Top_Videos_YT: "Nome do vídeo")
+//   Col F: Posição          → posicao
 //
-//   Top_50_Spotify / Top_Songs_Apple_Music:
-//     Capa da música | ID do tópico | Link do áudio | ID do criador | Nome da música | Posição
-//
-//   Top_Videos_YT:
-//     Thumb | ID do tópico | Link do áudio | ID do criador | Nome do vídeo | Posição
-//
-// Mapeamento:
-//   Posição          -> posicao
-//   Nome da música / Nome do vídeo -> titulo
-//   ID do tópico     -> id do PlayItem
-//   Link do áudio    -> audioSrc do PlayItem
-//   Capa da música / Thumb -> capa do PlayItem
-//   ID do criador    -> artista (exibido como "by <criador>")
+// Top_Videos_YT usa "Thumb" (col A) e "Nome do vídeo" (col E)
 
 function processChart(
   chartValues: string[][],
@@ -240,27 +215,21 @@ function processChart(
 
   const entries: ChartEntry[] = rows
     .map((row) => {
-      // Posição
       const posicao = parseInt(
-        getField(row, "Posição", "Posicao", "posição", "posicao", "position", "pos").replace(/\D/g, "")
+        getField(row, "Posição", "Posicao").replace(/\D/g, "")
       ) || 0;
 
-      // Título: "Nome da música" (Spotify/Apple) ou "Nome do vídeo" (YT)
       const titulo = isVideo
-        ? getField(row, "Nome do vídeo", "Nome do video", "nomedovideo", "titulo", "nome")
-        : getField(row, "Nome da música", "Nome da musica", "nomedamusica", "titulo", "nome");
+        ? getField(row, "Nome do vídeo", "Nome do video")
+        : getField(row, "Nome da música", "Nome da musica");
 
-      // Capa: "Capa da música" (Spotify/Apple) ou "Thumb" (YT)
       const capa = isVideo
-        ? getField(row, "Thumb", "thumb", "capa", "Capa da música", "Capa da musica")
-        : getField(row, "Capa da música", "Capa da musica", "capadamusica", "capa", "thumb");
+        ? getField(row, "Thumb")
+        : getField(row, "Capa da música", "Capa da musica");
 
-      // ID do tópico e Link do áudio (para reprodução)
-      const idTopico  = getField(row, "ID do tópico", "ID do topico", "iddotopico", "id_topico");
-      const linkAudio = getField(row, "Link do áudio", "Link do audio", "linkdoaudio", "link", "audio");
-
-      // ID do criador → exibido como artista
-      const criador = getField(row, "ID do criador", "ID do Criador", "iddocriador", "criador", "artista");
+      const idTopico  = getField(row, "ID do tópico", "ID do topico");
+      const linkAudio = getField(row, "Link do áudio", "Link do audio");
+      const criador   = getField(row, "ID do criador");
 
       if (!posicao || !titulo) return null;
 
@@ -274,23 +243,13 @@ function processChart(
         categoria: isVideo ? "musicvideo" : "musica",
       };
 
-      return {
-        posicao,
-        titulo,
-        artistas: criador,
-        status: "",
-        capa,
-        playItem,
-      } as ChartEntry;
+      return { posicao, titulo, artistas: criador, capa, playItem } as ChartEntry;
     })
     .filter((e): e is ChartEntry => e !== null && e.posicao > 0)
     .sort((a, b) => a.posicao - b.posicao)
     .slice(0, 50);
 
-  // capa da playlist = capa da música #1
-  const capaDaPlaylist = entries[0]?.capa ?? "";
-
-  return { entries, capaDaPlaylist };
+  return { entries, capaDaPlaylist: entries[0]?.capa ?? "" };
 }
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────
@@ -451,7 +410,6 @@ function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
           </span>
         )}
       </div>
-
       <div className="size-10 rounded-xl overflow-hidden bg-white/[0.05] flex-shrink-0">
         {entry.capa ? (
           <img src={driveThumb(entry.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
@@ -459,7 +417,6 @@ function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
           <div className="w-full h-full grid place-items-center"><Music className="size-4 text-white/10" /></div>
         )}
       </div>
-
       <div className="min-w-0 flex-1">
         <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : canPlay ? "" : "text-muted-foreground"}`}>
           {entry.titulo}
@@ -489,15 +446,14 @@ function SectionHeader({ icon, title, onMore }: { icon: React.ReactNode; title: 
 // ─── Chart Mini Card ───────────────────────────────────────────────────────
 function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void }) {
   const top3 = chart.entries.slice(0, 3);
-  const capaCover = chart.capaDaPlaylist;
   return (
     <button
       onClick={onOpen}
       className="w-full text-left bg-white/[0.03] border border-white/[0.06] rounded-[1.5rem] overflow-hidden active:border-primary/30 transition-all"
     >
       <div className="relative w-full aspect-square bg-white/[0.05] grid place-items-center">
-        {capaCover ? (
-          <img src={driveThumb(capaCover, 300)} alt={chart.nome} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+        {chart.capaDaPlaylist ? (
+          <img src={driveThumb(chart.capaDaPlaylist, 300)} alt={chart.nome} className="w-full h-full object-cover" loading="lazy" decoding="async" />
         ) : (
           <span className="text-5xl">{chart.icone}</span>
         )}
@@ -528,7 +484,6 @@ function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => vo
       <button onClick={onBack} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground active:text-primary transition-colors">
         <ChevronLeft className="size-4" /> Charts
       </button>
-
       <div className="flex items-center gap-4 p-4 bg-white/[0.03] border border-white/[0.06] rounded-[1.5rem]">
         <div className="size-16 rounded-2xl overflow-hidden bg-white/[0.05] flex-shrink-0">
           {chart.capaDaPlaylist ? (
@@ -543,7 +498,6 @@ function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => vo
           <p className="text-[10px] text-muted-foreground mt-0.5">{chart.entries.length} faixas</p>
         </div>
       </div>
-
       <div className="space-y-0.5">
         {chart.entries.map((entry) => (
           <ChartRow key={entry.posicao} entry={entry} queue={queue} />
@@ -946,17 +900,19 @@ export default function PlayHomePage() {
   }, []);
 
   useEffect(() => {
+    // Musicas e Music Videos para a aba Lançamentos
     const playPromise = Promise.all([
-      fetch(PLAY_API("Musicas")).then((r) => r.json()).catch(() => ({ values: [] })),
-      fetch(PLAY_API("Music Videos")).then((r) => r.json()).catch(() => ({ values: [] })),
+      fetch(SHEET_API("Musicas")).then((r) => r.json()).catch(() => ({ values: [] })),
+      fetch(SHEET_API("Music Videos")).then((r) => r.json()).catch(() => ({ values: [] })),
     ]).then(([rm, rmv]) => {
       setPlayMusicasDB(sheetRowsToObjects(rm.values || []));
       setPlayMusicVideosDB(sheetRowsToObjects(rmv.values || []));
     });
 
+    // Charts — mesma planilha, abas Top_50_Spotify / Top_Songs_Apple_Music / Top_Videos_YT
     const chartsPromise = Promise.all(
       CHARTS_CONFIG.map((cfg) =>
-        fetchSheetValues(CHARTS_SHEET_ID, cfg.aba, SHEETS_KEY)
+        fetchSheetValues(cfg.aba)
           .then((res) => ({ cfg, values: res.values, error: res.error }))
       )
     ).then((results) => {
@@ -970,14 +926,7 @@ export default function PlayHomePage() {
             errors.push(`[${cfg.aba}] 0 entries. Headers: ${values[0]?.join(" | ")}`);
             return null;
           }
-          return {
-            nome: cfg.nome,
-            subtitulo: cfg.subtitulo,
-            icone: cfg.icone,
-            cor: cfg.cor,
-            capaDaPlaylist,
-            entries,
-          } as ChartData;
+          return { nome: cfg.nome, subtitulo: cfg.subtitulo, icone: cfg.icone, cor: cfg.cor, capaDaPlaylist, entries } as ChartData;
         })
         .filter((c): c is ChartData => c !== null);
       setCharts(built);
