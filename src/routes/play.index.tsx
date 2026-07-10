@@ -14,6 +14,7 @@ import {
   ArrowUp,
   ArrowDown,
   Minus,
+  AlertCircle,
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
@@ -21,14 +22,14 @@ export const Route = createFileRoute("/play/")({
   component: PlayHomePage,
   head: () => ({
     meta: [
-      { title: "Empire Play • Empire Hub" },
-      { property: "og:title", content: "Empire Play • Empire Hub" },
-      { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
+      { title: "Empire Play \u2022 Empire Hub" },
+      { property: "og:title", content: "Empire Play \u2022 Empire Hub" },
+      { property: "og:description", content: "Ou\u00e7a as m\u00fasicas, clipes e v\u00eddeos do Empire RPG." },
     ],
   }),
 });
 
-// ─── API URLs ──────────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 API URLs \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const API_URL =
   "https://script.google.com/macros/s/AKfycby1S1mIBXdj4hLqc9RYv1ZJjL7d5ct6to18FNPmpJn1KOnZrYCKJKPNe2LP0dPW-G8HOg/exec";
 
@@ -36,19 +37,24 @@ const CHARTS_SHEET_ID = "1ThRhljmAS41JmVBPkPtYwe0JQHRx9Pih2PQAPT2ebyA";
 const PLAY_SHEET_ID   = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
 const SHEETS_KEY      = "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY";
 
+// Sheets API v4 (requer API key e planilha public/compartilhada)
 const CHARTS_API = (aba: string) =>
   `https://sheets.googleapis.com/v4/spreadsheets/${CHARTS_SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
+
+// gviz fallback: funciona sem API key desde que a planilha seja publica no link
+const CHARTS_GVIZ = (aba: string) =>
+  `https://docs.google.com/spreadsheets/d/${CHARTS_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`;
 
 const PLAY_API = (aba: string) =>
   `https://sheets.googleapis.com/v4/spreadsheets/${PLAY_SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
 
-// ─── Configuração dos Charts ───────────────────────────────────────────────────
+// \u2500\u2500\u2500 Configuracao dos Charts \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const CHARTS_CONFIG = [
   {
     aba: "Top_50_Spotify",
     nome: "Spotify",
     subtitulo: "Top 50 Spotify",
-    icone: "🟢",
+    icone: "\ud83d\udfe2",
     cor: "text-green-400",
     isVideo: false,
   },
@@ -56,7 +62,7 @@ const CHARTS_CONFIG = [
     aba: "Top_Songs_Apple_Music",
     nome: "Apple Music",
     subtitulo: "Top Songs Apple Music",
-    icone: "🎵",
+    icone: "\ud83c\udfb5",
     cor: "text-red-400",
     isVideo: false,
   },
@@ -64,7 +70,7 @@ const CHARTS_CONFIG = [
     aba: "Top_Videos_YT",
     nome: "YouTube",
     subtitulo: "Top Videos",
-    icone: "📹",
+    icone: "\ud83d\udcf9",
     cor: "text-red-500",
     isVideo: true,
   },
@@ -74,11 +80,11 @@ type Tab = "home" | "musicas" | "clipes" | "videos" | "forum";
 type SheetItem = Record<string, string>;
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: "home",    label: "Início",  icon: Home },
-  { id: "musicas", label: "Músicas",  icon: Music },
+  { id: "home",    label: "In\u00edcio",  icon: Home },
+  { id: "musicas", label: "M\u00fasicas",  icon: Music },
   { id: "clipes",  label: "Clipes",   icon: Clapperboard },
-  { id: "videos",  label: "Vídeos",  icon: Tv },
-  { id: "forum",   label: "Fórum",   icon: MessageSquare },
+  { id: "videos",  label: "V\u00eddeos",  icon: Tv },
+  { id: "forum",   label: "F\u00f3rum",   icon: MessageSquare },
 ];
 
 export type ChartEntry = {
@@ -99,7 +105,7 @@ export type ChartData = {
   entries: ChartEntry[];
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function norm(s: string) {
   return String(s)
     .toLowerCase()
@@ -142,20 +148,6 @@ function parseDataLancamento(item: SheetItem): number {
   return isNaN(t) ? 0 : t;
 }
 
-function parseDate(s: string): number {
-  if (!s) return 0;
-  const clean = s.trim();
-  const parts = clean.split(/[\/\-\.]/);
-  if (parts.length === 3 && parts[0].length <= 2) {
-    const t = new Date(
-      `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`
-    ).getTime();
-    if (!isNaN(t)) return t;
-  }
-  const t2 = new Date(clean).getTime();
-  return isNaN(t2) ? 0 : t2;
-}
-
 function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
   const idTopico = getField(m, "id_do_topico", "idtopico", "id_topico");
   const audioSrc = getField(m, "id_do_arquivo", "idarquivo", "id_arquivo", "arquivo", "link", "url");
@@ -184,14 +176,66 @@ function sheetRowsToObjects(values: string[][]): SheetItem[] {
   });
 }
 
-// ─── processChart ──────────────────────────────────────────────────────────────
-// Lê headers reais da aba.
+// Parseia CSV do gviz (cada celula pode estar entre aspas com escaping)
+function parseCSV(csv: string): string[][] {
+  const rows: string[][] = [];
+  for (const line of csv.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const cols: string[] = [];
+    let cur = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (ch === "," && !inQ) {
+        cols.push(cur); cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    cols.push(cur);
+    rows.push(cols);
+  }
+  return rows;
+}
+
+// Busca uma aba: tenta Sheets API v4 primeiro, cai para gviz se falhar
+async function fetchSheetValues(sheetId: string, aba: string, apiKey: string): Promise<{ values: string[][]; error?: string }> {
+  const v4url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(aba)}?key=${apiKey}`;
+  try {
+    const res = await fetch(v4url);
+    if (res.ok) {
+      const j = await res.json();
+      if (j.values && j.values.length > 0) return { values: j.values as string[][] };
+      // v4 OK mas sem valores — pode ser planilha vazia ou aba errada
+      return { values: [], error: `v4 OK mas sem valores para aba "${aba}"` };
+    }
+    // v4 falhou (403, 400 etc) — tentar gviz
+    const errText = await res.text().catch(() => String(res.status));
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`;
+    const gvizRes = await fetch(gvizUrl);
+    if (gvizRes.ok) {
+      const csv = await gvizRes.text();
+      const parsed = parseCSV(csv);
+      if (parsed.length > 1) return { values: parsed };
+      return { values: [], error: `gviz: CSV vazio para aba "${aba}" (v4 erro: ${res.status} ${errText.slice(0, 120)})` };
+    }
+    return { values: [], error: `v4 ${res.status} + gviz ${gvizRes.status} para aba "${aba}"` };
+  } catch (e) {
+    return { values: [], error: String(e) };
+  }
+}
+
+// \u2500\u2500\u2500 processChart \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Le headers reais da aba.
 //
 // Abas Top_50_Spotify e Top_Songs_Apple_Music:
-//   "Capa da música" | "ID do tópico" | "Link do áudio" | "ID do criador" | "Nome da música" | "Posição"
+//   "Capa da musica" | "ID do topico" | "Link do audio" | "ID do criador" | "Nome da musica" | "Posicao"
 //
 // Aba Top_Videos_YT:
-//   "Thumb" | "ID do tópico" | "Link do áudio" | "ID do criador" | "Nome do vídeo" | "Posição"
+//   "Thumb" | "ID do topico" | "Link do audio" | "ID do criador" | "Nome do video" | "Posicao"
 
 function processChart(
   chartValues: string[][],
@@ -204,20 +248,28 @@ function processChart(
   const entries: ChartEntry[] = rows
     .map((row) => {
       const posicao = parseInt(
-        getField(row, "Posição", "Posicao", "posicao", "position").replace(/\D/g, "")
+        getField(row,
+          "Posi\u00e7\u00e3o", "Posicao", "posicao", "Posição", "position", "pos"
+        ).replace(/\D/g, "")
       ) || 0;
 
       const titulo = isVideo
-        ? getField(row, "Nome do vídeo", "Nome do video", "nomedovideo", "titulo", "nome")
-        : getField(row, "Nome da música", "Nome da musica", "nomedamusica", "titulo", "nome");
+        ? getField(row, "Nome do v\u00eddeo", "Nome do video", "nomedovideo", "titulo", "nome")
+        : getField(row, "Nome da m\u00fasica", "Nome da musica", "nomedamusica", "titulo", "nome");
 
       const capa = isVideo
         ? getField(row, "Thumb", "thumb", "capa")
-        : getField(row, "Capa da música", "Capa da musica", "capadamusica", "capa");
+        : getField(row, "Capa da m\u00fasica", "Capa da musica", "capadamusica", "capa");
 
-      const audioSrc = getField(row, "Link do áudio", "Link do audio", "linkdoaudio", "audio", "link");
-      const idTopico = getField(row, "ID do tópico", "ID do topico", "iddotopico", "idtopico");
-      const artista  = getField(row, "ID do criador", "ID do Criador", "iddocriador", "artista", "criador");
+      const audioSrc = getField(row,
+        "Link do \u00e1udio", "Link do audio", "linkdoaudio", "audio", "link"
+      );
+      const idTopico = getField(row,
+        "ID do t\u00f3pico", "ID do topico", "iddotopico", "idtopico", "id"
+      );
+      const artista = getField(row,
+        "ID do criador", "ID do Criador", "iddocriador", "artista", "criador"
+      );
 
       if (!posicao || !titulo) return null;
 
@@ -244,7 +296,7 @@ function processChart(
   return { entries, capaDaPlaylist };
 }
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Skeleton \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function SkeletonGrid({ cols = 3, rows = 2 }: { cols?: number; rows?: number }) {
   return (
     <div className={`grid grid-cols-${cols} gap-3`}>
@@ -275,7 +327,7 @@ function SkeletonList({ rows = 4 }: { rows?: number }) {
   );
 }
 
-// ─── Card Components ──────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Card Components \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function SongCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
   const { play, state } = usePlay();
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
@@ -301,7 +353,7 @@ function SongCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
         )}
       </div>
       <div className="min-w-0">
-        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "—"}</p>
+        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "\u2014"}</p>
         <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
       </div>
     </button>
@@ -326,7 +378,7 @@ function VideoCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
         </div>
       </div>
       <div className="min-w-0">
-        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "—"}</p>
+        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "\u2014"}</p>
         <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
       </div>
     </button>
@@ -362,7 +414,7 @@ function RowTrack({ item, queue, num }: { item: PlayItem; queue: PlayItem[]; num
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "—"}</p>
+        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "\u2014"}</p>
         <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
       </div>
       <Play className="size-4 text-muted-foreground/40 flex-shrink-0" fill="currentColor" />
@@ -370,7 +422,7 @@ function RowTrack({ item, queue, num }: { item: PlayItem; queue: PlayItem[]; num
   );
 }
 
-// ─── Status Icon ──────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Status Icon \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function StatusIcon({ status }: { status: string }) {
   const s = norm(status);
   if (s === "new" || s === "novo") return <span className="text-[8px] font-black bg-primary/20 text-primary px-1.5 py-0.5 rounded-full tracking-widest">NEW</span>;
@@ -379,7 +431,7 @@ function StatusIcon({ status }: { status: string }) {
   return <Minus className="size-3 text-muted-foreground/40" />;
 }
 
-// ─── Chart Row ────────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Chart Row \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
   const { play, state } = usePlay();
   const isActive =
@@ -434,7 +486,7 @@ function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
   );
 }
 
-// ─── Section Header ───────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Section Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function SectionHeader({ icon, title, onMore }: { icon: React.ReactNode; title: string; onMore?: () => void }) {
   return (
     <div className="flex items-center justify-between mb-3">
@@ -450,7 +502,7 @@ function SectionHeader({ icon, title, onMore }: { icon: React.ReactNode; title: 
   );
 }
 
-// ─── Chart Mini Card ──────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Chart Mini Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void }) {
   const top3 = chart.entries.slice(0, 3);
   return (
@@ -486,13 +538,13 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
             <StatusIcon status={e.status} />
           </div>
         ))}
-        <p className="text-[9px] text-muted-foreground/40 pt-0.5 text-right">Ver tudo →</p>
+        <p className="text-[9px] text-muted-foreground/40 pt-0.5 text-right">Ver tudo \u2192</p>
       </div>
     </button>
   );
 }
 
-// ─── Chart Detail View ────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Chart Detail View \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => void }) {
   const queue = chart.entries.filter((e) => e.playItem).map((e) => e.playItem!) as PlayItem[];
   return (
@@ -525,12 +577,13 @@ function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => vo
   );
 }
 
-// ─── Home Tab ─────────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Home Tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function HomeTab({
   playMusicasDB,
   playMusicVideosDB,
   charts,
   chartsLoading,
+  chartsError,
   loading,
   onTabChange,
 }: {
@@ -538,6 +591,7 @@ function HomeTab({
   playMusicVideosDB: SheetItem[];
   charts: ChartData[];
   chartsLoading: boolean;
+  chartsError: string;
   loading: boolean;
   onTabChange: (t: Tab) => void;
 }) {
@@ -575,7 +629,7 @@ function HomeTab({
               homeSection === s ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
             }`}
           >
-            {s === "charts" ? "🏆 Top Charts" : "✨ Lançamentos"}
+            {s === "charts" ? "\ud83c\udfc6 Top Charts" : "\u2728 Lan\u00e7amentos"}
           </button>
         ))}
       </div>
@@ -585,7 +639,15 @@ function HomeTab({
           {chartsLoading ? (
             <SkeletonGrid cols={3} rows={1} />
           ) : charts.length === 0 ? (
-            <p className="text-center text-xs text-muted-foreground py-8 opacity-40">Nenhum chart disponível.</p>
+            <div className="space-y-3">
+              <p className="text-center text-xs text-muted-foreground py-4 opacity-40">Nenhum chart dispon\u00edvel.</p>
+              {chartsError && (
+                <div className="bg-white/[0.03] border border-red-500/20 rounded-2xl p-3 flex gap-2">
+                  <AlertCircle className="size-4 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-red-400/80 font-mono break-all">{chartsError}</p>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="grid grid-cols-3 gap-3">
               {charts.map((c) => (
@@ -606,7 +668,7 @@ function HomeTab({
                 <div>
                   <SectionHeader
                     icon={<Music className="size-4 text-primary" />}
-                    title="Últimas Músicas"
+                    title="\u00daltimas M\u00fasicas"
                     onMore={() => onTabChange("musicas")}
                   />
                   <div className="space-y-1">
@@ -618,7 +680,7 @@ function HomeTab({
                 <div>
                   <SectionHeader
                     icon={<Clapperboard className="size-4 text-primary" />}
-                    title="Últimos Clipes"
+                    title="\u00daltimos Clipes"
                     onMore={() => onTabChange("clipes")}
                   />
                   <div className="grid grid-cols-2 gap-3">
@@ -634,7 +696,7 @@ function HomeTab({
   );
 }
 
-// ─── Músicas Tab ───────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 M\u00fasicas Tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: boolean }) {
   const [subTab, setSubTab] = useState<"lancamentos" | "top" | "albuns">("lancamentos");
 
@@ -668,7 +730,7 @@ function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: b
               subTab === t ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
             }`}
           >
-            {t === "lancamentos" ? "Lançamentos" : t === "top" ? "Top" : "Álbuns"}
+            {t === "lancamentos" ? "Lan\u00e7amentos" : t === "top" ? "Top" : "\u00c1lbuns"}
           </button>
         ))}
       </div>
@@ -705,7 +767,7 @@ function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: b
   );
 }
 
-// ─── Clipes Tab ────────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Clipes Tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function ClipesTab({ musicVideosDB, loading }: { musicVideosDB: SheetItem[]; loading: boolean }) {
   const [subTab, setSubTab] = useState<"novos" | "top">("novos");
   const novos = useMemo<PlayItem[]>(
@@ -728,7 +790,7 @@ function ClipesTab({ musicVideosDB, loading }: { musicVideosDB: SheetItem[]; loa
             className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
               subTab === t ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
             }`}>
-            {t === "novos" ? "Lançamentos" : "Top Clipes"}
+            {t === "novos" ? "Lan\u00e7amentos" : "Top Clipes"}
           </button>
         ))}
       </div>
@@ -739,7 +801,7 @@ function ClipesTab({ musicVideosDB, loading }: { musicVideosDB: SheetItem[]; loa
   );
 }
 
-// ─── Vídeos Tab ────────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 V\u00eddeos Tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function VideosTab({ videosDB, loading }: { videosDB: SheetItem[]; loading: boolean }) {
   const list = useMemo<PlayItem[]>(
     () => [...videosDB].sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a)).map((m) => toPlayItem(m, "video")),
@@ -749,14 +811,14 @@ function VideosTab({ videosDB, loading }: { videosDB: SheetItem[]; loading: bool
   return (
     <div className="grid grid-cols-2 gap-3">
       {list.length === 0
-        ? <p className="col-span-2 text-center text-xs text-muted-foreground py-12 opacity-40">Nenhum vídeo ainda.</p>
+        ? <p className="col-span-2 text-center text-xs text-muted-foreground py-12 opacity-40">Nenhum v\u00eddeo ainda.</p>
         : list.map((item) => <VideoCard key={item.id} item={item} queue={list} />)
       }
     </div>
   );
 }
 
-// ─── Forum Tab ─────────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Forum Tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 type Comentario = { nome: string; texto: string };
 
 function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categoria: string; onBack: () => void }) {
@@ -769,7 +831,7 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
   const load = () =>
     fetch(`${API_URL}?action=comentarios&categoria=${categoria}&idTopico=${item.id}`)
       .then((r) => r.json())
-      .then((j) => setComentarios((j.data || []).map((c: Record<string, string>) => ({ nome: getField(c, "nome_do_jogador", "nome") || "Anônimo", texto: getField(c, "comentario", "texto") }))))
+      .then((j) => setComentarios((j.data || []).map((c: Record<string, string>) => ({ nome: getField(c, "nome_do_jogador", "nome") || "An\u00f4nimo", texto: getField(c, "comentario", "texto") }))))
       .catch(() => setComentarios([]));
 
   useEffect(() => { load(); }, [item.id, categoria]);
@@ -777,7 +839,7 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
   const enviar = async () => {
     if (!texto.trim()) return;
     setEnviando(true);
-    await fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "novoComentario", categoria, idTopico: item.id, nomeJogador: nome.trim() || "Anônimo", comentario: texto.trim() }) });
+    await fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "novoComentario", categoria, idTopico: item.id, nomeJogador: nome.trim() || "An\u00f4nimo", comentario: texto.trim() }) });
     setTexto("");
     setEnviando(false);
     load();
@@ -786,7 +848,7 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
   return (
     <div className="space-y-4">
       <button onClick={onBack} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground active:text-primary transition-colors">
-        <ChevronLeft className="size-4" /> Tópicos
+        <ChevronLeft className="size-4" /> T\u00f3picos
       </button>
       <div className="flex items-start gap-3 p-4 bg-white/[0.03] border border-white/5 rounded-[1.5rem]">
         <div className="size-14 rounded-2xl overflow-hidden bg-primary/10 flex-shrink-0">
@@ -849,13 +911,13 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
             className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
               cat === t ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
             }`}>
-            {t === "musicas" ? "Músicas" : t === "musicvideos" ? "Clipes" : "Vídeos"}
+            {t === "musicas" ? "M\u00fasicas" : t === "musicvideos" ? "Clipes" : "V\u00eddeos"}
           </button>
         ))}
       </div>
       <div className="space-y-2">
         {list.length === 0
-          ? <p className="text-center text-xs text-muted-foreground py-12 opacity-40">Nenhum tópico.</p>
+          ? <p className="text-center text-xs text-muted-foreground py-12 opacity-40">Nenhum t\u00f3pico.</p>
           : list.map((item) => (
             <button key={item.id} onClick={() => setDetalhe({ item, cat })}
               className="w-full flex items-center gap-3 p-3 bg-white/[0.03] border border-white/5 rounded-[1.5rem] active:border-primary/30 transition-colors text-left">
@@ -863,7 +925,7 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
                 {item.capa ? <img src={driveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full grid place-items-center"><Music className="size-4 text-primary/40" /></div>}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-black text-xs truncate uppercase tracking-tight">{item.titulo || "—"}</p>
+                <p className="font-black text-xs truncate uppercase tracking-tight">{item.titulo || "\u2014"}</p>
                 <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
               </div>
               <MessageSquare className="size-4 text-muted-foreground/40 flex-shrink-0" />
@@ -875,7 +937,7 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Main Page \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 export default function PlayHomePage() {
   const [musicasDB, setMusicasDB]         = useState<SheetItem[]>([]);
   const [musicVideosDB, setMusicVideosDB] = useState<SheetItem[]>([]);
@@ -884,6 +946,7 @@ export default function PlayHomePage() {
 
   const [charts, setCharts]               = useState<ChartData[]>([]);
   const [chartsLoading, setChartsLoading] = useState(true);
+  const [chartsError, setChartsError]     = useState("");
 
   const [playMusicasDB, setPlayMusicasDB]         = useState<SheetItem[]>([]);
   const [playMusicVideosDB, setPlayMusicVideosDB] = useState<SheetItem[]>([]);
@@ -891,7 +954,7 @@ export default function PlayHomePage() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const tabsRef = useRef<HTMLDivElement>(null);
 
-  // 1. Empire Play API — Músicas, Clipes, Vídeos
+  // 1. Empire Play API \u2014 M\u00fasicas, Clipes, V\u00eddeos
   useEffect(() => {
     Promise.all([
       fetch(`${API_URL}?action=conteudo&categoria=musicas`).then((r) => r.json()),
@@ -907,9 +970,8 @@ export default function PlayHomePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // 2. Sheets API — planilha Empire Play (lançamentos) + Charts — todos em paralelo
+  // 2. Sheets API \u2014 planilha Empire Play (lancamentos) + Charts
   useEffect(() => {
-    // Planilha Empire Play
     const playPromise = Promise.all([
       fetch(PLAY_API("Musicas")).then((r) => r.json()).catch(() => ({ values: [] })),
       fetch(PLAY_API("Music Videos")).then((r) => r.json()).catch(() => ({ values: [] })),
@@ -918,18 +980,23 @@ export default function PlayHomePage() {
       setPlayMusicVideosDB(sheetRowsToObjects(rmv.values || []));
     });
 
-    // Charts — cada aba usa seus próprios headers via processChart
+    // Charts: fetchSheetValues tenta v4 -> gviz automaticamente
     const chartsPromise = Promise.all(
       CHARTS_CONFIG.map((cfg) =>
-        fetch(CHARTS_API(cfg.aba))
-          .then((r) => r.json())
-          .then((j) => ({ cfg, values: (j.values || []) as string[][] }))
-          .catch(() => ({ cfg, values: [] as string[][] }))
+        fetchSheetValues(CHARTS_SHEET_ID, cfg.aba, SHEETS_KEY)
+          .then((res) => ({ cfg, values: res.values, error: res.error }))
       )
     ).then((results) => {
+      const errors: string[] = [];
       const built: ChartData[] = results
-        .map(({ cfg, values }) => {
+        .map(({ cfg, values, error }) => {
+          if (error) errors.push(`[${cfg.aba}] ${error}`);
+          if (!values || values.length < 2) return null;
           const { entries, capaDaPlaylist } = processChart(values, cfg.isVideo);
+          if (!entries.length) {
+            errors.push(`[${cfg.aba}] processChart retornou 0 entries. Headers: ${values[0]?.join(" | ")}`);
+            return null;
+          }
           return {
             nome: cfg.nome,
             subtitulo: cfg.subtitulo,
@@ -939,12 +1006,13 @@ export default function PlayHomePage() {
             entries,
           } as ChartData;
         })
-        .filter((c) => c.entries.length > 0);
+        .filter((c): c is ChartData => c !== null);
       setCharts(built);
+      if (errors.length) setChartsError(errors.join(" \u2502 "));
     });
 
     Promise.all([playPromise, chartsPromise])
-      .catch(console.error)
+      .catch((e) => setChartsError(String(e)))
       .finally(() => setChartsLoading(false));
   }, []);
 
@@ -963,8 +1031,8 @@ export default function PlayHomePage() {
           <Radio className="size-4 text-primary" />
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Empire Play</p>
         </div>
-        <h1 className="text-2xl font-black tracking-tighter">Ouça agora</h1>
-        <p className="text-xs text-muted-foreground mt-1">Músicas, clipes e vídeos do universo Empire</p>
+        <h1 className="text-2xl font-black tracking-tighter">Ou\u00e7a agora</h1>
+        <p className="text-xs text-muted-foreground mt-1">M\u00fasicas, clipes e v\u00eddeos do universo Empire</p>
       </div>
 
       <div
@@ -998,6 +1066,7 @@ export default function PlayHomePage() {
             playMusicVideosDB={playMusicVideosDB}
             charts={charts}
             chartsLoading={chartsLoading}
+            chartsError={chartsError}
             loading={loading}
             onTabChange={handleTabChange}
           />
