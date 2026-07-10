@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")((({
+export const Route = createFileRoute("/play/")({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -26,15 +26,15 @@ export const Route = createFileRoute("/play/")((({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-})));
+});
 
 // ─── API URLs ──────────────────────────────────────────────────────────────────
 const API_URL =
   "https://script.google.com/macros/s/AKfycby1S1mIBXdj4hLqc9RYv1ZJjL7d5ct6to18FNPmpJn1KOnZrYCKJKPNe2LP0dPW-G8HOg/exec";
 
-// Planilha dos Charts (abas: Top 50 Global / Top Songs / Top Videos)
+// Planilha dos Charts
 const CHARTS_SHEET_ID = "1ThRhljmAS41JmVBPkPtYwe0JQHRx9Pih2PQAPT2ebyA";
-// Planilha principal Empire Play (Musicas)
+// Planilha principal Empire Play
 const PLAY_SHEET_ID = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
 
 const SHEETS_KEY = "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY";
@@ -46,35 +46,31 @@ const PLAY_API = (aba: string) =>
   `https://sheets.googleapis.com/v4/spreadsheets/${PLAY_SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
 
 // ─── Configuração dos Charts ───────────────────────────────────────────────────
-//
-// Cada chart define:
-//   abasPossiveis: lista de nomes de aba a tentar (em ordem de prioridade).
-//                 O primeiro que retornar dados válidos é usado.
-//   nome:         nome exibido na UI (ex: "Spotify")
-//   subtitulo:    subtítulo exibido na UI (ex: "Top 50 Global")
-//   icone:        emoji
-//   cor:          classe de cor Tailwind
-//   isVideo:      true = categoria musicvideo; false = musica
+// aba: nome exato da aba na planilha Charts
+// nome: label do serviço exibido na UI
+// subtitulo: título da playlist exibido na UI
+// icone / cor: visual
+// isVideo: true = categoria musicvideo
 
 const CHARTS_CONFIG = [
   {
-    abasPossiveis: ["Top 50 Global", "SPOTIFY", "Spotify", "TOP 50 GLOBAL"],
+    aba: "Top_50_Spotify",
     nome: "Spotify",
-    subtitulo: "Top 50 Global",
+    subtitulo: "Top 50 Spotify",
     icone: "🟢",
     cor: "text-green-400",
     isVideo: false,
   },
   {
-    abasPossiveis: ["Top Songs", "APPLE MUSIC", "Apple Music", "TOP SONGS"],
+    aba: "Top_Songs_Apple_Music",
     nome: "Apple Music",
-    subtitulo: "Top Songs",
+    subtitulo: "Top Songs Apple Music",
     icone: "🎵",
     cor: "text-red-400",
     isVideo: false,
   },
   {
-    abasPossiveis: ["Top Videos", "YOUTUBE", "YouTube", "TOP VIDEOS"],
+    aba: "Top_Videos_YT",
     nome: "YouTube",
     subtitulo: "Top Videos",
     icone: "📹",
@@ -109,6 +105,7 @@ export type ChartData = {
   subtitulo: string;
   icone: string;
   cor: string;
+  /** Capa do 1º lugar do chart */
   capaDaPlaylist: string;
   entries: ChartEntry[];
 };
@@ -200,49 +197,29 @@ function sheetRowsToObjects(values: string[][]): SheetItem[] {
   });
 }
 
-// ─── fetchFirstValid ───────────────────────────────────────────────────────────
-// Tenta cada aba na ordem; retorna os values da primeira que tiver dados.
-async function fetchFirstValid(abas: readonly string[]): Promise<string[][]> {
-  for (const aba of abas) {
-    try {
-      const res = await fetch(CHARTS_API(aba));
-      if (!res.ok) continue;
-      const json = await res.json();
-      const values: string[][] = json.values || [];
-      if (values.length > 1) return values; // tem dados além do header
-    } catch {
-      // tenta próxima aba
-    }
-  }
-  return [];
-}
-
-// ─── Lógica de charts — mapeamento real das colunas ───────────────────────────
-//
-// Planilha Charts (abas Top 50 Global / Top Songs / Top Videos) — linha 0 = header:
+// ─── processChart ──────────────────────────────────────────────────────────────
+// Lê os valores brutos de uma aba de chart e retorna as entries ordenadas.
+// Estrutura esperada das colunas (linha 0 = header):
 //   col[0]  = CHART          (ignorado)
-//   col[1]  = DATA           → parseDate() para encontrar a mais recente
+//   col[1]  = DATA           → parseDate() — filtra pela data mais recente
 //   col[2]  = POSIÇÃO        → parseInt()
 //   col[3]  = MÚSICA/ALBUM   → título exibido na UI
 //   col[6]  = ARTISTA 1      → artista principal
 //   col[11] = Status         → status (subida/queda/new)
-//   col[13] = Capa           → capa lida direto do chart (sem cruzamento)
+//   col[13] = Capa           → URL/ID da capa (lida direto do chart)
 //
-// Planilha Musicas (aba Musicas) — linha 0 = header:
-//   col[2]  = ID do arquivo  → audioSrc para o player
-//   col[3]  = Capa da música (fallback se chart não tiver capa)
-//   col[7]  = Nome da música → chave de cruzamento (norm)
+// capaDaPlaylist = capa da entry com posicao === 1 (1º lugar).
 
 function processChart(
-  chartValues: string[][],    // valores brutos da aba de chart (linha 0 = header)
-  musicasValues: string[][],  // valores brutos da aba Musicas (linha 0 = header)
+  chartValues: string[][],
+  musicasValues: string[][],
   isVideo: boolean
 ): { entries: ChartEntry[]; capaDaPlaylist: string } {
   if (!chartValues || chartValues.length < 2) return { entries: [], capaDaPlaylist: "" };
 
-  const dataRows = chartValues.slice(1); // pular header
+  const dataRows = chartValues.slice(1);
 
-  // 1. Data mais recente em col[1]
+  // 1. Data mais recente
   let maxDate = 0;
   for (const row of dataRows) {
     const d = parseDate(row[1] ?? "");
@@ -250,65 +227,48 @@ function processChart(
   }
   if (!maxDate) return { entries: [], capaDaPlaylist: "" };
 
-  // 2. Filtrar linhas da data mais recente
+  // 2. Somente linhas da semana mais recente
   const recentes = dataRows.filter((row) => parseDate(row[1] ?? "") === maxDate);
 
-  // 3. Mapa título normalizado → audioSrc (da planilha Musicas, col[7] → col[2])
+  // 3. Mapa título normalizado → audioSrc (da planilha Musicas)
   const audioMap = new Map<string, string>();
   if (musicasValues && musicasValues.length > 1) {
     for (const row of musicasValues.slice(1)) {
-      const titulo = (row[7] ?? "").trim(); // Nome da música
-      const arquivo = (row[2] ?? "").trim(); // ID do arquivo
+      const titulo = (row[7] ?? "").trim();
+      const arquivo = (row[2] ?? "").trim();
       if (titulo && arquivo) audioMap.set(norm(titulo), arquivo);
     }
   }
 
-  // 4. Processar cada entry
+  // 4. Processar entries
   const entries: ChartEntry[] = recentes
     .map((row) => {
-      const posicao = parseInt((row[2] ?? "").replace(/\D/g, "")) || 0; // col[2] = POSIÇÃO
-      const titulo  = (row[3]  ?? "").trim(); // col[3]  = MÚSICA/ALBUM
-      const artista = (row[6]  ?? "").trim(); // col[6]  = ARTISTA 1
-      const status  = (row[11] ?? "").trim(); // col[11] = Status
-      const capa    = (row[13] ?? "").trim(); // col[13] = Capa
+      const posicao = parseInt((row[2] ?? "").replace(/\D/g, "")) || 0;
+      const titulo  = (row[3]  ?? "").trim();
+      const artista = (row[6]  ?? "").trim();
+      const status  = (row[11] ?? "").trim();
+      const capa    = (row[13] ?? "").trim();
 
       if (!posicao || !titulo) return null;
 
-      // Tenta encontrar audioSrc pelo cruzamento de título
       const audioSrc = audioMap.get(norm(titulo)) ?? "";
-
       const playItem: PlayItem | undefined = audioSrc
-        ? {
-            id: norm(titulo),
-            titulo,
-            artista,
-            capa,
-            audioSrc,
-            letra: "",
-            categoria: isVideo ? "musicvideo" : "musica",
-          }
+        ? { id: norm(titulo), titulo, artista, capa, audioSrc, letra: "", categoria: isVideo ? "musicvideo" : "musica" }
         : undefined;
 
-      return {
-        posicao,
-        titulo,
-        artistas: artista,
-        status,
-        capa,
-        playItem,
-      } as ChartEntry;
+      return { posicao, titulo, artistas: artista, status, capa, playItem } as ChartEntry;
     })
     .filter((e): e is ChartEntry => e !== null && e.posicao > 0)
     .sort((a, b) => a.posicao - b.posicao)
     .slice(0, 50);
 
-  // capaDaPlaylist: usa a capa da 1ª entry com capa disponível
-  const capaDaPlaylist = entries.find((e) => e.capa)?.capa ?? "";
+  // capaDaPlaylist = capa exata do 1º lugar
+  const capaDaPlaylist = entries.find((e) => e.posicao === 1)?.capa ?? entries[0]?.capa ?? "";
 
   return { entries, capaDaPlaylist };
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
 function SkeletonGrid({ cols = 3, rows = 2 }: { cols?: number; rows?: number }) {
   return (
     <div className={`grid grid-cols-${cols} gap-3`}>
@@ -340,7 +300,7 @@ function SkeletonList({ rows = 4 }: { rows?: number }) {
 }
 
 // ─── Card Components ──────────────────────────────────────────────────────────
-function SongCard({ item, queue }: { item: PlayItem; queue: PlayItem[]; idx?: number }) {
+function SongCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
   const { play, state } = usePlay();
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
   return (
@@ -514,7 +474,7 @@ function SectionHeader({ icon, title, onMore }: { icon: React.ReactNode; title: 
   );
 }
 
-// ─── Chart Card (mini) ────────────────────────────────────────────────────────
+// ─── Chart Mini Card ──────────────────────────────────────────────────────────
 function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void }) {
   const top3 = chart.entries.slice(0, 3);
   return (
@@ -522,9 +482,16 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
       onClick={onOpen}
       className="w-full text-left bg-white/[0.03] border border-white/[0.06] rounded-[1.5rem] overflow-hidden active:border-primary/30 transition-all"
     >
+      {/* capa = 1º lugar */}
       <div className="relative w-full aspect-square">
         {chart.capaDaPlaylist ? (
-          <img src={driveThumb(chart.capaDaPlaylist, 400)} alt={chart.nome} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+          <img
+            src={driveThumb(chart.capaDaPlaylist, 400)}
+            alt={chart.subtitulo}
+            className="w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <div className="w-full h-full bg-white/[0.05] grid place-items-center">
             <span className="text-4xl">{chart.icone}</span>
@@ -536,6 +503,7 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
           <p className="text-xs font-black text-white leading-tight">{chart.subtitulo}</p>
         </div>
       </div>
+      {/* top 3 preview */}
       <div className="px-3 py-2.5 space-y-1.5">
         {top3.map((e, i) => (
           <div key={i} className="flex items-center gap-2">
@@ -544,7 +512,7 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
             <StatusIcon status={e.status} />
           </div>
         ))}
-        <p className="text-[9px] text-muted-foreground/40 pt-0.5 text-right">Ver top 50 →</p>
+        <p className="text-[9px] text-muted-foreground/40 pt-0.5 text-right">Ver tudo →</p>
       </div>
     </button>
   );
@@ -562,7 +530,7 @@ function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => vo
       <div className="flex items-center gap-4 p-4 bg-white/[0.03] border border-white/[0.06] rounded-[1.5rem]">
         <div className="size-16 rounded-2xl overflow-hidden bg-white/[0.05] flex-shrink-0">
           {chart.capaDaPlaylist ? (
-            <img src={driveThumb(chart.capaDaPlaylist, 120)} alt={chart.nome} className="w-full h-full object-cover" loading="lazy" />
+            <img src={driveThumb(chart.capaDaPlaylist, 120)} alt={chart.subtitulo} className="w-full h-full object-cover" loading="lazy" />
           ) : (
             <div className="w-full h-full grid place-items-center text-3xl">{chart.icone}</div>
           )}
@@ -624,6 +592,7 @@ function HomeTab({
 
   return (
     <div className="space-y-6">
+      {/* Toggle Charts / Lançamentos */}
       <div className="grid grid-cols-2 gap-2 p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
         {(["charts", "lancamentos"] as const).map((s) => (
           <button
@@ -638,6 +607,7 @@ function HomeTab({
         ))}
       </div>
 
+      {/* ── Top Charts ── */}
       {homeSection === "charts" && (
         <section className="space-y-4">
           {chartsLoading ? (
@@ -654,6 +624,7 @@ function HomeTab({
         </section>
       )}
 
+      {/* ── Lançamentos ── */}
       {homeSection === "lancamentos" && (
         <section className="space-y-6">
           {loading ? (
@@ -950,7 +921,7 @@ export default function PlayHomePage() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const tabsRef = useRef<HTMLDivElement>(null);
 
-  // 1. Empire Play API — Músicas, Clipes, Vídeos, Fórum
+  // 1. Empire Play API — Músicas, Clipes, Vídeos
   useEffect(() => {
     Promise.all([
       fetch(`${API_URL}?action=conteudo&categoria=musicas`).then((r) => r.json()),
@@ -966,7 +937,7 @@ export default function PlayHomePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // 2. Sheets API — planilha Musicas (cruzamento audioSrc + lançamentos)
+  // 2. Sheets API — planilha Musicas (lançamentos + cruzamento audioSrc)
   useEffect(() => {
     Promise.all([
       fetch(PLAY_API("Musicas")).then((r) => r.json()).catch(() => ({ values: [] })),
@@ -980,16 +951,20 @@ export default function PlayHomePage() {
     }).catch(console.error);
   }, []);
 
-  // 3. Charts — aguarda rawMusicasValues; tenta cada aba em ordem de prioridade
+  // 3. Charts — busca direta pelas abas corretas
   useEffect(() => {
     if (!rawMusicasValues.length) return;
 
     Promise.all(
-      CHARTS_CONFIG.map((cfg) => fetchFirstValid(cfg.abasPossiveis))
+      CHARTS_CONFIG.map((cfg) =>
+        fetch(CHARTS_API(cfg.aba))
+          .then((r) => r.json())
+          .then((j) => ({ cfg, values: (j.values || []) as string[][] }))
+          .catch(() => ({ cfg, values: [] as string[][] }))
+      )
     ).then((results) => {
       const built: ChartData[] = results
-        .map((values, i) => {
-          const cfg = CHARTS_CONFIG[i];
+        .map(({ cfg, values }) => {
           const { entries, capaDaPlaylist } = processChart(values, rawMusicasValues, cfg.isVideo);
           return {
             nome: cfg.nome,
