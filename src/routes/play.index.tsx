@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")({
+export const Route = createFileRoute("/play/")(({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/play/")({
       { property: "og:description", content: "Ou\u00e7a as m\u00fasicas, clipes e v\u00eddeos do Empire RPG." },
     ],
   }),
-});
+}));
 
 // \u2500\u2500\u2500 API URLs \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 const API_URL =
@@ -36,14 +36,6 @@ const API_URL =
 const CHARTS_SHEET_ID = "1ThRhljmAS41JmVBPkPtYwe0JQHRx9Pih2PQAPT2ebyA";
 const PLAY_SHEET_ID   = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
 const SHEETS_KEY      = "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY";
-
-// Sheets API v4 (requer API key e planilha public/compartilhada)
-const CHARTS_API = (aba: string) =>
-  `https://sheets.googleapis.com/v4/spreadsheets/${CHARTS_SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
-
-// gviz fallback: funciona sem API key desde que a planilha seja publica no link
-const CHARTS_GVIZ = (aba: string) =>
-  `https://docs.google.com/spreadsheets/d/${CHARTS_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`;
 
 const PLAY_API = (aba: string) =>
   `https://sheets.googleapis.com/v4/spreadsheets/${PLAY_SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
@@ -209,10 +201,8 @@ async function fetchSheetValues(sheetId: string, aba: string, apiKey: string): P
     if (res.ok) {
       const j = await res.json();
       if (j.values && j.values.length > 0) return { values: j.values as string[][] };
-      // v4 OK mas sem valores — pode ser planilha vazia ou aba errada
       return { values: [], error: `v4 OK mas sem valores para aba "${aba}"` };
     }
-    // v4 falhou (403, 400 etc) — tentar gviz
     const errText = await res.text().catch(() => String(res.status));
     const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`;
     const gvizRes = await fetch(gvizUrl);
@@ -229,17 +219,21 @@ async function fetchSheetValues(sheetId: string, aba: string, apiKey: string): P
 }
 
 // \u2500\u2500\u2500 processChart \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-// Le headers reais da aba.
+// Headers reais de todas as abas de chart:
+//   BRASIL | POS | PA\u00cdS | CHART | M\u00daSICA | STREAMS ESTIMADOS | DATA
 //
-// Abas Top_50_Spotify e Top_Songs_Apple_Music:
-//   "Capa da musica" | "ID do topico" | "Link do audio" | "ID do criador" | "Nome da musica" | "Posicao"
-//
-// Aba Top_Videos_YT:
-//   "Thumb" | "ID do topico" | "Link do audio" | "ID do criador" | "Nome do video" | "Posicao"
+// Mapeamento:
+//   POS              -> posicao
+//   M\u00daSICA           -> titulo
+//   BRASIL           -> artista (nome do artista brasileiro)
+//   PA\u00cdS             -> pais de origem
+//   STREAMS ESTIMADOS -> streams (exibido como subtitulo)
+//   DATA             -> data de entrada no chart
+//   (sem capa na planilha — usa placeholder)
 
 function processChart(
   chartValues: string[][],
-  isVideo: boolean
+  _isVideo: boolean
 ): { entries: ChartEntry[]; capaDaPlaylist: string } {
   if (!chartValues || chartValues.length < 2) return { entries: [], capaDaPlaylist: "" };
 
@@ -247,53 +241,41 @@ function processChart(
 
   const entries: ChartEntry[] = rows
     .map((row) => {
+      // Posicao: coluna "POS"
       const posicao = parseInt(
-        getField(row,
-          "Posi\u00e7\u00e3o", "Posicao", "posicao", "Posição", "position", "pos"
-        ).replace(/\D/g, "")
+        getField(row, "POS", "pos", "posi\u00e7\u00e3o", "posicao", "position").replace(/\D/g, "")
       ) || 0;
 
-      const titulo = isVideo
-        ? getField(row, "Nome do v\u00eddeo", "Nome do video", "nomedovideo", "titulo", "nome")
-        : getField(row, "Nome da m\u00fasica", "Nome da musica", "nomedamusica", "titulo", "nome");
+      // Titulo: coluna "M\u00daSICA"
+      const titulo = getField(row, "M\u00daSICA", "MUSICA", "musica", "m\u00fasica", "titulo", "nome", "song", "track");
 
-      const capa = isVideo
-        ? getField(row, "Thumb", "thumb", "capa")
-        : getField(row, "Capa da m\u00fasica", "Capa da musica", "capadamusica", "capa");
+      // Artista: coluna "BRASIL" (nome do artista/ato)
+      const artista = getField(row, "BRASIL", "brasil", "artista", "artist", "ato", "act");
 
-      const audioSrc = getField(row,
-        "Link do \u00e1udio", "Link do audio", "linkdoaudio", "audio", "link"
-      );
-      const idTopico = getField(row,
-        "ID do t\u00f3pico", "ID do topico", "iddotopico", "idtopico", "id"
-      );
-      const artista = getField(row,
-        "ID do criador", "ID do Criador", "iddocriador", "artista", "criador"
-      );
+      // Streams: coluna "STREAMS ESTIMADOS" — usado como subtitulo secundario
+      const streams = getField(row, "STREAMS ESTIMADOS", "streamsestimados", "streams");
+
+      // Pais: coluna "PA\u00cdS"
+      const pais = getField(row, "PA\u00cdS", "PAIS", "pais", "pa\u00eds", "country");
 
       if (!posicao || !titulo) return null;
 
-      const playItem: PlayItem | undefined = audioSrc
-        ? {
-            id: idTopico || norm(titulo),
-            titulo,
-            artista,
-            capa,
-            audioSrc,
-            letra: "",
-            categoria: isVideo ? "musicvideo" : "musica",
-          }
-        : undefined;
-
-      return { posicao, titulo, artistas: artista, status: "", capa, playItem } as ChartEntry;
+      return {
+        posicao,
+        titulo,
+        // artistas: "BRASIL (PA\u00cdS)" se tiver pais, sen\u00e3o s\u00f3 BRASIL
+        artistas: pais && pais !== artista ? `${artista} \u2022 ${pais}` : artista,
+        // status: reutiliza streams como badge secundario
+        status: streams || "",
+        capa: "",
+        playItem: undefined,
+      } as ChartEntry;
     })
     .filter((e): e is ChartEntry => e !== null && e.posicao > 0)
     .sort((a, b) => a.posicao - b.posicao)
     .slice(0, 50);
 
-  const capaDaPlaylist = entries.find((e) => e.posicao === 1)?.capa ?? entries[0]?.capa ?? "";
-
-  return { entries, capaDaPlaylist };
+  return { entries, capaDaPlaylist: "" };
 }
 
 // \u2500\u2500\u2500 Skeleton \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -464,12 +446,8 @@ function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
         )}
       </div>
 
-      <div className="size-10 rounded-xl overflow-hidden bg-white/[0.05] flex-shrink-0">
-        {entry.capa ? (
-          <img src={driveThumb(entry.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
-        ) : (
-          <div className="w-full h-full grid place-items-center"><Music className="size-4 text-white/10" /></div>
-        )}
+      <div className="size-10 rounded-xl overflow-hidden bg-white/[0.05] flex-shrink-0 grid place-items-center">
+        <Music className="size-4 text-white/10" />
       </div>
 
       <div className="min-w-0 flex-1">
@@ -479,8 +457,8 @@ function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
         <p className="text-[10px] text-muted-foreground truncate">{entry.artistas}</p>
       </div>
 
-      <div className="flex-shrink-0">
-        <StatusIcon status={entry.status} />
+      <div className="flex-shrink-0 text-[9px] text-muted-foreground/50 font-mono max-w-[60px] truncate text-right">
+        {entry.status}
       </div>
     </button>
   );
@@ -510,21 +488,10 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
       onClick={onOpen}
       className="w-full text-left bg-white/[0.03] border border-white/[0.06] rounded-[1.5rem] overflow-hidden active:border-primary/30 transition-all"
     >
-      <div className="relative w-full aspect-square">
-        {chart.capaDaPlaylist ? (
-          <img
-            src={driveThumb(chart.capaDaPlaylist, 400)}
-            alt={chart.subtitulo}
-            className="w-full h-full object-cover"
-            loading="lazy"
-            decoding="async"
-          />
-        ) : (
-          <div className="w-full h-full bg-white/[0.05] grid place-items-center">
-            <span className="text-4xl">{chart.icone}</span>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+      {/* Sem capa na planilha: usa placeholder com icone do chart */}
+      <div className="relative w-full aspect-square bg-white/[0.05] grid place-items-center">
+        <span className="text-5xl">{chart.icone}</span>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
         <div className="absolute bottom-3 left-3 right-3">
           <p className="text-[10px] font-black uppercase tracking-[0.15em] text-white/60 mb-0.5">{chart.icone} {chart.nome}</p>
           <p className="text-xs font-black text-white leading-tight">{chart.subtitulo}</p>
@@ -535,7 +502,6 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
           <div key={i} className="flex items-center gap-2">
             <span className="text-[10px] font-black text-muted-foreground/50 w-3">{e.posicao}</span>
             <p className="text-[10px] font-black truncate flex-1 uppercase tracking-tight">{e.titulo}</p>
-            <StatusIcon status={e.status} />
           </div>
         ))}
         <p className="text-[9px] text-muted-foreground/40 pt-0.5 text-right">Ver tudo \u2192</p>
@@ -554,12 +520,8 @@ function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => vo
       </button>
 
       <div className="flex items-center gap-4 p-4 bg-white/[0.03] border border-white/[0.06] rounded-[1.5rem]">
-        <div className="size-16 rounded-2xl overflow-hidden bg-white/[0.05] flex-shrink-0">
-          {chart.capaDaPlaylist ? (
-            <img src={driveThumb(chart.capaDaPlaylist, 120)} alt={chart.subtitulo} className="w-full h-full object-cover" loading="lazy" />
-          ) : (
-            <div className="w-full h-full grid place-items-center text-3xl">{chart.icone}</div>
-          )}
+        <div className="size-16 rounded-2xl overflow-hidden bg-white/[0.05] flex-shrink-0 grid place-items-center">
+          <span className="text-3xl">{chart.icone}</span>
         </div>
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">{chart.icone} {chart.nome}</p>
@@ -994,7 +956,7 @@ export default function PlayHomePage() {
           if (!values || values.length < 2) return null;
           const { entries, capaDaPlaylist } = processChart(values, cfg.isVideo);
           if (!entries.length) {
-            errors.push(`[${cfg.aba}] processChart retornou 0 entries. Headers: ${values[0]?.join(" | ")}`);
+            errors.push(`[${cfg.aba}] 0 entries. Headers: ${values[0]?.join(" | ")}`);
             return null;
           }
           return {
