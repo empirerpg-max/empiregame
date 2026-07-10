@@ -32,6 +32,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ToursIndexRouteImport } from './routes/tours.index'
 import { Route as PontoIndexRouteImport } from './routes/ponto.index'
 import { Route as PlaylistsIndexRouteImport } from './routes/playlists.index'
+import { Route as PlayIndexRouteImport } from './routes/play.index'
 import { Route as GamesIndexRouteImport } from './routes/games.index'
 import { Route as ArtistasIndexRouteImport } from './routes/artistas.index'
 import { Route as ToursNomeRouteImport } from './routes/tours.$nome'
@@ -168,6 +169,11 @@ const PontoIndexRoute = PontoIndexRouteImport.update({
 const PlaylistsIndexRoute = PlaylistsIndexRouteImport.update({
   id: '/playlists/',
   path: '/playlists/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlayIndexRoute = PlayIndexRouteImport.update({
+  id: '/play/',
+  path: '/play/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GamesIndexRoute = GamesIndexRouteImport.update({
@@ -317,6 +323,7 @@ export interface FileRoutesByFullPath {
   '/tours/$nome': typeof ToursNomeRoute
   '/artistas/': typeof ArtistasIndexRoute
   '/games/': typeof GamesIndexRoute
+  '/play/': typeof PlayIndexRoute
   '/playlists/': typeof PlaylistsIndexRoute
   '/ponto/': typeof PontoIndexRoute
   '/tours/': typeof ToursIndexRoute
@@ -364,6 +371,7 @@ export interface FileRoutesByTo {
   '/tours/$nome': typeof ToursNomeRoute
   '/artistas': typeof ArtistasIndexRoute
   '/games': typeof GamesIndexRoute
+  '/play': typeof PlayIndexRoute
   '/playlists': typeof PlaylistsIndexRoute
   '/ponto': typeof PontoIndexRoute
   '/tours': typeof ToursIndexRoute
@@ -412,6 +420,7 @@ export interface FileRoutesById {
   '/tours/$nome': typeof ToursNomeRoute
   '/artistas/': typeof ArtistasIndexRoute
   '/games/': typeof GamesIndexRoute
+  '/play/': typeof PlayIndexRoute
   '/playlists/': typeof PlaylistsIndexRoute
   '/ponto/': typeof PontoIndexRoute
   '/tours/': typeof ToursIndexRoute
@@ -461,6 +470,7 @@ export interface FileRouteTypes {
     | '/tours/$nome'
     | '/artistas/'
     | '/games/'
+    | '/play/'
     | '/playlists/'
     | '/ponto/'
     | '/tours/'
@@ -508,6 +518,7 @@ export interface FileRouteTypes {
     | '/tours/$nome'
     | '/artistas'
     | '/games'
+    | '/play'
     | '/playlists'
     | '/ponto'
     | '/tours'
@@ -555,6 +566,7 @@ export interface FileRouteTypes {
     | '/tours/$nome'
     | '/artistas/'
     | '/games/'
+    | '/play/'
     | '/playlists/'
     | '/ponto/'
     | '/tours/'
@@ -603,6 +615,7 @@ export interface RootRouteChildren {
   ToursNomeRoute: typeof ToursNomeRoute
   ArtistasIndexRoute: typeof ArtistasIndexRoute
   GamesIndexRoute: typeof GamesIndexRoute
+  PlayIndexRoute: typeof PlayIndexRoute
   PlaylistsIndexRoute: typeof PlaylistsIndexRoute
   PontoIndexRoute: typeof PontoIndexRoute
   ToursIndexRoute: typeof ToursIndexRoute
@@ -772,6 +785,13 @@ declare module '@tanstack/react-router' {
       path: '/playlists'
       fullPath: '/playlists/'
       preLoaderRoute: typeof PlaylistsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/play/': {
+      id: '/play/'
+      path: '/play'
+      fullPath: '/play/'
+      preLoaderRoute: typeof PlayIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/games/': {
@@ -1014,6 +1034,7 @@ const rootRouteChildren: RootRouteChildren = {
   ToursNomeRoute: ToursNomeRoute,
   ArtistasIndexRoute: ArtistasIndexRoute,
   GamesIndexRoute: GamesIndexRoute,
+  PlayIndexRoute: PlayIndexRoute,
   PlaylistsIndexRoute: PlaylistsIndexRoute,
   PontoIndexRoute: PontoIndexRoute,
   ToursIndexRoute: ToursIndexRoute,
