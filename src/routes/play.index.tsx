@@ -131,10 +131,38 @@ function driveThumb(capa: string, size = 300): string {
   return capa;
 }
 
+/**
+ * Faz o parse da coluna "Data de lançamento" (coluna A da aba Musicas).
+ * Aceita formatos: DD/MM/YYYY, YYYY-MM-DD, MM/DD/YYYY e ISO 8601.
+ * Retorna timestamp numérico para ordenação (0 se inválido).
+ */
 function parseDataLancamento(item: SheetItem): number {
-  const d = getField(item, "data_de_lancamento", "datadelancamento", "data");
-  if (!d) return 0;
-  const t = new Date(d).getTime();
+  const raw = getField(
+    item,
+    // nome exato da coluna na planilha (com acentos e espaços)
+    "Data de lançamento",
+    "Data de lancamento",
+    // aliases normalizados que getField também verifica
+    "data_de_lancamento",
+    "datadelancamento",
+    "data_lancamento",
+    "datalancamento",
+    "data",
+    "release_date",
+    "releasedate",
+  );
+  if (!raw || raw.trim() === "") return 0;
+
+  // DD/MM/YYYY  →  YYYY-MM-DD
+  const brDate = raw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (brDate) {
+    const iso = `${brDate[3]}-${brDate[2].padStart(2, "0")}-${brDate[1].padStart(2, "0")}`;
+    const t = new Date(iso).getTime();
+    return isNaN(t) ? 0 : t;
+  }
+
+  // qualquer outro formato (YYYY-MM-DD, ISO, etc.)
+  const t = new Date(raw.trim()).getTime();
   return isNaN(t) ? 0 : t;
 }
 
@@ -342,7 +370,17 @@ function VideoCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
   );
 }
 
-function RowTrack({ item, queue, num }: { item: PlayItem; queue: PlayItem[]; num: number }) {
+function RowTrack({
+  item,
+  queue,
+  num,
+  dataLancamento,
+}: {
+  item: PlayItem;
+  queue: PlayItem[];
+  num: number;
+  dataLancamento?: string;
+}) {
   const { play, state } = usePlay();
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
   return (
@@ -372,7 +410,12 @@ function RowTrack({ item, queue, num }: { item: PlayItem; queue: PlayItem[]; num
       </div>
       <div className="min-w-0 flex-1">
         <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "—"}</p>
-        <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
+        <p className="text-[10px] text-muted-foreground truncate">
+          {item.artista}
+          {dataLancamento && (
+            <span className="ml-1.5 opacity-50">· {dataLancamento}</span>
+          )}
+        </p>
       </div>
       <Play className="size-4 text-muted-foreground/40 flex-shrink-0" fill="currentColor" />
     </button>
@@ -621,7 +664,38 @@ function HomeTab({
 // ─── Músicas Tab ───────────────────────────────────────────────────────────
 type MusicasSubTab = "lancamentos" | "albuns" | "lancar";
 
-function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: boolean }) {
+/**
+ * Formata timestamp para exibição: "DD/MM/YYYY" ou string original se inválida.
+ */
+function formatDataDisplay(item: SheetItem): string {
+  const raw = getField(
+    item,
+    "Data de lançamento",
+    "Data de lancamento",
+    "data_de_lancamento",
+    "datadelancamento",
+    "data_lancamento",
+    "datalancamento",
+    "data",
+  );
+  if (!raw) return "";
+
+  // Já está no formato DD/MM/YYYY → devolve direto
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw.trim())) return raw.trim();
+
+  // Tenta converter qualquer outro formato para DD/MM/YYYY
+  const d = new Date(raw.trim());
+  if (!isNaN(d.getTime())) {
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  }
+  return raw.trim();
+}
+
+function MusicasTab({ playMusicasDB, musicasDB, loading }: {
+  playMusicasDB: SheetItem[];
+  musicasDB: SheetItem[];
+  loading: boolean;
+}) {
   const [subTab, setSubTab] = useState<MusicasSubTab>("lancamentos");
 
   const SUB_TABS: { id: MusicasSubTab; label: string; icon: React.ElementType }[] = [
@@ -630,13 +704,25 @@ function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: b
     { id: "lancar",      label: "Lançar",              icon: PlusCircle },
   ];
 
-  const lancamentos = useMemo<PlayItem[]>(
-    () =>
-      [...musicasDB]
-        .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
-        .map((m) => toPlayItem(m, "musica")),
-    [musicasDB]
-  );
+  /**
+   * Últimos lançamentos:
+   * - Fonte: planilha CSV da aba "Musicas" (playMusicasDB) → tem a coluna "Data de lançamento"
+   * - Ordenação: mais recente primeiro (coluna A, parseDataLancamento)
+   * - Limite: 30 músicas
+   * - Fallback: se playMusicasDB estiver vazio (carregando), usa musicasDB da API sem ordenação por data
+   */
+  const lancamentos = useMemo<{ item: PlayItem; dataDisplay: string }[]>(() => {
+    const source = playMusicasDB.length > 0 ? playMusicasDB : musicasDB;
+    return [...source]
+      .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
+      .slice(0, 30)
+      .map((m) => ({
+        item: toPlayItem(m, "musica"),
+        dataDisplay: formatDataDisplay(m),
+      }));
+  }, [playMusicasDB, musicasDB]);
+
+  const lancamentosQueue = useMemo(() => lancamentos.map((l) => l.item), [lancamentos]);
 
   const albuns = useMemo(() => {
     const map: Record<string, { title: string; artist: string; capa: string; faixas: PlayItem[] }> = {};
@@ -656,7 +742,7 @@ function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: b
     return Object.values(map);
   }, [musicasDB]);
 
-  if (loading) return <SkeletonList rows={6} />;
+  if (loading && playMusicasDB.length === 0) return <SkeletonList rows={6} />;
 
   return (
     <div className="space-y-5">
@@ -684,9 +770,20 @@ function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: b
           {lancamentos.length === 0 ? (
             <p className="text-center text-xs text-muted-foreground py-12 opacity-40">Nenhuma música ainda.</p>
           ) : (
-            lancamentos.map((item, i) => (
-              <RowTrack key={item.id} item={item} queue={lancamentos} num={i + 1} />
-            ))
+            <>
+              <p className="text-[10px] text-muted-foreground/50 uppercase tracking-widest font-black px-3 pb-1">
+                {lancamentos.length} músicas · mais recente primeiro
+              </p>
+              {lancamentos.map(({ item, dataDisplay }, i) => (
+                <RowTrack
+                  key={item.id || i}
+                  item={item}
+                  queue={lancamentosQueue}
+                  num={i + 1}
+                  dataLancamento={dataDisplay}
+                />
+              ))}
+            </>
           )}
         </div>
       )}
@@ -1033,7 +1130,13 @@ export default function PlayHomePage() {
             onTabChange={handleTabChange}
           />
         )}
-        {activeTab === "musicas" && <MusicasTab musicasDB={musicasDB} loading={loading} />}
+        {activeTab === "musicas" && (
+          <MusicasTab
+            playMusicasDB={playMusicasDB}
+            musicasDB={musicasDB}
+            loading={loading}
+          />
+        )}
         {activeTab === "clipes"  && <ClipesTab musicVideosDB={musicVideosDB} loading={loading} />}
         {activeTab === "videos"  && <VideosTab videosDB={videosDB} loading={loading} />}
         {activeTab === "forum"   && <ForumTab musicasDB={musicasDB} musicVideosDB={musicVideosDB} videosDB={videosDB} loading={loading} />}
