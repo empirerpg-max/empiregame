@@ -4,9 +4,12 @@ import {
   useState,
   useRef,
   useCallback,
-  useEffect,
   type ReactNode,
 } from "react";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tipos
+// ─────────────────────────────────────────────────────────────────────────────
 
 export type MediaType = "drive" | "youtube";
 
@@ -15,7 +18,8 @@ export type PlayItem = {
   titulo: string;
   artista: string;
   capa: string;
-  audioSrc: string; // drive file-id puro OU youtube video-id puro
+  /** Drive file-id puro OU YouTube video-id puro (11 chars) ou URL completa */
+  audioSrc: string;
   letra?: string;
   categoria: "musica" | "musicvideo" | "video";
 };
@@ -23,6 +27,11 @@ export type PlayItem = {
 type PlayerState = {
   queue: PlayItem[];
   currentIdx: number | null;
+  /**
+   * `playing` representa a INTENÇÃO do usuário.
+   * O estado visual real é confirmado pelos eventos onPlay/onStateChange.
+   * Nunca mude para `true` aqui sem ter certeza de que a mídia vai tocar.
+   */
   playing: boolean;
 };
 
@@ -30,28 +39,36 @@ type PlayContextType = {
   state: PlayerState;
   play: (item: PlayItem, queue?: PlayItem[]) => void;
   pause: () => void;
+  /**
+   * `resume` NÃO muda `playing` para true diretamente.
+   * Ele tenta disparar o .play() no elemento nativo e só atualiza
+   * o estado após a promise resolver (Drive) ou o evento PLAYING (YT).
+   * Use `triggerPlay` no MiniPlayer para isso.
+   */
   resume: () => void;
   next: () => void;
   prev: () => void;
   close: () => void;
-  /** @deprecated use mediaType + currentMediaId instead */
-  iframeSrc: string | null;
   mediaType: MediaType | null;
   currentMediaId: string | null;
   audioRef: React.RefObject<HTMLAudioElement | null>;
   ytPlayerRef: React.MutableRefObject<YT.Player | null>;
+  /** Chamado pelo player nativo quando a mídia de fato começou a tocar */
+  confirmPlaying: () => void;
+  /** Chamado pelo player nativo quando a mídia foi pausada/parou */
+  confirmPaused: () => void;
+  /** Chamado ao fim da faixa — avança a fila ou reseta */
   onEnded: () => void;
-  syncPlaying: (isPlaying: boolean) => void;
+  /** @deprecated mantido para não quebrar imports existentes */
+  iframeSrc: null;
+  /** @deprecated */
+  syncPlaying: (v: boolean) => void;
 };
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers de extração de ID
+// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Devolve o fileId puro do Google Drive a partir de:
- * - uma URL completa (drive.google.com/file/d/<id>/...)
- * - uma query-string (?id=<id>)
- * - já um ID puro (sem barras/protocol)
- */
 export function extractDriveId(str: string): string | null {
   if (!str) return null;
   const m =
@@ -62,13 +79,6 @@ export function extractDriveId(str: string): string | null {
   return null;
 }
 
-/**
- * Devolve o videoId puro do YouTube a partir de:
- * - youtu.be/<id>
- * - youtube.com/watch?v=<id>
- * - youtube.com/embed/<id>
- * - já um ID puro (11 chars alfanuméricos)
- */
 export function extractYouTubeId(str: string): string | null {
   if (!str) return null;
   const patterns = [
@@ -84,13 +94,13 @@ export function extractYouTubeId(str: string): string | null {
   return null;
 }
 
-/** Detecta o tipo de mídia pelo conteúdo de audioSrc */
 export function detectMediaType(audioSrc: string): MediaType {
   if (!audioSrc) return "drive";
+  const s = audioSrc.trim();
   if (
-    audioSrc.includes("youtube") ||
-    audioSrc.includes("youtu.be") ||
-    /^[a-zA-Z0-9_-]{11}$/.test(audioSrc.trim())
+    s.includes("youtube") ||
+    s.includes("youtu.be") ||
+    /^[a-zA-Z0-9_-]{11}$/.test(s)
   ) {
     return "youtube";
   }
@@ -98,22 +108,21 @@ export function detectMediaType(audioSrc: string): MediaType {
 }
 
 /**
- * URL de stream direto do Google Drive (HTML5 <audio>).
- * NOTA: funciona para arquivos públicos ou compartilhados com "qualquer
- * pessoa com o link". O export=download faz o browser carregar o binário
- * diretamente, sem a página de preview do Drive.
+ * URL de stream do Google Drive com crossorigin seguro.
+ * Usa `/uc?export=download` para servir o binário diretamente.
+ * O arquivo precisa ter permissão "Qualquer pessoa com o link".
  */
 export function driveStreamUrl(idOrUrl: string): string {
   const id = extractDriveId(idOrUrl) ?? idOrUrl;
   return `https://drive.google.com/uc?export=download&id=${id}`;
 }
 
-/** @deprecated mantido por compatibilidade – use driveStreamUrl */
-export function driveAudioPreview(url: string): string {
-  return driveStreamUrl(url);
-}
+/** @deprecated – use driveStreamUrl */
+export const driveAudioPreview = driveStreamUrl;
 
-// ─── Context ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Context
+// ─────────────────────────────────────────────────────────────────────────────
 
 const PlayContext = createContext<PlayContextType | null>(null);
 
@@ -124,12 +133,11 @@ export function PlayProvider({ children }: { children: ReactNode }) {
     playing: false,
   });
 
-  // Refs dos players nativos — criados aqui para existirem por toda a vida
-  // do Provider sem re-montar quando a faixa muda.
+  // Refs para os players nativos — vivem enquanto o Provider existir
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<YT.Player | null>(null);
 
-  // ── Derivados ──────────────────────────────────────────────────────────────
+  // ── Derivados ────────────────────────────────────────────────────────────
   const currentItem =
     state.currentIdx !== null ? state.queue[state.currentIdx] : null;
 
@@ -139,75 +147,59 @@ export function PlayProvider({ children }: { children: ReactNode }) {
 
   const currentMediaId: string | null = currentItem
     ? mediaType === "youtube"
-      ? extractYouTubeId(currentItem.audioSrc) ?? currentItem.audioSrc
-      : extractDriveId(currentItem.audioSrc) ?? currentItem.audioSrc
+      ? (extractYouTubeId(currentItem.audioSrc) ?? currentItem.audioSrc)
+      : (extractDriveId(currentItem.audioSrc) ?? currentItem.audioSrc)
     : null;
 
+  // ── Confirmações de estado real (chamadas pelo player nativo) ────────────
+
+  /** Atualiza playing → true SOMENTE depois que a mídia realmente começou */
+  const confirmPlaying = useCallback(() => {
+    setState((s) => ({ ...s, playing: true }));
+  }, []);
+
+  /** Atualiza playing → false quando a mídia realmente parou/falhou */
+  const confirmPaused = useCallback(() => {
+    setState((s) => ({ ...s, playing: false }));
+  }, []);
+
   /** @deprecated */
-  const iframeSrc: string | null =
-    currentItem && state.playing && mediaType === "drive"
-      ? driveStreamUrl(currentItem.audioSrc)
-      : null;
+  const syncPlaying = useCallback((v: boolean) => {
+    setState((s) => ({ ...s, playing: v }));
+  }, []);
 
-  // ── Sincroniza playing → player nativo ─────────────────────────────────────
-  useEffect(() => {
-    if (!currentItem) return;
+  // ── Actions ──────────────────────────────────────────────────────────────
 
-    if (mediaType === "drive" && audioRef.current) {
-      if (state.playing) {
-        audioRef.current.play().catch(() => {
-          // Autoplay bloqueado: o botão de play já foi o gesto do usuário,
-          // então isso não deveria acontecer. Apenas silencia o warning.
-        });
-      } else {
-        audioRef.current.pause();
-      }
-    }
-
-    if (mediaType === "youtube" && ytPlayerRef.current) {
-      try {
-        if (state.playing) {
-          ytPlayerRef.current.playVideo();
-        } else {
-          ytPlayerRef.current.pauseVideo();
-        }
-      } catch {
-        // player ainda não inicializado — o onReady do YouTube vai chamar
-        // playVideo assim que estiver pronto.
-      }
-    }
-  }, [state.playing, currentItem, mediaType]);
-
-  // ── Troca de faixa: recarrega o elemento de áudio ──────────────────────────
-  useEffect(() => {
-    if (!currentItem || mediaType !== "drive") return;
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const url = driveStreamUrl(currentItem.audioSrc);
-    audio.src = url;
-    audio.load();
-    if (state.playing) {
-      audio.play().catch(() => {});
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMediaId, mediaType]);
-
-  // ── Actions ────────────────────────────────────────────────────────────────
+  /**
+   * Inicia a reprodução de um item.
+   * playing fica false aqui; o MiniPlayer chama triggerPlay()
+   * após atualizar a faixa, garantindo o user-gesture correto.
+   */
   const play = useCallback((item: PlayItem, queue?: PlayItem[]) => {
     const newQueue = queue ?? [item];
     const idx = queue ? queue.findIndex((q) => q.id === item.id) : 0;
-    setState({ queue: newQueue, currentIdx: idx >= 0 ? idx : 0, playing: true });
+    // playing=false propositalmente: o MiniPlayer vai chamar o .play() nativo
+    // dentro do onClick (user gesture) após o estado atualizar.
+    setState({ queue: newQueue, currentIdx: idx >= 0 ? idx : 0, playing: false });
   }, []);
 
-  const pause = useCallback(() =>
-    setState((s) => ({ ...s, playing: false })), []);
+  const pause = useCallback(() => {
+    if (audioRef.current) audioRef.current.pause();
+    if (ytPlayerRef.current) {
+      try { ytPlayerRef.current.pauseVideo(); } catch { /* YT não iniciado */ }
+    }
+    setState((s) => ({ ...s, playing: false }));
+  }, []);
 
-  const resume = useCallback(() =>
-    setState((s) => ({ ...s, playing: true })), []);
+  /**
+   * resume não altera o estado — delega ao MiniPlayer que dispara
+   * .play() / playVideo() diretamente dentro do onClick do botão.
+   */
+  const resume = useCallback(() => {
+    // Intencional: sem setState. O MiniPlayer cuida disso com triggerPlay().
+  }, []);
 
   const close = useCallback(() => {
-    // Para tudo antes de fechar
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = "";
@@ -223,7 +215,7 @@ export function PlayProvider({ children }: { children: ReactNode }) {
       if (s.currentIdx === null) return s;
       const nextIdx = s.currentIdx + 1;
       if (nextIdx >= s.queue.length) return s;
-      return { ...s, currentIdx: nextIdx, playing: true };
+      return { ...s, currentIdx: nextIdx, playing: false }; // MiniPlayer dispara o play
     });
   }, []);
 
@@ -232,27 +224,19 @@ export function PlayProvider({ children }: { children: ReactNode }) {
       if (s.currentIdx === null) return s;
       const prevIdx = s.currentIdx - 1;
       if (prevIdx < 0) return s;
-      return { ...s, currentIdx: prevIdx, playing: true };
+      return { ...s, currentIdx: prevIdx, playing: false };
     });
   }, []);
 
-  /** Chamado pelo player quando a mídia termina — avança ou reseta */
   const onEnded = useCallback(() => {
     setState((s) => {
       if (s.currentIdx === null) return s;
       const nextIdx = s.currentIdx + 1;
       if (nextIdx < s.queue.length) {
-        return { ...s, currentIdx: nextIdx, playing: true };
+        return { ...s, currentIdx: nextIdx, playing: false }; // MiniPlayer dispara o próximo
       }
-      // Fim da fila: reseta mas mantém a última faixa visível
       return { ...s, playing: false };
     });
-  }, []);
-
-  /** Permite que o player de YouTube sincronize o estado quando o usuário
-   *  pausa/retoma dentro do próprio iframe (opcional, mas deixa o ícone certo). */
-  const syncPlaying = useCallback((isPlaying: boolean) => {
-    setState((s) => ({ ...s, playing: isPlaying }));
   }, []);
 
   return (
@@ -265,12 +249,14 @@ export function PlayProvider({ children }: { children: ReactNode }) {
         next,
         prev,
         close,
-        iframeSrc,
         mediaType,
         currentMediaId,
         audioRef,
         ytPlayerRef,
+        confirmPlaying,
+        confirmPaused,
         onEnded,
+        iframeSrc: null,
         syncPlaying,
       }}
     >
