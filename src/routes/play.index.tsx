@@ -12,10 +12,11 @@ import {
   Clapperboard,
   ChevronLeft,
   AlertCircle,
+  PlusCircle,
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")((({
+export const Route = createFileRoute("/play/")(((({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/play/")((({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-})));
+}))));
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
 const API_URL =
@@ -443,7 +444,6 @@ function SectionHeader({ icon, title, onMore }: { icon: React.ReactNode; title: 
 }
 
 // ─── Chart Mini Card ───────────────────────────────────────────────────────
-// Exibe apenas: capa (ou ícone) + título da playlist. Sem listas internas.
 function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void }) {
   return (
     <button
@@ -619,22 +619,39 @@ function HomeTab({
 }
 
 // ─── Músicas Tab ───────────────────────────────────────────────────────────
+type MusicasSubTab = "lancamentos" | "albuns" | "lancar";
+
 function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: boolean }) {
-  const [subTab, setSubTab] = useState<"lancamentos" | "top" | "albuns">("lancamentos");
+  const [subTab, setSubTab] = useState<MusicasSubTab>("lancamentos");
+
+  const SUB_TABS: { id: MusicasSubTab; label: string; icon: React.ElementType }[] = [
+    { id: "lancamentos", label: "Últimos lançamentos", icon: Music },
+    { id: "albuns",      label: "Álbuns",              icon: Music },
+    { id: "lancar",      label: "Lançar",              icon: PlusCircle },
+  ];
 
   const lancamentos = useMemo<PlayItem[]>(
-    () => [...musicasDB].sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a)).map((m) => toPlayItem(m, "musica")),
+    () =>
+      [...musicasDB]
+        .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
+        .map((m) => toPlayItem(m, "musica")),
     [musicasDB]
   );
-  const top = useMemo<PlayItem[]>(
-    () => [...musicasDB].sort((a, b) => (parseInt(getField(b, "weeks")) || 0) - (parseInt(getField(a, "weeks")) || 0)).map((m) => toPlayItem(m, "musica")),
-    [musicasDB]
-  );
+
   const albuns = useMemo(() => {
-    const map: Record<string, { title: string; artist: string; item: PlayItem }> = {};
+    const map: Record<string, { title: string; artist: string; capa: string; faixas: PlayItem[] }> = {};
     musicasDB.forEach((m) => {
       const album = getField(m, "album");
-      if (album && !map[album]) map[album] = { title: album, artist: getField(m, "act_principal", "actprincipal"), item: toPlayItem(m, "musica") };
+      if (!album) return;
+      if (!map[album]) {
+        map[album] = {
+          title: album,
+          artist: getField(m, "act_principal", "actprincipal"),
+          capa: getField(m, "capa_da_musica", "capadamusica", "capa", "cover"),
+          faixas: [],
+        };
+      }
+      map[album].faixas.push(toPlayItem(m, "musica"));
     });
     return Object.values(map);
   }, [musicasDB]);
@@ -643,46 +660,74 @@ function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: b
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-2 p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
-        {(["lancamentos", "top", "albuns"] as const).map((t) => (
+      {/* Sub-tab bar */}
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
+        {SUB_TABS.map(({ id, label, icon: Icon }) => (
           <button
-            key={t}
-            onClick={() => setSubTab(t)}
-            className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-              subTab === t ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
+            key={id}
+            onClick={() => setSubTab(id)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap flex-shrink-0 transition-all ${
+              subTab === id
+                ? "bg-primary text-primary-foreground shadow-lg"
+                : "text-muted-foreground"
             }`}
           >
-            {t === "lancamentos" ? "Lançamentos" : t === "top" ? "Top" : "Álbuns"}
+            <Icon className="size-3" />
+            {label}
           </button>
         ))}
       </div>
+
+      {/* Últimos lançamentos */}
       {subTab === "lancamentos" && (
         <div className="space-y-1">
-          {lancamentos.map((item, i) => <RowTrack key={item.id} item={item} queue={lancamentos} num={i + 1} />)}
+          {lancamentos.length === 0 ? (
+            <p className="text-center text-xs text-muted-foreground py-12 opacity-40">Nenhuma música ainda.</p>
+          ) : (
+            lancamentos.map((item, i) => (
+              <RowTrack key={item.id} item={item} queue={lancamentos} num={i + 1} />
+            ))
+          )}
         </div>
       )}
-      {subTab === "top" && (
-        <div className="space-y-1">
-          {top.map((item, i) => <RowTrack key={item.id} item={item} queue={top} num={i + 1} />)}
-        </div>
-      )}
+
+      {/* Álbuns */}
       {subTab === "albuns" && (
         <div className="grid grid-cols-2 gap-3">
-          {albuns.map((a) => (
-            <div key={a.title} className="flex flex-col gap-2">
-              <div className="aspect-square rounded-2xl overflow-hidden bg-primary/10">
-                {a.item.capa ? (
-                  <img src={driveThumb(a.item.capa, 300)} alt={a.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
-                ) : (
-                  <div className="w-full h-full grid place-items-center"><Music className="size-8 text-primary/30" /></div>
-                )}
+          {albuns.length === 0 ? (
+            <p className="col-span-2 text-center text-xs text-muted-foreground py-12 opacity-40">Nenhum álbum ainda.</p>
+          ) : (
+            albuns.map((a) => (
+              <div key={a.title} className="flex flex-col gap-2">
+                <div className="aspect-square rounded-2xl overflow-hidden bg-primary/10">
+                  {a.capa ? (
+                    <img src={driveThumb(a.capa, 300)} alt={a.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                  ) : (
+                    <div className="w-full h-full grid place-items-center"><Music className="size-8 text-primary/30" /></div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black truncate uppercase tracking-tight">{a.title}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{a.artist}</p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-xs font-black truncate uppercase tracking-tight">{a.title}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{a.artist}</p>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Lançar — placeholder para construção futura */}
+      {subTab === "lancar" && (
+        <div className="flex flex-col items-center gap-4 py-16 text-center">
+          <div className="size-16 rounded-full bg-primary/10 grid place-items-center">
+            <PlusCircle className="size-8 text-primary/60" />
+          </div>
+          <div>
+            <p className="text-sm font-black uppercase tracking-tight">Lançar música</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[24ch]">
+              Em breve você poderá submeter suas músicas aqui.
+            </p>
+          </div>
         </div>
       )}
     </div>
