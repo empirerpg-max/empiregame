@@ -27,11 +27,6 @@ export type PlayItem = {
 type PlayerState = {
   queue: PlayItem[];
   currentIdx: number | null;
-  /**
-   * `playing` representa a INTENÇÃO do usuário.
-   * Quando autoPlay=true, já entra como true para o MiniPlayer acionar
-   * triggerPlay() automaticamente no useEffect.
-   */
   playing: boolean;
 };
 
@@ -47,11 +42,8 @@ type PlayContextType = {
   currentMediaId: string | null;
   audioRef: React.RefObject<HTMLAudioElement | null>;
   ytPlayerRef: React.MutableRefObject<YT.Player | null>;
-  /** Chamado pelo player nativo quando a mídia de fato começou a tocar */
   confirmPlaying: () => void;
-  /** Chamado pelo player nativo quando a mídia foi pausada/parou */
   confirmPaused: () => void;
-  /** Chamado ao fim da faixa — avança a fila ou reseta */
   onEnded: () => void;
   /** @deprecated mantido para não quebrar imports existentes */
   iframeSrc: null;
@@ -60,7 +52,7 @@ type PlayContextType = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers de extração de ID
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function extractDriveId(str: string): string | null {
@@ -101,10 +93,6 @@ export function detectMediaType(audioSrc: string): MediaType {
   return "drive";
 }
 
-/**
- * URL de stream do Google Drive via proxy Cloudflare.
- * Evita CORS/CORB do Drive direto.
- */
 export function driveStreamUrl(idOrUrl: string): string {
   const id = extractDriveId(idOrUrl) ?? idOrUrl;
   return `https://empire-media-api.empirerpg-forum.workers.dev/?id=${id}`;
@@ -135,18 +123,17 @@ export function PlayProvider({ children }: { children: ReactNode }) {
   const currentItem =
     state.currentIdx !== null ? state.queue[state.currentIdx] : null;
 
-  const mediaType: MediaType | null = currentItem
+  const mediaType: MediaType | null = currentItem?.audioSrc
     ? detectMediaType(currentItem.audioSrc)
     : null;
 
-  const currentMediaId: string | null = currentItem
+  const currentMediaId: string | null = currentItem?.audioSrc
     ? mediaType === "youtube"
       ? (extractYouTubeId(currentItem.audioSrc) ?? currentItem.audioSrc)
       : (extractDriveId(currentItem.audioSrc) ?? currentItem.audioSrc)
     : null;
 
-  // ── Confirmações de estado real (chamadas pelo player nativo) ────────────
-
+  // ── Confirmações ─────────────────────────────────────────────────────────
   const confirmPlaying = useCallback(() => {
     setState((s) => ({ ...s, playing: true }));
   }, []);
@@ -162,18 +149,33 @@ export function PlayProvider({ children }: { children: ReactNode }) {
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
-  /**
-   * Inicia a reprodução de um item.
-   * Se opts.autoPlay=true, playing já entra como true e o MiniPlayer
-   * aciona triggerPlay() automaticamente via useEffect [currentMediaId, playing].
-   */
   const play = useCallback(
     (item: PlayItem, queue?: PlayItem[], opts?: { autoPlay?: boolean }) => {
       const newQueue = queue ?? [item];
-      const idx = queue ? queue.findIndex((q) => q.id === item.id) : 0;
+
+      // BUG FIX: quando id é vazio (campo "ID do tópico" não preenchido na
+      // planilha), findIndex sempre retorna 0 ou -1, ignorando qual item foi
+      // clicado. Usamos índice posicional baseado em audioSrc + titulo como
+      // chave de identidade, com fallback para posição na fila.
+      let idx = -1;
+
+      if (item.id) {
+        // Tenta por id primeiro (caso esteja preenchido)
+        idx = newQueue.findIndex((q) => q.id === item.id && q.id !== "");
+      }
+
+      if (idx < 0) {
+        // Fallback: compara audioSrc + titulo para encontrar o item exato
+        idx = newQueue.findIndex(
+          (q) => q.audioSrc === item.audioSrc && q.titulo === item.titulo
+        );
+      }
+
+      if (idx < 0) idx = 0;
+
       setState({
         queue: newQueue,
-        currentIdx: idx >= 0 ? idx : 0,
+        currentIdx: idx,
         playing: opts?.autoPlay === true,
       });
     },
@@ -188,12 +190,6 @@ export function PlayProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, playing: false }));
   }, []);
 
-  /**
-   * Resume: seta playing:true imediatamente para o botão refletir
-   * antes do evento 'play' chegar via confirmPlaying.
-   * O MiniPlayer ainda chama triggerPlay() no onClick para garantir
-   * o user-gesture no navegador.
-   */
   const resume = useCallback(() => {
     setState((s) => ({ ...s, playing: true }));
   }, []);
@@ -209,17 +205,11 @@ export function PlayProvider({ children }: { children: ReactNode }) {
     setState({ queue: [], currentIdx: null, playing: false });
   }, []);
 
-  /**
-   * next/prev: preservam o estado de playing para que o efeito 4
-   * do MiniPlayer dispare triggerPlay() automaticamente na nova faixa
-   * quando o usuário já estava ouvindo.
-   */
   const next = useCallback(() => {
     setState((s) => {
       if (s.currentIdx === null) return s;
       const nextIdx = s.currentIdx + 1;
       if (nextIdx >= s.queue.length) return s;
-      // Mantém playing para o efeito [currentMediaId, playing] disparar.
       return { ...s, currentIdx: nextIdx };
     });
   }, []);
@@ -229,7 +219,6 @@ export function PlayProvider({ children }: { children: ReactNode }) {
       if (s.currentIdx === null) return s;
       const prevIdx = s.currentIdx - 1;
       if (prevIdx < 0) return s;
-      // Mantém playing para o efeito [currentMediaId, playing] disparar.
       return { ...s, currentIdx: prevIdx };
     });
   }, []);
@@ -239,8 +228,6 @@ export function PlayProvider({ children }: { children: ReactNode }) {
       if (s.currentIdx === null) return s;
       const nextIdx = s.currentIdx + 1;
       if (nextIdx < s.queue.length) {
-        // Avança para próxima faixa mantendo playing:true para
-        // o useEffect [currentMediaId, playing] disparar triggerPlay().
         return { ...s, currentIdx: nextIdx, playing: true };
       }
       return { ...s, playing: false };
