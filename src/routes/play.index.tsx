@@ -15,16 +15,16 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")({
+export const Route = createFileRoute("/play/")(({
   component: PlayHomePage,
   head: () => ({
     meta: [
-      { title: "Empire Play \u2022 Empire Hub" },
-      { property: "og:title", content: "Empire Play \u2022 Empire Hub" },
-      { property: "og:description", content: "Ou\u00e7a as m\u00fasicas, clipes e v\u00eddeos do Empire RPG." },
+      { title: "Empire Play • Empire Hub" },
+      { property: "og:title", content: "Empire Play • Empire Hub" },
+      { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-});
+}));
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
 const API_URL =
@@ -32,10 +32,6 @@ const API_URL =
 
 const SHEET_ID = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
 
-/**
- * Busca uma aba da planilha pública como CSV — não exige API key.
- * Funciona enquanto a planilha tiver acesso "Qualquer pessoa com o link pode ver".
- */
 function sheetCsvUrl(aba: string): string {
   return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`;
 }
@@ -46,7 +42,7 @@ const CHARTS_CONFIG = [
     aba: "Top_50_Spotify",
     nome: "Spotify",
     subtitulo: "Top 100 Global Spotify",
-    icone: "\ud83d\udfe2",
+    icone: "🟢",
     cor: "text-green-400",
     isVideo: false,
     maxEntries: 100,
@@ -55,7 +51,7 @@ const CHARTS_CONFIG = [
     aba: "Top_Songs_Apple_Music",
     nome: "Apple Music",
     subtitulo: "Top Songs Apple Music",
-    icone: "\ud83c\udfb5",
+    icone: "🎵",
     cor: "text-red-400",
     isVideo: false,
     maxEntries: 100,
@@ -64,7 +60,7 @@ const CHARTS_CONFIG = [
     aba: "Top_Videos_YT",
     nome: "YouTube",
     subtitulo: "Top Videos",
-    icone: "\ud83d\udcf9",
+    icone: "📹",
     cor: "text-red-500",
     isVideo: true,
     maxEntries: 100,
@@ -75,11 +71,11 @@ type Tab = "home" | "musicas" | "clipes" | "videos" | "forum";
 type SheetItem = Record<string, string>;
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: "home",    label: "In\u00edcio",  icon: Home },
-  { id: "musicas", label: "M\u00fasicas",  icon: Music },
+  { id: "home",    label: "Início",  icon: Home },
+  { id: "musicas", label: "Músicas",  icon: Music },
   { id: "clipes",  label: "Clipes",   icon: Clapperboard },
-  { id: "videos",  label: "V\u00eddeos",  icon: Tv },
-  { id: "forum",   label: "F\u00f3rum",   icon: MessageSquare },
+  { id: "videos",  label: "Vídeos",  icon: Tv },
+  { id: "forum",   label: "Fórum",   icon: MessageSquare },
 ];
 
 export type ChartEntry = {
@@ -194,10 +190,6 @@ function parseCSV(csv: string): string[][] {
   return rows;
 }
 
-/**
- * Busca os valores de uma aba usando APENAS o endpoint de CSV público (gviz).
- * Não depende de API key — funciona com planilha pública.
- */
 async function fetchSheetValues(aba: string): Promise<{ values: string[][]; error?: string }> {
   try {
     const res = await fetch(sheetCsvUrl(aba));
@@ -225,19 +217,19 @@ function processChart(
 
   const entries: ChartEntry[] = rows
     .map((row) => {
-      const posStr = getField(row, "Posi\u00e7\u00e3o", "Posicao", "Pos", "position", "rank");
+      const posStr = getField(row, "Posição", "Posicao", "Pos", "position", "rank");
       const posicao = parseInt(posStr.replace(/\D/g, "")) || 0;
 
       const titulo = isVideo
-        ? getField(row, "Nome do v\u00eddeo", "Nome do video", "nomedovideo", "titulo", "title")
-        : getField(row, "Nome da m\u00fasica", "Nome da musica", "nomedamusica", "titulo", "title", "nome");
+        ? getField(row, "Nome do vídeo", "Nome do video", "nomedovideo", "titulo", "title")
+        : getField(row, "Nome da música", "Nome da musica", "nomedamusica", "titulo", "title", "nome");
 
       const capa = isVideo
-        ? getField(row, "Thumb", "thumb", "thumbnail", "capa", "Capa da m\u00fasica", "Capa da musica")
-        : getField(row, "Capa da m\u00fasica", "Capa da musica", "capadamusica", "capa", "cover");
+        ? getField(row, "Thumb", "thumb", "thumbnail", "capa", "Capa da música", "Capa da musica")
+        : getField(row, "Capa da música", "Capa da musica", "capadamusica", "capa", "cover");
 
-      const idTopico  = getField(row, "ID do t\u00f3pico", "ID do topico", "idtopico", "id");
-      const linkAudio = getField(row, "Link do \u00e1udio", "Link do audio", "linkdoaudio", "link", "audio", "url");
+      const idTopico  = getField(row, "ID do tópico", "ID do topico", "idtopico", "id");
+      const linkAudio = getField(row, "Link do áudio", "Link do audio", "linkdoaudio", "link", "audio", "url");
       const criador   = getField(row, "ID do criador", "iddocriador", "criador", "artista", "artist");
 
       if (!posicao || !titulo) return null;
@@ -318,7 +310,7 @@ function SongCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
         )}
       </div>
       <div className="min-w-0">
-        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "\u2014"}</p>
+        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "—"}</p>
         <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
       </div>
     </button>
@@ -343,7 +335,7 @@ function VideoCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
         </div>
       </div>
       <div className="min-w-0">
-        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "\u2014"}</p>
+        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "—"}</p>
         <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
       </div>
     </button>
@@ -379,7 +371,7 @@ function RowTrack({ item, queue, num }: { item: PlayItem; queue: PlayItem[]; num
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "\u2014"}</p>
+        <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "—"}</p>
         <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
       </div>
       <Play className="size-4 text-muted-foreground/40 flex-shrink-0" fill="currentColor" />
@@ -479,7 +471,7 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
             <p className="text-[10px] font-black truncate flex-1 uppercase tracking-tight">{e.titulo}</p>
           </div>
         ))}
-        <p className="text-[9px] text-muted-foreground/40 pt-0.5 text-right">{chart.entries.length} faixas \u2192</p>
+        <p className="text-[9px] text-muted-foreground/40 pt-0.5 text-right">{chart.entries.length} faixas →</p>
       </div>
     </button>
   );
@@ -568,20 +560,20 @@ function HomeTab({
               homeSection === s ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
             }`}
           >
-            {s === "charts" ? "\ud83c\udfc6 Top Charts" : "\u2728 Lan\u00e7amentos"}
+            {s === "charts" ? "🏆 Top Charts" : "✨ Lançamentos"}
           </button>
         ))}
       </div>
 
       {homeSection === "charts" && (
         <section className="space-y-4">
-          <SectionHeader icon={<span>\ud83c\udfc6</span>} title="Top Charts" />
+          <SectionHeader icon={<span>🏆</span>} title="Top Charts" />
           {chartsLoading ? (
             <SkeletonGrid cols={3} rows={1} />
           ) : charts.length === 0 ? (
             <div className="space-y-3">
               <p className="text-center text-xs text-muted-foreground py-4 opacity-40">
-                Nenhum chart dispon\u00edvel no momento.
+                Nenhum chart disponível no momento.
               </p>
               {chartsError && (
                 <div className="bg-white/[0.03] border border-red-500/20 rounded-2xl p-3 flex gap-2">
@@ -610,7 +602,7 @@ function HomeTab({
                 <div>
                   <SectionHeader
                     icon={<Music className="size-4 text-primary" />}
-                    title="\u00daltimas M\u00fasicas"
+                    title="Últimas Músicas"
                     onMore={() => onTabChange("musicas")}
                   />
                   <div className="space-y-1">
@@ -622,7 +614,7 @@ function HomeTab({
                 <div>
                   <SectionHeader
                     icon={<Clapperboard className="size-4 text-primary" />}
-                    title="\u00daltimos Clipes"
+                    title="Últimos Clipes"
                     onMore={() => onTabChange("clipes")}
                   />
                   <div className="grid grid-cols-2 gap-3">
@@ -672,7 +664,7 @@ function MusicasTab({ musicasDB, loading }: { musicasDB: SheetItem[]; loading: b
               subTab === t ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
             }`}
           >
-            {t === "lancamentos" ? "Lan\u00e7amentos" : t === "top" ? "Top" : "\u00c1lbuns"}
+            {t === "lancamentos" ? "Lançamentos" : t === "top" ? "Top" : "Álbuns"}
           </button>
         ))}
       </div>
@@ -732,7 +724,7 @@ function ClipesTab({ musicVideosDB, loading }: { musicVideosDB: SheetItem[]; loa
             className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
               subTab === t ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
             }`}>
-            {t === "novos" ? "Lan\u00e7amentos" : "Top Clipes"}
+            {t === "novos" ? "Lançamentos" : "Top Clipes"}
           </button>
         ))}
       </div>
@@ -753,7 +745,7 @@ function VideosTab({ videosDB, loading }: { videosDB: SheetItem[]; loading: bool
   return (
     <div className="grid grid-cols-2 gap-3">
       {list.length === 0
-        ? <p className="col-span-2 text-center text-xs text-muted-foreground py-12 opacity-40">Nenhum v\u00eddeo ainda.</p>
+        ? <p className="col-span-2 text-center text-xs text-muted-foreground py-12 opacity-40">Nenhum vídeo ainda.</p>
         : list.map((item) => <VideoCard key={item.id} item={item} queue={list} />)
       }
     </div>
@@ -773,7 +765,7 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
   const load = () =>
     fetch(`${API_URL}?action=comentarios&categoria=${categoria}&idTopico=${item.id}`)
       .then((r) => r.json())
-      .then((j) => setComentarios((j.data || []).map((c: Record<string, string>) => ({ nome: getField(c, "nome_do_jogador", "nome") || "An\u00f4nimo", texto: getField(c, "comentario", "texto") }))))
+      .then((j) => setComentarios((j.data || []).map((c: Record<string, string>) => ({ nome: getField(c, "nome_do_jogador", "nome") || "Anônimo", texto: getField(c, "comentario", "texto") }))))
       .catch(() => setComentarios([]));
 
   useEffect(() => { load(); }, [item.id, categoria]);
@@ -781,7 +773,7 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
   const enviar = async () => {
     if (!texto.trim()) return;
     setEnviando(true);
-    await fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "novoComentario", categoria, idTopico: item.id, nomeJogador: nome.trim() || "An\u00f4nimo", comentario: texto.trim() }) });
+    await fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "novoComentario", categoria, idTopico: item.id, nomeJogador: nome.trim() || "Anônimo", comentario: texto.trim() }) });
     setTexto("");
     setEnviando(false);
     load();
@@ -790,7 +782,7 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
   return (
     <div className="space-y-4">
       <button onClick={onBack} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground active:text-primary transition-colors">
-        <ChevronLeft className="size-4" /> T\u00f3picos
+        <ChevronLeft className="size-4" /> Tópicos
       </button>
       <div className="flex items-start gap-3 p-4 bg-white/[0.03] border border-white/5 rounded-[1.5rem]">
         <div className="size-14 rounded-2xl overflow-hidden bg-primary/10 flex-shrink-0">
@@ -853,13 +845,13 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
             className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
               cat === t ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
             }`}>
-            {t === "musicas" ? "M\u00fasicas" : t === "musicvideos" ? "Clipes" : "V\u00eddeos"}
+            {t === "musicas" ? "Músicas" : t === "musicvideos" ? "Clipes" : "Vídeos"}
           </button>
         ))}
       </div>
       <div className="space-y-2">
         {list.length === 0
-          ? <p className="text-center text-xs text-muted-foreground py-12 opacity-40">Nenhum t\u00f3pico.</p>
+          ? <p className="text-center text-xs text-muted-foreground py-12 opacity-40">Nenhum tópico.</p>
           : list.map((item) => (
             <button key={item.id} onClick={() => setDetalhe({ item, cat })}
               className="w-full flex items-center gap-3 p-3 bg-white/[0.03] border border-white/5 rounded-[1.5rem] active:border-primary/30 transition-colors text-left">
@@ -867,7 +859,7 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
                 {item.capa ? <img src={driveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full grid place-items-center"><Music className="size-4 text-primary/40" /></div>}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-black text-xs truncate uppercase tracking-tight">{item.titulo || "\u2014"}</p>
+                <p className="font-black text-xs truncate uppercase tracking-tight">{item.titulo || "—"}</p>
                 <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
               </div>
               <MessageSquare className="size-4 text-muted-foreground/40 flex-shrink-0" />
@@ -896,7 +888,6 @@ export default function PlayHomePage() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const tabsRef = useRef<HTMLDivElement>(null);
 
-  // Carrega músicas/clipes/vídeos via Apps Script (fórum + listas)
   useEffect(() => {
     Promise.all([
       fetch(`${API_URL}?action=conteudo&categoria=musicas`).then((r) => r.json()),
@@ -912,9 +903,7 @@ export default function PlayHomePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Carrega lançamentos (abas Musicas/Music Videos) + Top Charts via CSV público
   useEffect(() => {
-    // Lançamentos para a seção Início > Lançamentos
     const playPromise = Promise.all([
       fetchSheetValues("Musicas"),
       fetchSheetValues("Music Videos"),
@@ -923,7 +912,6 @@ export default function PlayHomePage() {
       setPlayMusicVideosDB(sheetRowsToObjects(rmv.values));
     });
 
-    // Top Charts — abas Top_50_Spotify / Top_Songs_Apple_Music / Top_Videos_YT
     const chartsPromise = Promise.all(
       CHARTS_CONFIG.map((cfg) =>
         fetchSheetValues(cfg.aba)
@@ -951,7 +939,7 @@ export default function PlayHomePage() {
         })
         .filter((c): c is ChartData => c !== null);
       setCharts(built);
-      if (errors.length) setChartsError(errors.join(" \u2502 "));
+      if (errors.length) setChartsError(errors.join(" │ "));
     });
 
     Promise.all([playPromise, chartsPromise])
@@ -974,8 +962,8 @@ export default function PlayHomePage() {
           <Radio className="size-4 text-primary" />
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Empire Play</p>
         </div>
-        <h1 className="text-2xl font-black tracking-tighter">Ou\u00e7a agora</h1>
-        <p className="text-xs text-muted-foreground mt-1">M\u00fasicas, clipes e v\u00eddeos do universo Empire</p>
+        <h1 className="text-2xl font-black tracking-tighter">Ouça agora</h1>
+        <p className="text-xs text-muted-foreground mt-1">Músicas, clipes e vídeos do universo Empire</p>
       </div>
 
       <div
