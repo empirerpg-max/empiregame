@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")(((({
+export const Route = createFileRoute("/play/")((((({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/play/")(((({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-}))));
+})))));
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
 const API_URL =
@@ -107,9 +107,6 @@ function norm(s: string) {
 /**
  * Busca um campo em `item` pelos aliases fornecidos (normalização insensível a
  * acentos, espaços, underscores e maiúsculas).
- *
- * Se `fallbackFirstNonEmpty` for true e nenhum alias casar, devolve o primeiro
- * valor não-vazio do objeto — útil para CSVs com nomes de colunas inesperados.
  */
 function getField(
   item: Record<string, string>,
@@ -124,21 +121,6 @@ function getField(
     if (found && item[found.orig] != null && item[found.orig] !== "") return item[found.orig];
   }
   return "";
-}
-
-/**
- * Igual a getField, mas se todos os aliases falharem devolve o primeiro valor
- * não-vazio do objeto como último recurso.
- */
-function getFieldWithFallback(
-  item: Record<string, string>,
-  ...aliases: string[]
-): string {
-  const byAlias = getField(item, ...aliases);
-  if (byAlias) return byAlias;
-  // fallback: primeiro valor não-vazio entre todas as colunas
-  const firstNonEmpty = Object.values(item).find((v) => v && v.trim() !== "");
-  return firstNonEmpty ?? "";
 }
 
 function extractDriveId(str: string): string | null {
@@ -190,110 +172,124 @@ function parseDataLancamento(item: SheetItem): number {
 }
 
 /**
- * Converte uma linha da planilha (CSV ou API) em PlayItem.
+ * Converte uma linha da aba "Musicas" em PlayItem.
  *
- * Aliases cobrem tanto a nomenclatura da API (snake_case sem acentos)
- * quanto os nomes reais das colunas do CSV (com acentos, espaços e
- * variações comuns da planilha).
+ * Colunas confirmadas pelo usuário:
+ *   Data de lançamento | ID do tópico | ID do arquivo | Capa da música |
+ *   Letra | Comentários para | ID do Criador | Nome da música
  *
- * Para `titulo` e `artista`, se TODOS os aliases falharem é aplicado um
- * fallback de "primeiro valor não-vazio" via getFieldWithFallback, evitando
- * exibição de "—" quando o nome da coluna no CSV for inesperado.
+ * IMPORTANTE: NÃO usa getFieldWithFallback para título/artista para evitar
+ * que o fallback "primeiro valor não-vazio" retorne a data (coluna A).
+ */
+function toPlayItemMusica(m: SheetItem): PlayItem {
+  const idTopico = getField(m,
+    "ID do tópico", "ID do topico", "id_do_topico", "idtopico", "id",
+  );
+
+  const titulo = getField(m,
+    // Coluna confirmada
+    "Nome da música", "Nome da musica", "Nome da Música",
+    // Variações
+    "nome_da_musica", "nomedamusica", "nome_musica", "nomemusica",
+    "nome", "titulo", "title", "track", "song",
+  );
+
+  const artista = getField(m,
+    // Coluna confirmada
+    "ID do Criador", "ID do criador", "iddocriador", "idcriador",
+    // Variações
+    "act_principal", "actprincipal", "ACT Principal",
+    "artista", "artist", "autor", "author",
+  );
+
+  const capa = getField(m,
+    // Coluna confirmada
+    "Capa da música", "Capa da musica", "Capa da Música",
+    // Variações
+    "capa_da_musica", "capadamusica", "capa", "cover", "thumb", "thumbnail",
+  );
+
+  const audioSrc = getField(m,
+    // Coluna confirmada
+    "ID do arquivo", "ID do Arquivo", "id_do_arquivo", "idArquivo", "idarquivo",
+    // Variações
+    "link", "url", "audio",
+  );
+
+  const letra = getField(m,
+    "Letra", "letra", "lyrics",
+  );
+
+  return {
+    id: idTopico || audioSrc || `musica-${titulo}`,
+    titulo,
+    artista,
+    capa,
+    audioSrc,
+    letra,
+    categoria: "musica",
+  };
+}
+
+/**
+ * Converte uma linha genérica (API ou outras abas) em PlayItem.
+ * Usado para clipes, vídeos e charts.
  */
 function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
-  // ── id do tópico ──────────────────────────────────────────────────────────
-  const idTopico = getField(
-    m,
-    // API
+  const idTopico = getField(m,
     "id_do_topico", "idtopico", "id_topico", "id",
-    // CSV
-    "ID do tópico", "ID do topico", "Id do topico", "ID Tópico", "ID Topico",
+    "ID do tópico", "ID do topico",
   );
 
-  // ── título ────────────────────────────────────────────────────────────────
-  // Aliases abrangem: API (snake_case), CSV (PT-BR com/sem acento, espaço,
-  // underscore), variações de capitalização e campos genéricos de fallback.
-  const tituloAliases =
+  const titulo =
     cat === "musica"
-      ? [
-          // API snake_case
-          "nome_da_musica", "nomedamusica", "nome_musica", "nomemusica",
-          "nome", "titulo", "title",
-          // CSV — variações reais da planilha (com e sem acento)
-          "Nome da Música", "Nome da musica", "Nome da música",
-          "Nome Música", "Nome Musica", "Nome música",
-          "musica", "música", "Música", "Musica",
-          // campo genérico de última instância
-          "track", "song",
-        ]
-      : [
-          // API snake_case
+      ? getField(m,
+          "nome_da_musica", "nomedamusica", "nome_musica", "nome", "titulo", "title",
+          "Nome da Música", "Nome da musica", "Música", "musica", "track", "song",
+        )
+      : getField(m,
           "tipo_de_clipe", "tipodeclipe", "tipo", "titulo", "title",
-          "nome_do_clipe", "nomedoclipe", "nome_clipe", "nomeclipe",
-          // CSV
-          "Tipo de Clipe", "Tipo de clipe", "TipodeClipe",
-          "Nome do Clipe", "Nome do clipe", "Nome do Vídeo", "Nome do video",
+          "nome_do_clipe", "nomedoclipe",
+          "Tipo de Clipe", "Nome do Clipe", "Nome do Vídeo", "nome do video",
           "nomedovideo", "clipe", "video",
-        ];
-  const titulo = getFieldWithFallback(m, ...tituloAliases);
+        );
 
-  // ── artista ───────────────────────────────────────────────────────────────
-  // Aliases cobrem: API (act_principal), CSV PT-BR (Artista, Intérprete,
-  // "ACT Principal"), variações sem acento e campos de criador/ID.
-  // getFieldWithFallback garante que nunca retorne vazio quando há ao menos
-  // um valor na linha — útil para depurar linhas com colunas fora do padrão.
-  const artista = getFieldWithFallback(
-    m,
-    // API
+  const artista = getField(m,
     "act_principal", "actprincipal", "act principal",
     "artista", "artist",
-    // CSV PT-BR
     "ACT Principal", "Act Principal",
     "Artista", "Artista Principal",
-    "Intérprete", "Interprete", "intérprete",
-    // campos de criador / identificador de artista
-    "ID do criador", "iddocriador", "criador",
-    "ID do artista", "iddoartista",
-    // fallback genérico
-    "autor", "author", "band", "banda",
+    "ID do criador", "iddocriador",
+    "autor", "author",
   );
 
-  // ── capa ──────────────────────────────────────────────────────────────────
-  const capa = getField(
-    m,
-    // API
+  const capa = getField(m,
     "capa_da_musica", "capadamusica", "capa", "cover",
-    // CSV
-    "Capa da Música", "Capa da musica", "Capa da música",
-    "capadamusica", "Capa", "Thumb", "thumb", "thumbnail",
+    "Capa da Música", "Capa da musica",
+    "Thumb", "thumb", "thumbnail",
   );
 
-  // ── audioSrc ──────────────────────────────────────────────────────────────
-  // Aliases cobrem IDs/links do Google Drive e YouTube em ambas as fontes.
-  const audioSrc = getField(
-    m,
-    // API — campo canônico
+  const audioSrc = getField(m,
     "id_do_arquivo", "idarquivo", "id_arquivo", "arquivo",
-    // CSV — variações de nome de coluna para Drive
-    "ID do Arquivo", "ID do arquivo", "Id do arquivo",
-    "id arquivo", "idArquivo",
-    // CSV — links de áudio genérico
-    "Link do áudio", "Link do audio", "Link de audio", "Link de áudio",
-    "linkdoaudio", "linkdeaudio",
-    // CSV — variações de link/URL genérico
+    "ID do Arquivo", "ID do arquivo",
+    "Link do áudio", "Link do audio",
     "Link", "link", "url", "URL",
-    // CSV — YouTube
-    "ID do vídeo", "ID do video", "Id do video",
-    "idvideo", "id_video", "video_id", "videoid",
+    "ID do vídeo", "ID do video", "idvideo", "id_video",
     "youtube_id", "youtubeid",
-    // fallback genérico
     "audio", "Audio",
   );
 
-  // ── letra ─────────────────────────────────────────────────────────────────
   const letra = getField(m, "letra", "lyrics", "Letra");
 
-  return { id: idTopico, titulo, artista, capa, audioSrc, letra, categoria: cat };
+  return {
+    id: idTopico || audioSrc || `item-${titulo}`,
+    titulo,
+    artista,
+    capa,
+    audioSrc,
+    letra,
+    categoria: cat,
+  };
 }
 
 function sheetRowsToObjects(values: string[][]): SheetItem[] {
@@ -677,7 +673,7 @@ function HomeTab({
       [...playMusicasDB]
         .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
         .slice(0, 5)
-        .map((m) => toPlayItem(m, "musica")),
+        .map((m) => toPlayItemMusica(m)),
     [playMusicasDB]
   );
 
@@ -816,22 +812,24 @@ function MusicasTab({ playMusicasDB, musicasDB, loading }: {
     { id: "lancar",      label: "Lançar",              icon: PlusCircle },
   ];
 
+  // Usa exclusivamente a aba "Musicas" do CSV (playMusicasDB),
+  // com toPlayItemMusica que conhece as colunas exatas da planilha.
   const lancamentos = useMemo<{ item: PlayItem; dataDisplay: string }[]>(() => {
-    const source = playMusicasDB.length > 0 ? playMusicasDB : musicasDB;
-    return [...source]
+    return [...playMusicasDB]
       .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
       .slice(0, 30)
       .map((m) => ({
-        item: toPlayItem(m, "musica"),
+        item: toPlayItemMusica(m),
         dataDisplay: formatDataDisplay(m),
       }));
-  }, [playMusicasDB, musicasDB]);
+  }, [playMusicasDB]);
 
   const lancamentosQueue = useMemo(() => lancamentos.map((l) => l.item), [lancamentos]);
 
   const albuns = useMemo(() => {
+    const source = musicasDB.length > 0 ? musicasDB : [];
     const map: Record<string, { title: string; artist: string; capa: string; faixas: PlayItem[] }> = {};
-    musicasDB.forEach((m) => {
+    source.forEach((m) => {
       const album = getField(m, "album");
       if (!album) return;
       if (!map[album]) {
