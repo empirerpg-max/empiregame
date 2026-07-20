@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")(((((({
+export const Route = createFileRoute("/play/")({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -25,7 +25,8 @@ export const Route = createFileRoute("/play/")(((((({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-})))))
+});
+
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
 const API_URL =
