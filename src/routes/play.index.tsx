@@ -211,34 +211,51 @@ function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
   );
 
   // ── título ────────────────────────────────────────────────────────────────
+  // Aliases abrangem: API (snake_case), CSV (PT-BR com/sem acento, espaço,
+  // underscore), variações de capitalização e campos genéricos de fallback.
   const tituloAliases =
     cat === "musica"
       ? [
-          // API
-          "nome_da_musica", "nomedamusica", "nome", "titulo", "title",
-          // CSV — variações reais da planilha
+          // API snake_case
+          "nome_da_musica", "nomedamusica", "nome_musica", "nomemusica",
+          "nome", "titulo", "title",
+          // CSV — variações reais da planilha (com e sem acento)
           "Nome da Música", "Nome da musica", "Nome da música",
-          "nomedamusica", "musica", "música", "Música", "Musica",
-          "nome_musica", "nomemusica",
+          "Nome Música", "Nome Musica", "Nome música",
+          "musica", "música", "Música", "Musica",
+          // campo genérico de última instância
+          "track", "song",
         ]
       : [
-          // API
+          // API snake_case
           "tipo_de_clipe", "tipodeclipe", "tipo", "titulo", "title",
+          "nome_do_clipe", "nomedoclipe", "nome_clipe", "nomeclipe",
           // CSV
-          "Tipo de Clipe", "Tipo de clipe", "Nome do Clipe", "Nome do clipe",
-          "nomedoclipe", "clipe",
+          "Tipo de Clipe", "Tipo de clipe", "TipodeClipe",
+          "Nome do Clipe", "Nome do clipe", "Nome do Vídeo", "Nome do video",
+          "nomedovideo", "clipe", "video",
         ];
   const titulo = getFieldWithFallback(m, ...tituloAliases);
 
   // ── artista ───────────────────────────────────────────────────────────────
-  const artista = getField(
+  // Aliases cobrem: API (act_principal), CSV PT-BR (Artista, Intérprete,
+  // "ACT Principal"), variações sem acento e campos de criador/ID.
+  // getFieldWithFallback garante que nunca retorne vazio quando há ao menos
+  // um valor na linha — útil para depurar linhas com colunas fora do padrão.
+  const artista = getFieldWithFallback(
     m,
     // API
-    "act_principal", "actprincipal", "artista", "artist",
-    // CSV
-    "ACT Principal", "Act Principal", "act principal",
-    "Artista", "artista", "Intérprete", "interprete",
-    "ID do criador", "ID do artista",
+    "act_principal", "actprincipal", "act principal",
+    "artista", "artist",
+    // CSV PT-BR
+    "ACT Principal", "Act Principal",
+    "Artista", "Artista Principal",
+    "Intérprete", "Interprete", "intérprete",
+    // campos de criador / identificador de artista
+    "ID do criador", "iddocriador", "criador",
+    "ID do artista", "iddoartista",
+    // fallback genérico
+    "autor", "author", "band", "banda",
   );
 
   // ── capa ──────────────────────────────────────────────────────────────────
@@ -252,15 +269,25 @@ function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
   );
 
   // ── audioSrc ──────────────────────────────────────────────────────────────
+  // Aliases cobrem IDs/links do Google Drive e YouTube em ambas as fontes.
   const audioSrc = getField(
     m,
-    // API
+    // API — campo canônico
     "id_do_arquivo", "idarquivo", "id_arquivo", "arquivo",
-    // CSV — IDs / links do Google Drive ou YouTube
+    // CSV — variações de nome de coluna para Drive
     "ID do Arquivo", "ID do arquivo", "Id do arquivo",
-    "Link do áudio", "Link do audio", "linkdoaudio",
+    "id arquivo", "idArquivo",
+    // CSV — links de áudio genérico
+    "Link do áudio", "Link do audio", "Link de audio", "Link de áudio",
+    "linkdoaudio", "linkdeaudio",
+    // CSV — variações de link/URL genérico
     "Link", "link", "url", "URL",
-    "ID do vídeo", "ID do video", "idvideo", "video_id",
+    // CSV — YouTube
+    "ID do vídeo", "ID do video", "Id do video",
+    "idvideo", "id_video", "video_id", "videoid",
+    "youtube_id", "youtubeid",
+    // fallback genérico
+    "audio", "Audio",
   );
 
   // ── letra ─────────────────────────────────────────────────────────────────
