@@ -107,7 +107,7 @@ export function detectMediaType(audioSrc: string): MediaType {
  */
 export function driveStreamUrl(idOrUrl: string): string {
   const id = extractDriveId(idOrUrl) ?? idOrUrl;
-  return `https://empire-drive-proxy.empirerpg-forum.workers.dev/?id=${id}`;
+  return `https://empire-media-api.empirerpg-forum.workers.dev/?id=${id}`;
 }
 
 /** @deprecated – use driveStreamUrl */
@@ -131,7 +131,7 @@ export function PlayProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<YT.Player | null>(null);
 
-  // ── Derivados ────────────────────────────────────────────────────────────
+  // ── Derivados ───────────────────────────────────────────────────────────────
   const currentItem =
     state.currentIdx !== null ? state.queue[state.currentIdx] : null;
 
