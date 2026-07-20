@@ -1,18 +1,35 @@
 /**
  * MiniPlayer — player de áudio/vídeo background.
  *
- * Estratégia:
- * ─ Google Drive → <audio> nativo via proxy Cloudflare Worker.
- * ─ YouTube     → YT.Player invisível (opacity:0, 1×1px).
+ * Estratégia de reprodução:
+ * ─ Google Drive → <audio> nativo com crossOrigin="anonymous".
+ *   O .play() é disparado DENTRO do onClick (user-gesture) via triggerPlay().
+ *   Quando autoPlay=true, o useEffect [currentMediaId, playing] chama
+ *   triggerPlay() automaticamente após a troca de faixa.
  *
- * Fluxo com autoPlay=true (um clique):
+ * ─ YouTube → YT.Player injetado em um <div> de 1×1 px invisível
+ *   (opacity:0, position:absolute, zIndex:-1, pointerEvents:none).
+ *   NÃO usa display:none nem width/height 0 — a API para de funcionar.
+ *   O .playVideo() é chamado via triggerPlay() no onClick OU pelo
+ *   useEffect [currentMediaId, playing] quando playing já é true.
+ *   Estado visual sincronizado via onStateChange (PLAYING/PAUSED).
+ *
+ * Fluxo com autoPlay=true (um único clique):
  *   1. onClick → play(item, queue, { autoPlay: true })
- *   2. context seta playing:true + currentIdx correto
- *   3. Efeito [currentMediaId] → carrega src
- *   4. Efeito [currentMediaId, playing] → playing:true → triggerPlay()
+ *   2. playContext seta playing:true imediatamente
+ *   3. useEffect [currentMediaId] → apenas configura src/carrega (sem play)
+ *   4. useEffect [currentMediaId, playing] → vê playing:true → chama triggerPlay()
  *
- * Fluxo resume:
- *   1. handlePlayPause → resume() + triggerPlay() (user-gesture garantido)
+ * Fluxo next/prev enquanto tocando:
+ *   1. onClick → next() / prev()
+ *   2. playContext troca currentIdx mas MANTÉM playing:true
+ *   3. useEffect [currentMediaId] → configura nova src
+ *   4. useEffect [currentMediaId, playing] → playing ainda true → triggerPlay()
+ *
+ * Fluxo resume após pausa:
+ *   1. onClick → resume() → context seta playing:true + triggerPlay() chamado
+ *   2. triggerPlay() chama .play() / .playVideo() com user-gesture garantido
+ *   3. confirmPlaying() atualiza estado via evento nativo (redundante mas seguro)
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -22,10 +39,14 @@ import {
   driveStreamUrl,
   detectMediaType,
   extractYouTubeId,
+  extractDriveId,
 } from "@/lib/playContext";
 import { ChevronLeft, ChevronRight, X, Music } from "lucide-react";
 import { driveImg } from "@/lib/api";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// YT API type shim — remova se @types/youtube estiver instalado
+// ─────────────────────────────────────────────────────────────────────────────
 declare global {
   interface Window {
     YT: typeof YT;
@@ -33,7 +54,9 @@ declare global {
   }
 }
 
-// ─── Hook: carrega a YT IFrame API uma única vez ──────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook: garante que a YT IFrame API é carregada uma única vez
+// ─────────────────────────────────────────────────────────────────────────────
 function useLoadYTApi(onReady: () => void) {
   const cbRef = useRef(onReady);
   cbRef.current = onReady;
@@ -57,7 +80,9 @@ function useLoadYTApi(onReady: () => void) {
   }, []);
 }
 
-// ─── MiniPlayer ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// MiniPlayer
+// ─────────────────────────────────────────────────────────────────────────────
 export function MiniPlayer() {
   const {
     state,
@@ -78,25 +103,33 @@ export function MiniPlayer() {
   const { queue, currentIdx, playing } = state;
 
   const ytContainerRef = useRef<HTMLDivElement>(null);
-  const ytApiReady     = useRef(false);
-  const ytActiveId     = useRef<string | null>(null);
-  const pendingPlay    = useRef(false);
+  const ytApiReady = useRef(false);
+  const ytActiveId = useRef<string | null>(null);
+  const pendingPlay = useRef(false);
 
-  // ── 1. Cria o <audio> nativo uma única vez ──────────────────────────────
+  // ── 1. Cria o elemento <audio> nativo (uma única vez) ───────────────────
   useEffect(() => {
     if (audioRef.current) return;
     const audio = new Audio();
-    audio.preload     = "none";
+    audio.preload = "none";
     audio.crossOrigin = "anonymous";
 
-    audio.addEventListener("play",  confirmPlaying);
+    audio.addEventListener("play", confirmPlaying);
     audio.addEventListener("pause", confirmPaused);
     audio.addEventListener("ended", onEnded);
     audio.addEventListener("error", (e) => {
-      const err = (e.target as HTMLAudioElement).error;
-      console.error("[MiniPlayer] Erro de áudio:", err?.code, err?.message);
+      const mediaErr = (e.target as HTMLAudioElement).error;
+      console.error(
+        "[MiniPlayer] Erro ao carregar áudio:",
+        mediaErr?.code,
+        mediaErr?.message,
+        "| src:",
+        (e.target as HTMLAudioElement).src
+      );
       confirmPaused();
-      toast.error("Não foi possível carregar a mídia. Verifique se o arquivo está público.");
+      toast.error(
+        "Não foi possível carregar a mídia. Verifique se o arquivo está público ou tente novamente mais tarde."
+      );
     });
 
     audioRef.current = audio;
@@ -107,6 +140,7 @@ export function MiniPlayer() {
   const buildYTPlayer = useCallback(
     (videoId: string, autoStart: boolean) => {
       if (!ytContainerRef.current) return;
+
       if (ytPlayerRef.current) {
         try { ytPlayerRef.current.destroy(); } catch { /* */ }
         ytPlayerRef.current = null;
@@ -118,8 +152,12 @@ export function MiniPlayer() {
         width: "1",
         height: "1",
         playerVars: {
-          autoplay: 1, controls: 0, disablekb: 1,
-          rel: 0, modestbranding: 1, playsinline: 1,
+          autoplay: 1,
+          controls: 0,
+          disablekb: 1,
+          rel: 0,
+          modestbranding: 1,
+          playsinline: 1,
         },
         events: {
           onReady(e: YT.PlayerEvent) {
@@ -131,8 +169,8 @@ export function MiniPlayer() {
           onStateChange(e: YT.OnStateChangeEvent) {
             const S = window.YT.PlayerState;
             if (e.data === S.PLAYING) confirmPlaying();
-            if (e.data === S.PAUSED)  confirmPaused();
-            if (e.data === S.ENDED)   onEnded();
+            if (e.data === S.PAUSED) confirmPaused();
+            if (e.data === S.ENDED) onEnded();
           },
           onError() {
             confirmPaused();
@@ -146,14 +184,19 @@ export function MiniPlayer() {
 
   const onYTApiReady = useCallback(() => {
     ytApiReady.current = true;
-    if (mediaType === "youtube" && currentMediaId && ytActiveId.current !== currentMediaId) {
+    if (
+      mediaType === "youtube" &&
+      currentMediaId &&
+      ytActiveId.current !== currentMediaId
+    ) {
       buildYTPlayer(currentMediaId, pendingPlay.current);
     }
   }, [mediaType, currentMediaId, buildYTPlayer]);
 
   useLoadYTApi(onYTApiReady);
 
-  // ── 3. Troca de faixa — carrega src, NÃO inicia ─────────────────────────
+  // ── 3. Reage à troca de faixa — configura src, NÃO inicia reprodução ────
+  //    A decisão de tocar ou não fica para o efeito 4.
   useEffect(() => {
     if (!currentMediaId) return;
 
@@ -174,25 +217,35 @@ export function MiniPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMediaId, mediaType]);
 
-  // ── 4. Auto-play quando playing:true ────────────────────────────────────
+  // ── 4. Auto-play quando playing é true (troca de faixa OU resume) ────────
+  //    Suporta: autoPlay=true, next/prev enquanto tocando, onEnded, resume.
   useEffect(() => {
     if (!currentMediaId || !playing) return;
 
     const id = setTimeout(() => {
       if (mediaType === "drive") {
-        audioRef.current?.play().catch(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        audio.play().catch(() => {
           confirmPaused();
-          toast.error("Falha ao reproduzir. O arquivo pode estar privado ou o navegador bloqueou o autoplay.");
+          toast.error(
+            "Falha ao reproduzir. O arquivo pode estar privado ou o navegador bloqueou o autoplay."
+          );
         });
       }
 
       if (mediaType === "youtube") {
         if (ytPlayerRef.current) {
-          try { ytPlayerRef.current.playVideo(); }
-          catch { pendingPlay.current = true; }
+          try {
+            ytPlayerRef.current.playVideo();
+          } catch {
+            pendingPlay.current = true;
+          }
         } else {
           pendingPlay.current = true;
-          if (ytApiReady.current && currentMediaId) buildYTPlayer(currentMediaId, true);
+          if (ytApiReady.current && currentMediaId) {
+            buildYTPlayer(currentMediaId, true);
+          }
         }
       }
     }, 50);
@@ -203,26 +256,40 @@ export function MiniPlayer() {
 
   // ── 5. Limpa ao desmontar ────────────────────────────────────────────────
   useEffect(() => {
-    return () => { audioRef.current?.pause(); };
+    return () => {
+      audioRef.current?.pause();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 6. triggerPlay — user-gesture garantido ─────────────────────────────
+  // ── 6. triggerPlay — chamado com user-gesture garantido ─────────────────
   const triggerPlay = useCallback(() => {
     if (mediaType === "drive") {
-      audioRef.current?.play().catch(() => {
-        confirmPaused();
-        toast.error("Falha ao reproduzir. O arquivo pode estar privado ou o navegador bloqueou o autoplay.");
-      });
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio
+        .play()
+        .catch(() => {
+          confirmPaused();
+          toast.error(
+            "Falha ao reproduzir. O arquivo pode estar privado ou o navegador bloqueou o autoplay."
+          );
+        });
       return;
     }
+
     if (mediaType === "youtube") {
       if (ytPlayerRef.current) {
-        try { ytPlayerRef.current.playVideo(); }
-        catch { pendingPlay.current = true; }
+        try {
+          ytPlayerRef.current.playVideo();
+        } catch {
+          pendingPlay.current = true;
+        }
       } else {
         pendingPlay.current = true;
-        if (ytApiReady.current && currentMediaId) buildYTPlayer(currentMediaId, true);
+        if (ytApiReady.current && currentMediaId) {
+          buildYTPlayer(currentMediaId, true);
+        }
       }
     }
   }, [mediaType, audioRef, ytPlayerRef, currentMediaId, buildYTPlayer, confirmPaused]);
@@ -236,32 +303,40 @@ export function MiniPlayer() {
   // ── Guard ────────────────────────────────────────────────────────────────
   if (currentIdx === null || queue.length === 0) return null;
 
-  // BUG FIX: se o item na posição currentIdx não tem audioSrc, o MiniPlayer
-  // aparece mas não toca. Exibe aviso em vez de travar silenciosamente.
   const item = queue[currentIdx];
-  if (!item) return null;
-
   const hasPrev = currentIdx > 0;
   const hasNext = currentIdx < queue.length - 1;
 
+  // Handler do botão play/pause:
+  // - Se tocando → pausa
+  // - Se pausado → resume() no contexto (seta playing:true) + triggerPlay() (user-gesture)
   const handlePlayPause = () => {
     if (playing) {
       triggerPause();
     } else {
-      resume();
-      triggerPlay();
+      resume();      // seta playing:true no contexto imediatamente
+      triggerPlay(); // dispara .play()/.playVideo() com user-gesture
     }
   };
 
   return (
     <div className="fixed bottom-16 inset-x-0 z-40 bg-card border-t border-white/10 shadow-2xl">
-      {/* Container YouTube — NUNCA display:none */}
+      {/*
+       * Container do YouTube — NUNCA display:none nem size 0.
+       * Escondemos via opacity/position/z-index.
+       */}
       {mediaType === "youtube" && (
         <div
           style={{
-            position: "absolute", top: 0, left: 0,
-            width: 1, height: 1, opacity: 0,
-            pointerEvents: "none", zIndex: -1, overflow: "hidden",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: 1,
+            height: 1,
+            opacity: 0,
+            pointerEvents: "none",
+            zIndex: -1,
+            overflow: "hidden",
           }}
           aria-hidden="true"
         >
@@ -290,20 +365,17 @@ export function MiniPlayer() {
         {/* Info */}
         <div className="min-w-0 flex-1">
           <p className="text-xs font-black truncate uppercase tracking-tight">
-            {item.titulo || "—"}
+            {item.titulo}
           </p>
           <p className="text-[10px] text-muted-foreground truncate">
             {item.artista}
-            {!item.audioSrc && (
-              <span className="ml-1 text-yellow-500/70">· sem áudio</span>
-            )}
           </p>
         </div>
 
         {/* Controles */}
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
-            onClick={() => prev()}
+            onClick={() => { prev(); }}
             disabled={!hasPrev}
             className="size-8 grid place-items-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-opacity"
             aria-label="Anterior"
@@ -313,8 +385,7 @@ export function MiniPlayer() {
 
           <button
             onClick={handlePlayPause}
-            disabled={!item.audioSrc}
-            className="size-9 rounded-full bg-primary text-primary-foreground grid place-items-center hover:scale-105 transition-transform disabled:opacity-40"
+            className="size-9 rounded-full bg-primary text-primary-foreground grid place-items-center hover:scale-105 transition-transform"
             aria-label={playing ? "Pausar" : "Reproduzir"}
           >
             {playing ? (
@@ -330,7 +401,7 @@ export function MiniPlayer() {
           </button>
 
           <button
-            onClick={() => next()}
+            onClick={() => { next(); }}
             disabled={!hasNext}
             className="size-8 grid place-items-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-opacity"
             aria-label="Próxima"
