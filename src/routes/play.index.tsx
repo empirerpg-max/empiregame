@@ -25,7 +25,7 @@ export const Route = createFileRoute("/play/")(((((({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-}))))))
+})))))
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
 const API_URL =
@@ -160,35 +160,48 @@ function parseDataLancamento(item: SheetItem): number {
   return isNaN(t) ? 0 : t;
 }
 
+// Converte uma linha da API (campos snake_case) OU do CSV (campos literais) para PlayItem de música.
+// Cobre ambos os formatos para garantir que capa e título sempre apareçam.
 function toPlayItemMusica(m: SheetItem): PlayItem {
   const idTopico = getField(m,
-    "ID do tópico", "ID do topico", "id_do_topico", "idtopico", "id",
+    // API (snake_case)
+    "id_do_topico", "idtopico", "id_topico",
+    // CSV (literal)
+    "ID do tópico", "ID do topico", "id",
   );
 
   const titulo = getField(m,
-    "Nome da música", "Nome da musica", "Nome da Música",
-    "nome_da_musica", "nomedamusica", "nome_musica", "nomemusica",
-    "nome", "titulo", "title", "track", "song",
+    // API
+    "nome_da_musica", "nomedamusica", "nome_musica", "nomemusica", "nome", "titulo", "title",
+    // CSV
+    "Nome da música", "Nome da musica", "Nome da Música", "track", "song",
   );
 
   const artista = getField(m,
-    "ID do Criador", "ID do criador", "iddocriador", "idcriador",
-    "act_principal", "actprincipal", "ACT Principal",
+    // API
+    "act_principal", "actprincipal", "id_do_criador", "iddocriador", "idcriador",
     "artista", "artist", "autor", "author",
+    // CSV
+    "ACT Principal", "ID do Criador", "ID do criador",
   );
 
   const capa = getField(m,
-    "Capa da música", "Capa da musica", "Capa da Música",
+    // API
     "capa_da_musica", "capadamusica", "capa", "cover", "thumb", "thumbnail",
+    // CSV
+    "Capa da música", "Capa da musica", "Capa da Música",
   );
 
   const audioSrc = getField(m,
-    "ID do arquivo", "ID do Arquivo", "id_do_arquivo", "idArquivo", "idarquivo",
-    "link", "url", "audio",
+    // API
+    "id_do_arquivo", "idarquivo", "id_arquivo", "arquivo",
+    "link_do_audio", "linkdoaudio", "link", "url", "audio",
+    // CSV
+    "ID do arquivo", "ID do Arquivo",
   );
 
   const letra = getField(m,
-    "Letra", "letra", "lyrics",
+    "letra", "lyrics", "Letra",
   );
 
   return {
@@ -616,7 +629,7 @@ function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => vo
 
 // ─── Home Tab ──────────────────────────────────────────────────────────────
 function HomeTab({
-  playMusicasDB,
+  musicasDB,
   playMusicVideosDB,
   charts,
   chartsLoading,
@@ -624,7 +637,7 @@ function HomeTab({
   loading,
   onTabChange,
 }: {
-  playMusicasDB: SheetItem[];
+  musicasDB: SheetItem[];
   playMusicVideosDB: SheetItem[];
   charts: ChartData[];
   chartsLoading: boolean;
@@ -635,13 +648,14 @@ function HomeTab({
   const [openChart, setOpenChart] = useState<ChartData | null>(null);
   const [homeSection, setHomeSection] = useState<"charts" | "lancamentos">("charts");
 
+  // Usa musicasDB (API) como fonte — mesma que já funciona em Clipes/Fórum
   const lancMusicas = useMemo<PlayItem[]>(
     () =>
-      [...playMusicasDB]
+      [...musicasDB]
         .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
         .slice(0, 5)
         .map((m) => toPlayItemMusica(m)),
-    [playMusicasDB]
+    [musicasDB]
   );
 
   const lancVideos = useMemo<PlayItem[]>(
@@ -739,28 +753,7 @@ function HomeTab({
 // ─── Músicas Tab ───────────────────────────────────────────────────────────
 type MusicasSubTab = "lancamentos" | "albuns" | "lancar";
 
-function formatDataDisplay(item: SheetItem): string {
-  const raw = getField(
-    item,
-    "Data de lançamento",
-    "Data de lancamento",
-    "data_de_lancamento",
-    "datadelancamento",
-    "data_lancamento",
-    "datalancamento",
-    "data",
-  );
-  if (!raw) return "";
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw.trim())) return raw.trim();
-  const d = new Date(raw.trim());
-  if (!isNaN(d.getTime())) {
-    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-  }
-  return raw.trim();
-}
-
-function MusicasTab({ playMusicasDB, musicasDB, loading }: {
-  playMusicasDB: SheetItem[];
+function MusicasTab({ musicasDB, loading }: {
   musicasDB: SheetItem[];
   loading: boolean;
 }) {
@@ -772,19 +765,17 @@ function MusicasTab({ playMusicasDB, musicasDB, loading }: {
     { id: "lancar",      label: "Lançar",              icon: PlusCircle },
   ];
 
-  // 30 músicas mais recentes da aba "Musicas" da planilha,
-  // ordenadas por "Data de lançamento" (mais recente primeiro).
+  // 30 músicas mais recentes — usa musicasDB (API) que já tem os campos normalizados
   const lancamentos = useMemo<PlayItem[]>(() => {
-    return [...playMusicasDB]
+    return [...musicasDB]
       .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
       .slice(0, 30)
       .map((m) => toPlayItemMusica(m));
-  }, [playMusicasDB]);
+  }, [musicasDB]);
 
   const albuns = useMemo(() => {
-    const source = musicasDB.length > 0 ? musicasDB : [];
     const map: Record<string, { title: string; artist: string; capa: string; faixas: PlayItem[] }> = {};
-    source.forEach((m) => {
+    musicasDB.forEach((m) => {
       const album = getField(m, "album");
       if (!album) return;
       if (!map[album]) {
@@ -800,8 +791,7 @@ function MusicasTab({ playMusicasDB, musicasDB, loading }: {
     return Object.values(map);
   }, [musicasDB]);
 
-  // Mostra skeleton apenas na primeira carga
-  if (loading && playMusicasDB.length === 0) return <SkeletonGrid cols={3} rows={4} />;
+  if (loading && musicasDB.length === 0) return <SkeletonGrid cols={3} rows={4} />;
 
   return (
     <div className="space-y-5">
@@ -1066,7 +1056,6 @@ export default function PlayHomePage() {
   const [chartsLoading, setChartsLoading] = useState(true);
   const [chartsError, setChartsError]     = useState("");
 
-  const [playMusicasDB, setPlayMusicasDB]         = useState<SheetItem[]>([]);
   const [playMusicVideosDB, setPlayMusicVideosDB] = useState<SheetItem[]>([]);
 
   const [activeTab, setActiveTab] = useState<Tab>("home");
@@ -1088,18 +1077,6 @@ export default function PlayHomePage() {
   }, []);
 
   useEffect(() => {
-    // Lê diretamente a aba "Musicas" da planilha 1XYa6Pzd-...
-    // Colunas usadas: Data de lançamento, ID do tópico, ID do arquivo,
-    //                 Capa da música, Letra, Comentários para,
-    //                 ID do Criador, Nome da música
-    const playPromise = Promise.all([
-      fetchSheetValues("Musicas"),
-      fetchSheetValues("Music Videos"),
-    ]).then(([rm, rmv]) => {
-      setPlayMusicasDB(sheetRowsToObjects(rm.values));
-      setPlayMusicVideosDB(sheetRowsToObjects(rmv.values));
-    });
-
     const chartsPromise = Promise.all(
       CHARTS_CONFIG.map((cfg) =>
         fetchSheetValues(cfg.aba)
@@ -1130,7 +1107,12 @@ export default function PlayHomePage() {
       if (errors.length) setChartsError(errors.join(" │ "));
     });
 
-    Promise.all([playPromise, chartsPromise])
+    // Music Videos ainda vem do CSV para ter Data de lançamento
+    const mvPromise = fetchSheetValues("Music Videos").then((res) => {
+      setPlayMusicVideosDB(sheetRowsToObjects(res.values));
+    });
+
+    Promise.all([chartsPromise, mvPromise])
       .catch((e) => setChartsError(String(e)))
       .finally(() => setChartsLoading(false));
   }, []);
@@ -1181,7 +1163,7 @@ export default function PlayHomePage() {
       <div className="px-4 pt-6">
         {activeTab === "home" && (
           <HomeTab
-            playMusicasDB={playMusicasDB}
+            musicasDB={musicasDB}
             playMusicVideosDB={playMusicVideosDB}
             charts={charts}
             chartsLoading={chartsLoading}
@@ -1192,7 +1174,6 @@ export default function PlayHomePage() {
         )}
         {activeTab === "musicas" && (
           <MusicasTab
-            playMusicasDB={playMusicasDB}
             musicasDB={musicasDB}
             loading={loading}
           />
