@@ -3,16 +3,22 @@
  *
  * Estratégia de reprodução:
  * ─ Google Drive → <audio> nativo com crossOrigin="anonymous".
- *   O .play() é disparado DENTRO do onClick (user-gesture).
- *   O estado visual só muda para "tocando" após a promise resolver.
- *   Em caso de erro (CORS/CORB/permissão), reverte para pause + toast.
+ *   O .play() é disparado DENTRO do onClick (user-gesture) via triggerPlay().
+ *   Quando autoPlay=true, o useEffect [currentMediaId, playing] chama
+ *   triggerPlay() automaticamente após a troca de faixa.
  *
  * ─ YouTube → YT.Player injetado em um <div> de 1×1 px invisível
  *   (opacity:0, position:absolute, zIndex:-1, pointerEvents:none).
  *   NÃO usa display:none nem width/height 0 — a API para de funcionar.
- *   O .playVideo() é chamado DENTRO do onClick ou no onReady se
- *   a faixa já estava marcada para tocar.
+ *   O .playVideo() é chamado via triggerPlay() no onClick OU pelo
+ *   useEffect [currentMediaId, playing] quando playing já é true.
  *   Estado visual sincronizado via onStateChange (PLAYING/PAUSED).
+ *
+ * Fluxo com autoPlay=true (um único clique):
+ *   1. onClick → play(item, queue, { autoPlay: true })
+ *   2. playContext seta playing:true imediatamente
+ *   3. useEffect [currentMediaId] → apenas configura src/carrega (sem play)
+ *   4. useEffect [currentMediaId, playing] → vê playing:true → chama triggerPlay()
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -177,7 +183,8 @@ export function MiniPlayer() {
 
   useLoadYTApi(onYTApiReady);
 
-  // ── 3. Reage à troca de faixa ────────────────────────────────────────────
+  // ── 3. Reage à troca de faixa — configura src, NÃO inicia reprodução ────
+  //    A decisão de tocar ou não fica para o efeito 4.
   useEffect(() => {
     if (!currentMediaId) return;
 
@@ -187,18 +194,58 @@ export function MiniPlayer() {
       audio.pause();
       audio.src = driveStreamUrl(currentMediaId);
       audio.load();
+      // Não chama audio.play() aqui — o efeito 4 cuida disso.
     }
 
     if (mediaType === "youtube") {
       if (!ytApiReady.current) return;
       if (ytActiveId.current !== currentMediaId) {
-        buildYTPlayer(currentMediaId, pendingPlay.current);
+        // autoStart=false: o efeito 4 decide se deve tocar.
+        buildYTPlayer(currentMediaId, false);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMediaId, mediaType]);
 
-  // ── 4. Limpa ao desmontar ────────────────────────────────────────────────
+  // ── 4. Auto-play quando playing já é true ao trocar de faixa ────────────
+  //    Isso suporta o fluxo autoPlay=true E o avanço automático por onEnded.
+  useEffect(() => {
+    if (!currentMediaId || !playing) return;
+
+    // Pequeno timeout para garantir que o efeito 3 já rodou e o src foi setado.
+    const id = setTimeout(() => {
+      if (mediaType === "drive") {
+        const audio = audioRef.current;
+        if (!audio) return;
+        audio.play().catch(() => {
+          confirmPaused();
+          toast.error(
+            "Falha ao reproduzir. O arquivo pode estar privado ou o navegador bloqueou o autoplay."
+          );
+        });
+      }
+
+      if (mediaType === "youtube") {
+        if (ytPlayerRef.current) {
+          try {
+            ytPlayerRef.current.playVideo();
+          } catch {
+            pendingPlay.current = true;
+          }
+        } else {
+          pendingPlay.current = true;
+          if (ytApiReady.current && currentMediaId) {
+            buildYTPlayer(currentMediaId, true);
+          }
+        }
+      }
+    }, 50);
+
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMediaId, playing]);
+
+  // ── 5. Limpa ao desmontar ────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       audioRef.current?.pause();
@@ -206,7 +253,7 @@ export function MiniPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 5. triggerPlay ───────────────────────────────────────────────────────
+  // ── 6. triggerPlay ───────────────────────────────────────────────────────
   const triggerPlay = useCallback(() => {
     if (mediaType === "drive") {
       const audio = audioRef.current;
@@ -238,7 +285,7 @@ export function MiniPlayer() {
     }
   }, [mediaType, audioRef, ytPlayerRef, currentMediaId, buildYTPlayer, confirmPaused]);
 
-  // ── 6. triggerPause ──────────────────────────────────────────────────────
+  // ── 7. triggerPause ──────────────────────────────────────────────────────
   const triggerPause = useCallback(() => {
     pendingPlay.current = false;
     pause();

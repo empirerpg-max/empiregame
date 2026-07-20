@@ -165,7 +165,7 @@ export function PlayProvider({ children }: { children: ReactNode }) {
   /**
    * Inicia a reprodução de um item.
    * Se opts.autoPlay=true, playing já entra como true e o MiniPlayer
-   * aciona triggerPlay() automaticamente via useEffect.
+   * aciona triggerPlay() automaticamente via useEffect [currentMediaId, playing].
    */
   const play = useCallback(
     (item: PlayItem, queue?: PlayItem[], opts?: { autoPlay?: boolean }) => {
@@ -226,7 +226,9 @@ export function PlayProvider({ children }: { children: ReactNode }) {
       if (s.currentIdx === null) return s;
       const nextIdx = s.currentIdx + 1;
       if (nextIdx < s.queue.length) {
-        return { ...s, currentIdx: nextIdx, playing: false };
+        // Avança para próxima faixa mantendo playing:true para
+        // o useEffect [currentMediaId, playing] disparar triggerPlay().
+        return { ...s, currentIdx: nextIdx, playing: true };
       }
       return { ...s, playing: false };
     });

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")(({
+export const Route = createFileRoute("/play/")({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/play/")(({
       { property: "og:description", content: "Ou\u00e7a as m\u00fasicas, clipes e v\u00eddeos do Empire RPG." },
     ],
   }),
-}));
+});
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
 const API_URL =
@@ -297,7 +297,7 @@ function SongCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
   const { play, state } = usePlay();
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
   return (
-    <button onClick={() => play(item, queue)} className="flex flex-col gap-2 text-left group w-full">
+    <button onClick={() => play(item, queue, { autoPlay: true })} className="flex flex-col gap-2 text-left group w-full">
       <div className={`relative aspect-square w-full rounded-2xl overflow-hidden bg-primary/10 ${isActive ? "ring-2 ring-primary" : ""} transition-all`}>
         {item.capa ? (
           <img src={driveThumb(item.capa, 300)} alt={item.titulo} className="w-full h-full object-cover" loading="lazy" decoding="async" />
@@ -329,7 +329,7 @@ function VideoCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
   const { play, state } = usePlay();
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
   return (
-    <button onClick={() => play(item, queue)} className="flex flex-col gap-2 text-left group w-full">
+    <button onClick={() => play(item, queue, { autoPlay: true })} className="flex flex-col gap-2 text-left group w-full">
       <div className={`relative w-full rounded-2xl overflow-hidden bg-primary/10 aspect-video ${isActive ? "ring-2 ring-primary" : ""} transition-all`}>
         {item.capa ? (
           <img src={driveThumb(item.capa, 400)} alt={item.titulo} className="w-full h-full object-cover" loading="lazy" decoding="async" />
@@ -355,7 +355,7 @@ function RowTrack({ item, queue, num }: { item: PlayItem; queue: PlayItem[]; num
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
   return (
     <button
-      onClick={() => play(item, queue)}
+      onClick={() => play(item, queue, { autoPlay: true })}
       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all text-left ${
         isActive ? "bg-primary/10 border border-primary/30" : "hover:bg-white/[0.04] border border-transparent"
       }`}
@@ -396,7 +396,7 @@ function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
 
   return (
     <button
-      onClick={() => { if (entry.playItem) play(entry.playItem, queue); }}
+      onClick={() => { if (entry.playItem) play(entry.playItem, queue, { autoPlay: true }); }}
       disabled={!canPlay}
       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all text-left ${
         isActive
@@ -799,7 +799,7 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
         <div className="min-w-0 flex-1">
           <p className="font-black text-sm truncate uppercase tracking-tight">{item.titulo}</p>
           <p className="text-[10px] text-muted-foreground mb-2">{item.artista}</p>
-          <button onClick={() => play(item)} className="px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1">
+          <button onClick={() => play(item, [item], { autoPlay: true })} className="px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1">
             <Play className="size-3" fill="currentColor" /> Tocar
           </button>
         </div>
