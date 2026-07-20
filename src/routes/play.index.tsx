@@ -104,7 +104,17 @@ function norm(s: string) {
     .replace(/[^a-z0-9]/g, "");
 }
 
-function getField(item: Record<string, string>, ...aliases: string[]): string {
+/**
+ * Busca um campo em `item` pelos aliases fornecidos (normalização insensível a
+ * acentos, espaços, underscores e maiúsculas).
+ *
+ * Se `fallbackFirstNonEmpty` for true e nenhum alias casar, devolve o primeiro
+ * valor não-vazio do objeto — útil para CSVs com nomes de colunas inesperados.
+ */
+function getField(
+  item: Record<string, string>,
+  ...aliases: string[]
+): string {
   if (!item) return "";
   const keys = Object.keys(item);
   const normKeys = keys.map((k) => ({ orig: k, norm: norm(k) }));
@@ -114,6 +124,21 @@ function getField(item: Record<string, string>, ...aliases: string[]): string {
     if (found && item[found.orig] != null && item[found.orig] !== "") return item[found.orig];
   }
   return "";
+}
+
+/**
+ * Igual a getField, mas se todos os aliases falharem devolve o primeiro valor
+ * não-vazio do objeto como último recurso.
+ */
+function getFieldWithFallback(
+  item: Record<string, string>,
+  ...aliases: string[]
+): string {
+  const byAlias = getField(item, ...aliases);
+  if (byAlias) return byAlias;
+  // fallback: primeiro valor não-vazio entre todas as colunas
+  const firstNonEmpty = Object.values(item).find((v) => v && v.trim() !== "");
+  return firstNonEmpty ?? "";
 }
 
 function extractDriveId(str: string): string | null {
@@ -139,10 +164,8 @@ function driveThumb(capa: string, size = 300): string {
 function parseDataLancamento(item: SheetItem): number {
   const raw = getField(
     item,
-    // nome exato da coluna na planilha (com acentos e espaços)
     "Data de lançamento",
     "Data de lancamento",
-    // aliases normalizados que getField também verifica
     "data_de_lancamento",
     "datadelancamento",
     "data_lancamento",
@@ -166,22 +189,84 @@ function parseDataLancamento(item: SheetItem): number {
   return isNaN(t) ? 0 : t;
 }
 
+/**
+ * Converte uma linha da planilha (CSV ou API) em PlayItem.
+ *
+ * Aliases cobrem tanto a nomenclatura da API (snake_case sem acentos)
+ * quanto os nomes reais das colunas do CSV (com acentos, espaços e
+ * variações comuns da planilha).
+ *
+ * Para `titulo` e `artista`, se TODOS os aliases falharem é aplicado um
+ * fallback de "primeiro valor não-vazio" via getFieldWithFallback, evitando
+ * exibição de "—" quando o nome da coluna no CSV for inesperado.
+ */
 function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
-  const idTopico = getField(m, "id_do_topico", "idtopico", "id_topico");
-  const audioSrc = getField(m, "id_do_arquivo", "idarquivo", "id_arquivo", "arquivo", "link", "url");
-  const titulo =
+  // ── id do tópico ──────────────────────────────────────────────────────────
+  const idTopico = getField(
+    m,
+    // API
+    "id_do_topico", "idtopico", "id_topico", "id",
+    // CSV
+    "ID do tópico", "ID do topico", "Id do topico", "ID Tópico", "ID Topico",
+  );
+
+  // ── título ────────────────────────────────────────────────────────────────
+  const tituloAliases =
     cat === "musica"
-      ? getField(m, "nome_da_musica", "nomedamusica", "nome", "titulo")
-      : getField(m, "tipo_de_clipe", "tipodeclipe", "tipo", "titulo");
-  return {
-    id: idTopico,
-    titulo,
-    artista: getField(m, "act_principal", "actprincipal"),
-    capa: getField(m, "capa_da_musica", "capadamusica", "capa", "cover"),
-    audioSrc,
-    letra: getField(m, "letra", "lyrics"),
-    categoria: cat,
-  };
+      ? [
+          // API
+          "nome_da_musica", "nomedamusica", "nome", "titulo", "title",
+          // CSV — variações reais da planilha
+          "Nome da Música", "Nome da musica", "Nome da música",
+          "nomedamusica", "musica", "música", "Música", "Musica",
+          "nome_musica", "nomemusica",
+        ]
+      : [
+          // API
+          "tipo_de_clipe", "tipodeclipe", "tipo", "titulo", "title",
+          // CSV
+          "Tipo de Clipe", "Tipo de clipe", "Nome do Clipe", "Nome do clipe",
+          "nomedoclipe", "clipe",
+        ];
+  const titulo = getFieldWithFallback(m, ...tituloAliases);
+
+  // ── artista ───────────────────────────────────────────────────────────────
+  const artista = getField(
+    m,
+    // API
+    "act_principal", "actprincipal", "artista", "artist",
+    // CSV
+    "ACT Principal", "Act Principal", "act principal",
+    "Artista", "artista", "Intérprete", "interprete",
+    "ID do criador", "ID do artista",
+  );
+
+  // ── capa ──────────────────────────────────────────────────────────────────
+  const capa = getField(
+    m,
+    // API
+    "capa_da_musica", "capadamusica", "capa", "cover",
+    // CSV
+    "Capa da Música", "Capa da musica", "Capa da música",
+    "capadamusica", "Capa", "Thumb", "thumb", "thumbnail",
+  );
+
+  // ── audioSrc ──────────────────────────────────────────────────────────────
+  const audioSrc = getField(
+    m,
+    // API
+    "id_do_arquivo", "idarquivo", "id_arquivo", "arquivo",
+    // CSV — IDs / links do Google Drive ou YouTube
+    "ID do Arquivo", "ID do arquivo", "Id do arquivo",
+    "Link do áudio", "Link do audio", "linkdoaudio",
+    "Link", "link", "url", "URL",
+    "ID do vídeo", "ID do video", "idvideo", "video_id",
+  );
+
+  // ── letra ─────────────────────────────────────────────────────────────────
+  const letra = getField(m, "letra", "lyrics", "Letra");
+
+  return { id: idTopico, titulo, artista, capa, audioSrc, letra, categoria: cat };
 }
 
 function sheetRowsToObjects(values: string[][]): SheetItem[] {
@@ -704,13 +789,6 @@ function MusicasTab({ playMusicasDB, musicasDB, loading }: {
     { id: "lancar",      label: "Lançar",              icon: PlusCircle },
   ];
 
-  /**
-   * Últimos lançamentos:
-   * - Fonte: planilha CSV da aba "Musicas" (playMusicasDB) → tem a coluna "Data de lançamento"
-   * - Ordenação: mais recente primeiro (coluna A, parseDataLancamento)
-   * - Limite: 30 músicas
-   * - Fallback: se playMusicasDB estiver vazio (carregando), usa musicasDB da API sem ordenação por data
-   */
   const lancamentos = useMemo<{ item: PlayItem; dataDisplay: string }[]>(() => {
     const source = playMusicasDB.length > 0 ? playMusicasDB : musicasDB;
     return [...source]
