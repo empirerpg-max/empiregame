@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")(({
+export const Route = createFileRoute("/play/")((({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/play/")(({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-}));
+})));
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
 const API_URL =
@@ -81,7 +81,6 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 export type ChartEntry = {
   posicao: number;
   titulo: string;
-  artistas: string;
   capa: string;
   playItem?: PlayItem;
 };
@@ -244,7 +243,7 @@ function processChart(
         categoria: isVideo ? "musicvideo" : "musica",
       };
 
-      return { posicao, titulo, artistas: criador, capa, playItem } as ChartEntry;
+      return { posicao, titulo, capa, playItem } as ChartEntry;
     })
     .filter((e): e is ChartEntry => e !== null && e.posicao > 0)
     .sort((a, b) => a.posicao - b.posicao)
@@ -422,7 +421,6 @@ function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
         <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : canPlay ? "" : "text-muted-foreground"}`}>
           {entry.titulo}
         </p>
-        <p className="text-[10px] text-muted-foreground truncate">{entry.artistas}</p>
       </div>
     </button>
   );
@@ -445,8 +443,8 @@ function SectionHeader({ icon, title, onMore }: { icon: React.ReactNode; title: 
 }
 
 // ─── Chart Mini Card ───────────────────────────────────────────────────────
+// Exibe apenas: capa (ou ícone) + título da playlist. Sem listas internas.
 function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void }) {
-  const top3 = chart.entries.slice(0, 3);
   return (
     <button
       onClick={onOpen}
@@ -458,20 +456,10 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
         ) : (
           <span className="text-5xl">{chart.icone}</span>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
         <div className="absolute bottom-3 left-3 right-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-white/60 mb-0.5">{chart.icone} {chart.nome}</p>
           <p className="text-[11px] font-black text-white leading-tight">{chart.subtitulo}</p>
         </div>
-      </div>
-      <div className="px-3 py-2.5 space-y-1.5">
-        {top3.map((e, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="text-[10px] font-black text-muted-foreground/50 w-3">{e.posicao}</span>
-            <p className="text-[10px] font-black truncate flex-1 uppercase tracking-tight">{e.titulo}</p>
-          </div>
-        ))}
-        <p className="text-[9px] text-muted-foreground/40 pt-0.5 text-right">{chart.entries.length} faixas →</p>
       </div>
     </button>
   );
@@ -790,8 +778,7 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-black text-sm truncate uppercase tracking-tight">{item.titulo}</p>
-          <p className="text-[10px] text-muted-foreground mb-2">{item.artista}</p>
-          <button onClick={() => play(item, [item], { autoPlay: true })} className="px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1">
+          <button onClick={() => play(item, [item], { autoPlay: true })} className="mt-2 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1">
             <Play className="size-3" fill="currentColor" /> Tocar
           </button>
         </div>
@@ -860,7 +847,6 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-black text-xs truncate uppercase tracking-tight">{item.titulo || "—"}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
               </div>
               <MessageSquare className="size-4 text-muted-foreground/40 flex-shrink-0" />
             </button>
