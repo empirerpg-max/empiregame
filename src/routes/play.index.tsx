@@ -37,14 +37,41 @@ const SHEETS_KEY = "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY";
 const SHEET_API = (aba: string) =>
   `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
 
-// ─── Configuracao dos Charts ───────────────────────────────────────────────
-// Headers reais (confirmados pela imagem da planilha):
-//   Capa da música | ID do tópico | Link do áudio | ID do criador | Nome da música | Posição
-//   (Top_Videos_YT usa "Thumb" no lugar de "Capa da música" e "Nome do vídeo" no lugar de "Nome da música")
+// ─── Configuração dos Charts ───────────────────────────────────────────────
+// Col A: Capa da música / Thumb  → capa
+// Col B: ID do tópico            → id
+// Col C: Link do áudio           → audioSrc
+// Col D: ID do criador           → artista
+// Col E: Nome da música / vídeo  → titulo
+// Col F: Posição                 → posicao
 const CHARTS_CONFIG = [
-  { aba: "Top_50_Spotify",      nome: "Spotify",     subtitulo: "Top 50 Spotify",         icone: "\ud83d\udfe2", cor: "text-green-400", isVideo: false },
-  { aba: "Top_Songs_Apple_Music", nome: "Apple Music", subtitulo: "Top Songs Apple Music", icone: "\ud83c\udfb5", cor: "text-red-400",   isVideo: false },
-  { aba: "Top_Videos_YT",       nome: "YouTube",     subtitulo: "Top Videos",              icone: "\ud83d\udcf9", cor: "text-red-500",   isVideo: true  },
+  {
+    aba: "Top_50_Spotify",
+    nome: "Spotify",
+    subtitulo: "Top 100 Global Spotify",
+    icone: "\ud83d\udfe2",
+    cor: "text-green-400",
+    isVideo: false,
+    maxEntries: 100,
+  },
+  {
+    aba: "Top_Songs_Apple_Music",
+    nome: "Apple Music",
+    subtitulo: "Top Songs Apple Music",
+    icone: "\ud83c\udfb5",
+    cor: "text-red-400",
+    isVideo: false,
+    maxEntries: 100,
+  },
+  {
+    aba: "Top_Videos_YT",
+    nome: "YouTube",
+    subtitulo: "Top Videos",
+    icone: "\ud83d\udcf9",
+    cor: "text-red-500",
+    isVideo: true,
+    maxEntries: 100,
+  },
 ] as const;
 
 type Tab = "home" | "musicas" | "clipes" | "videos" | "forum";
@@ -76,6 +103,7 @@ export type ChartData = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
+/** Remove acentos, espaços e caracteres especiais → string comparável */
 function norm(s: string) {
   return String(s)
     .toLowerCase()
@@ -84,6 +112,10 @@ function norm(s: string) {
     .replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Busca um campo no objeto pelos aliases fornecidos, usando comparação
+ * normalizada para tolerar variações de acento, espaço e maiúsculas.
+ */
 function getField(item: Record<string, string>, ...aliases: string[]): string {
   if (!item) return "";
   const keys = Object.keys(item);
@@ -100,7 +132,8 @@ function extractDriveId(str: string): string | null {
   if (!str) return null;
   const m = String(str).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(str).match(/id=([a-zA-Z0-9_-]+)/);
   if (m) return m[1];
-  if (!/^https?:\/\//.test(str) && !str.includes("/")) return str.trim();
+  // string já é um ID puro (sem protocolo, sem barras)
+  if (!/^https?:\/\//.test(str) && !str.includes("/") && str.length > 10) return str.trim();
   return null;
 }
 
@@ -177,16 +210,16 @@ async function fetchSheetValues(aba: string): Promise<{ values: string[][]; erro
     if (res.ok) {
       const j = await res.json();
       if (j.values && j.values.length > 0) return { values: j.values as string[][] };
-      return { values: [], error: `v4 OK mas sem valores para aba "${aba}"` };
+      // v4 OK mas sem dados — tenta GViz como fallback
     }
-    const errText = await res.text().catch(() => String(res.status));
+    // Fallback: Google Visualization CSV export
     const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`;
     const gvizRes = await fetch(gvizUrl);
     if (gvizRes.ok) {
       const csv = await gvizRes.text();
       const parsed = parseCSV(csv);
       if (parsed.length > 1) return { values: parsed };
-      return { values: [], error: `gviz: CSV vazio para aba "${aba}" (v4 erro: ${res.status} ${errText.slice(0, 120)})` };
+      return { values: [], error: `GViz: CSV vazio para aba "${aba}"` };
     }
     return { values: [], error: `v4 ${res.status} + gviz ${gvizRes.status} para aba "${aba}"` };
   } catch (e) {
@@ -195,19 +228,21 @@ async function fetchSheetValues(aba: string): Promise<{ values: string[][]; erro
 }
 
 // ─── processChart ──────────────────────────────────────────────────────────
-// Headers reais confirmados (imagem da planilha):
-//   Col A: Capa da música   → capa
-//   Col B: ID do tópico     → id do PlayItem
-//   Col C: Link do áudio    → audioSrc do PlayItem
-//   Col D: ID do criador    → artista
-//   Col E: Nome da música   → titulo  (Top_Videos_YT: "Nome do vídeo")
-//   Col F: Posição          → posicao
+// Tolera variações nos nomes das colunas via norm() — acentos, maiúsculas,
+// espaços e caracteres especiais são ignorados na comparação.
 //
-// Top_Videos_YT usa "Thumb" (col A) e "Nome do vídeo" (col E)
+// Ordem esperada das colunas (mesma para as 3 abas):
+//   Col A: Capa da música / Thumb
+//   Col B: ID do tópico
+//   Col C: Link do áudio
+//   Col D: ID do criador
+//   Col E: Nome da música / Nome do vídeo
+//   Col F: Posição
 
 function processChart(
   chartValues: string[][],
-  isVideo: boolean
+  isVideo: boolean,
+  maxEntries = 100
 ): { entries: ChartEntry[]; capaDaPlaylist: string } {
   if (!chartValues || chartValues.length < 2) return { entries: [], capaDaPlaylist: "" };
 
@@ -215,22 +250,25 @@ function processChart(
 
   const entries: ChartEntry[] = rows
     .map((row) => {
-      const posicao = parseInt(
-        getField(row, "Posição", "Posicao").replace(/\D/g, "")
-      ) || 0;
+      // Posição — aceita "Posição", "Posicao", "posicao", "Pos", etc.
+      const posStr = getField(row, "Posi\u00e7\u00e3o", "Posicao", "Pos", "position", "rank");
+      const posicao = parseInt(posStr.replace(/\D/g, "")) || 0;
 
+      // Título — aceita "Nome da música", "Nome do vídeo" e variações sem acento
       const titulo = isVideo
-        ? getField(row, "Nome do vídeo", "Nome do video")
-        : getField(row, "Nome da música", "Nome da musica");
+        ? getField(row, "Nome do v\u00eddeo", "Nome do video", "nomedovideo", "titulo", "title")
+        : getField(row, "Nome da m\u00fasica", "Nome da musica", "nomedamusica", "titulo", "title", "nome");
 
+      // Capa — "Capa da música" ou "Thumb" (vídeos)
       const capa = isVideo
-        ? getField(row, "Thumb")
-        : getField(row, "Capa da música", "Capa da musica");
+        ? getField(row, "Thumb", "thumb", "thumbnail", "capa", "Capa da m\u00fasica", "Capa da musica")
+        : getField(row, "Capa da m\u00fasica", "Capa da musica", "capadamusica", "capa", "cover");
 
-      const idTopico  = getField(row, "ID do tópico", "ID do topico");
-      const linkAudio = getField(row, "Link do áudio", "Link do audio");
-      const criador   = getField(row, "ID do criador");
+      const idTopico  = getField(row, "ID do t\u00f3pico", "ID do topico", "idtopico", "id");
+      const linkAudio = getField(row, "Link do \u00e1udio", "Link do audio", "linkdoaudio", "link", "audio", "url");
+      const criador   = getField(row, "ID do criador", "iddocriador", "criador", "artista", "artist");
 
+      // Linha sem posição ou título não é válida
       if (!posicao || !titulo) return null;
 
       const playItem: PlayItem = {
@@ -247,7 +285,7 @@ function processChart(
     })
     .filter((e): e is ChartEntry => e !== null && e.posicao > 0)
     .sort((a, b) => a.posicao - b.posicao)
-    .slice(0, 50);
+    .slice(0, maxEntries);
 
   return { entries, capaDaPlaylist: entries[0]?.capa ?? "" };
 }
@@ -460,7 +498,7 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
         <div className="absolute bottom-3 left-3 right-3">
           <p className="text-[10px] font-black uppercase tracking-[0.15em] text-white/60 mb-0.5">{chart.icone} {chart.nome}</p>
-          <p className="text-xs font-black text-white leading-tight">{chart.subtitulo}</p>
+          <p className="text-[11px] font-black text-white leading-tight">{chart.subtitulo}</p>
         </div>
       </div>
       <div className="px-3 py-2.5 space-y-1.5">
@@ -470,7 +508,7 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
             <p className="text-[10px] font-black truncate flex-1 uppercase tracking-tight">{e.titulo}</p>
           </div>
         ))}
-        <p className="text-[9px] text-muted-foreground/40 pt-0.5 text-right">Ver tudo \u2192</p>
+        <p className="text-[9px] text-muted-foreground/40 pt-0.5 text-right">{chart.entries.length} faixas \u2192</p>
       </div>
     </button>
   );
@@ -550,6 +588,7 @@ function HomeTab({
 
   return (
     <div className="space-y-6">
+      {/* Seletor Charts / Lançamentos */}
       <div className="grid grid-cols-2 gap-2 p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
         {(["charts", "lancamentos"] as const).map((s) => (
           <button
@@ -564,13 +603,17 @@ function HomeTab({
         ))}
       </div>
 
+      {/* ── Top Charts ─────────────────────────────────────────────────── */}
       {homeSection === "charts" && (
         <section className="space-y-4">
+          <SectionHeader icon={<span>\ud83c\udfc6</span>} title="Top Charts" />
           {chartsLoading ? (
             <SkeletonGrid cols={3} rows={1} />
           ) : charts.length === 0 ? (
             <div className="space-y-3">
-              <p className="text-center text-xs text-muted-foreground py-4 opacity-40">Nenhum chart dispon\u00edvel.</p>
+              <p className="text-center text-xs text-muted-foreground py-4 opacity-40">
+                Nenhum chart dispon\u00edvel no momento.
+              </p>
               {chartsError && (
                 <div className="bg-white/[0.03] border border-red-500/20 rounded-2xl p-3 flex gap-2">
                   <AlertCircle className="size-4 text-red-400 flex-shrink-0 mt-0.5" />
@@ -588,6 +631,7 @@ function HomeTab({
         </section>
       )}
 
+      {/* ── Lançamentos ─────────────────────────────────────────────────── */}
       {homeSection === "lancamentos" && (
         <section className="space-y-6">
           {loading ? (
@@ -884,6 +928,7 @@ export default function PlayHomePage() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const tabsRef = useRef<HTMLDivElement>(null);
 
+  // Carrega músicas/clipes/vídeos via Apps Script (fórum + listas)
   useEffect(() => {
     Promise.all([
       fetch(`${API_URL}?action=conteudo&categoria=musicas`).then((r) => r.json()),
@@ -899,8 +944,9 @@ export default function PlayHomePage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Carrega lançamentos (aba Musicas/Music Videos) + Top Charts via Sheets API
   useEffect(() => {
-    // Musicas e Music Videos para a aba Lançamentos
+    // Lançamentos para a seção Início > Lançamentos
     const playPromise = Promise.all([
       fetch(SHEET_API("Musicas")).then((r) => r.json()).catch(() => ({ values: [] })),
       fetch(SHEET_API("Music Videos")).then((r) => r.json()).catch(() => ({ values: [] })),
@@ -909,7 +955,8 @@ export default function PlayHomePage() {
       setPlayMusicVideosDB(sheetRowsToObjects(rmv.values || []));
     });
 
-    // Charts — mesma planilha, abas Top_50_Spotify / Top_Songs_Apple_Music / Top_Videos_YT
+    // Top Charts — abas Top_50_Spotify / Top_Songs_Apple_Music / Top_Videos_YT
+    // Busca em paralelo e aceita qualquer número de entradas na planilha.
     const chartsPromise = Promise.all(
       CHARTS_CONFIG.map((cfg) =>
         fetchSheetValues(cfg.aba)
@@ -921,12 +968,19 @@ export default function PlayHomePage() {
         .map(({ cfg, values, error }) => {
           if (error) errors.push(`[${cfg.aba}] ${error}`);
           if (!values || values.length < 2) return null;
-          const { entries, capaDaPlaylist } = processChart(values, cfg.isVideo);
+          const { entries, capaDaPlaylist } = processChart(values, cfg.isVideo, cfg.maxEntries);
           if (!entries.length) {
-            errors.push(`[${cfg.aba}] 0 entries. Headers: ${values[0]?.join(" | ")}`);
+            errors.push(`[${cfg.aba}] 0 entradas. Headers encontrados: ${values[0]?.join(" | ")}`);
             return null;
           }
-          return { nome: cfg.nome, subtitulo: cfg.subtitulo, icone: cfg.icone, cor: cfg.cor, capaDaPlaylist, entries } as ChartData;
+          return {
+            nome: cfg.nome,
+            subtitulo: cfg.subtitulo,
+            icone: cfg.icone,
+            cor: cfg.cor,
+            capaDaPlaylist,
+            entries,
+          } as ChartData;
         })
         .filter((c): c is ChartData => c !== null);
       setCharts(built);
