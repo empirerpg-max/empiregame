@@ -10,18 +10,17 @@
  * └───────────────────────────────────────────────────────────────────────────┘
  *
  * ┌─ YouTube ─────────────────────────────────────────────────────────────────┐
- * │ • Usa react-youtube. O <iframe> NUNCA tem display:none nem size 0.        │
- * │ • Container com position:absolute, opacity:0, pointerEvents:none,        │
+ * │ • Usa a YouTube IFrame API nativa (sem react-youtube).                    │
+ * │ • <div> container com position:absolute, opacity:0, pointerEvents:none,  │
  * │   width:1px, height:1px, zIndex:-1 — invisível mas presente no DOM.      │
- * │ • playerVars: { autoplay: 1, controls: 0 }.                              │
- * │ • .playVideo() chamado no onClick (user-gesture) ou no onReady.          │
- * │ • Estado visual muda para "tocando" APENAS no evento onPlay.             │
+ * │   NUNCA usar display:none — a API para de funcionar.                      │
+ * │ • .playVideo() chamado no onClick (user-gesture) ou no onReady.           │
+ * │ • Estado visual muda para "tocando" APENAS no evento onStateChange(1).   │
  * │ • Erro → reverte para pause + toast.                                     │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
 
 import { useEffect, useRef, useCallback, useState } from "react";
-import YouTube, { type YouTubeEvent, type YouTubePlayer } from "react-youtube";
 import { toast } from "sonner";
 import {
   usePlay,
@@ -32,6 +31,74 @@ import {
 } from "@/lib/playContext";
 import { ChevronLeft, ChevronRight, X, Music } from "lucide-react";
 import { driveImg } from "@/lib/api";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Declaração do namespace global da YouTube IFrame API
+// ─────────────────────────────────────────────────────────────────────────────
+declare global {
+  interface Window {
+    YT: {
+      Player: new (
+        elementId: string | HTMLElement,
+        config: {
+          videoId?: string;
+          width?: number | string;
+          height?: number | string;
+          playerVars?: Record<string, number | string>;
+          events?: {
+            onReady?: (e: { target: YTPlayer }) => void;
+            onStateChange?: (e: { target: YTPlayer; data: number }) => void;
+            onError?: (e: { target: YTPlayer; data: number }) => void;
+          };
+        }
+      ) => YTPlayer;
+      PlayerState: {
+        PLAYING: number;
+        PAUSED: number;
+        ENDED: number;
+        BUFFERING: number;
+        CUED: number;
+      };
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+  interface YTPlayer {
+    playVideo: () => void;
+    pauseVideo: () => void;
+    stopVideo: () => void;
+    loadVideoById: (videoId: string) => void;
+    cueVideoById: (videoId: string) => void;
+    destroy: () => void;
+    getPlayerState: () => number;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook: carrega o script da YouTube IFrame API uma única vez por página
+// ─────────────────────────────────────────────────────────────────────────────
+let ytApiPromise: Promise<void> | null = null;
+
+function loadYouTubeAPI(): Promise<void> {
+  if (ytApiPromise) return ytApiPromise;
+  ytApiPromise = new Promise<void>((resolve) => {
+    if (window.YT?.Player) {
+      resolve();
+      return;
+    }
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      prev?.();
+      resolve();
+    };
+    if (!document.getElementById("yt-iframe-api")) {
+      const tag = document.createElement("script");
+      tag.id = "yt-iframe-api";
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(tag);
+    }
+  });
+  return ytApiPromise;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MiniPlayer
@@ -54,10 +121,12 @@ export function MiniPlayer() {
 
   const { queue, currentIdx, playing } = state;
 
+  // Ref para o <div> onde o YT.Player injeta o <iframe>
+  const ytContainerRef = useRef<HTMLDivElement>(null);
   // Flag: o usuário pediu play antes do player YT estar pronto
   const pendingYTPlay = useRef(false);
-  // Mantém o videoId montado no <YouTube> component para forçar remount na troca
-  const [ytVideoId, setYtVideoId] = useState<string | null>(null);
+  // Guarda o videoId que está montado no player YT para evitar re-criações desnecessárias
+  const [ytReady, setYtReady] = useState(false);
 
   // ── 1. Cria o <audio> nativo uma única vez ──────────────────────────────
   useEffect(() => {
@@ -65,10 +134,8 @@ export function MiniPlayer() {
 
     const audio = new Audio();
     audio.preload = "none";
-    // crossOrigin="anonymous" é obrigatório para o proxy responder sem erro CORB
     audio.crossOrigin = "anonymous";
 
-    // Estado visual confirmado pelos eventos nativos — nunca pelo onClick
     audio.addEventListener("play", confirmPlaying);
     audio.addEventListener("pause", confirmPaused);
     audio.addEventListener("ended", onEnded);
@@ -83,138 +150,137 @@ export function MiniPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 2. Reage à troca de faixa ──────────────────────────────────────────
+  // ── 2. Instancia o YT.Player quando o container estiver no DOM ──────────
   useEffect(() => {
-    if (!currentMediaId) return;
+    if (mediaType !== "youtube" || !currentMediaId) return;
+    if (!ytContainerRef.current) return;
 
-    if (mediaType === "drive") {
-      const audio = audioRef.current;
-      if (!audio) return;
-      audio.pause();
-      // Proxy Cloudflare em vez da URL do Drive diretamente
-      audio.src = driveProxyUrl(currentMediaId);
-      audio.load();
-      // NÃO chama .play() aqui — será feito no onClick (user-gesture)
+    const videoId =
+      extractYouTubeId(currentMediaId) ?? currentMediaId;
+    if (!videoId) return;
+
+    // Destrói player anterior se existir
+    if (ytPlayerRef.current) {
+      try {
+        ytPlayerRef.current.destroy();
+      } catch {
+        /* ignora */
+      }
+      ytPlayerRef.current = null;
+      setYtReady(false);
     }
 
-    if (mediaType === "youtube") {
-      // Atualiza o videoId que alimenta o componente <YouTube>
-      // O react-youtube faz remount automático ao trocar videoId
-      const id = extractYouTubeId(currentMediaId) ?? currentMediaId;
-      setYtVideoId(id);
-      pendingYTPlay.current = false; // reseta flag na troca de faixa
-    }
+    pendingYTPlay.current = false;
+
+    loadYouTubeAPI().then(() => {
+      if (!ytContainerRef.current) return;
+
+      const player = new window.YT.Player(ytContainerRef.current, {
+        videoId,
+        width: 1,
+        height: 1,
+        playerVars: {
+          autoplay: 1,
+          controls: 0,
+          disablekb: 1,
+          rel: 0,
+          modestbranding: 1,
+          playsinline: 1,
+        },
+        events: {
+          onReady: (e) => {
+            ytPlayerRef.current = e.target;
+            setYtReady(true);
+            if (pendingYTPlay.current) {
+              pendingYTPlay.current = false;
+              try {
+                e.target.playVideo();
+              } catch {
+                confirmPaused();
+                toast.error("Não foi possível iniciar o vídeo do YouTube.");
+              }
+            }
+          },
+          onStateChange: (e) => {
+            const s = window.YT.PlayerState;
+            if (e.data === s.PLAYING) confirmPlaying();
+            else if (e.data === s.PAUSED) confirmPaused();
+            else if (e.data === s.ENDED) onEnded();
+          },
+          onError: () => {
+            confirmPaused();
+            toast.error("Erro ao carregar o vídeo do YouTube.");
+          },
+        },
+      });
+
+      ytPlayerRef.current = player as unknown as YTPlayer;
+    });
+
+    return () => {
+      // não destrói aqui pois o <div> pode ser reutilizado — destrói na próxima troca
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMediaId, mediaType]);
 
-  // ── 3. Limpa ao desmontar ──────────────────────────────────────────────
+  // ── 3. Reage à troca de faixa (Drive) ──────────────────────────────────
+  useEffect(() => {
+    if (!currentMediaId || mediaType !== "drive") return;
+
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.src = driveProxyUrl(currentMediaId);
+    audio.load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMediaId, mediaType]);
+
+  // ── 4. Limpa ao desmontar ──────────────────────────────────────────────
   useEffect(() => {
     return () => {
       audioRef.current?.pause();
+      try {
+        ytPlayerRef.current?.destroy();
+      } catch {
+        /* ignora */
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // ── 4. Handlers do react-youtube ───────────────────────────────────────
-
-  /** Chamado pelo react-youtube quando o player está pronto para receber comandos */
-  const handleYTReady = useCallback(
-    (e: YouTubeEvent) => {
-      const player: YouTubePlayer = e.target;
-      ytPlayerRef.current = player;
-
-      // Se o usuário clicou em Play antes do player terminar de carregar
-      if (pendingYTPlay.current) {
-        pendingYTPlay.current = false;
-        try {
-          player.playVideo();
-        } catch {
-          confirmPaused();
-          toast.error("Não foi possível iniciar o vídeo do YouTube.");
-        }
-      }
-    },
-    [ytPlayerRef, confirmPaused]
-  );
-
-  /**
-   * onPlay do react-youtube — único lugar que define playing=true para YT.
-   * Equivale ao evento 'play' do <audio>.
-   */
-  const handleYTPlay = useCallback(
-    (_e: YouTubeEvent) => {
-      confirmPlaying();
-    },
-    [confirmPlaying]
-  );
-
-  const handleYTPause = useCallback(
-    (_e: YouTubeEvent) => {
-      confirmPaused();
-    },
-    [confirmPaused]
-  );
-
-  const handleYTEnd = useCallback(
-    (_e: YouTubeEvent) => {
-      onEnded();
-    },
-    [onEnded]
-  );
-
-  const handleYTError = useCallback(
-    (_e: YouTubeEvent) => {
-      confirmPaused();
-      toast.error("Erro ao carregar o vídeo do YouTube.");
-    },
-    [confirmPaused]
-  );
 
   // ── 5. triggerPlay — disparado DENTRO do onClick (user-gesture) ─────────
   const triggerPlay = useCallback(() => {
     if (mediaType === "drive") {
       const audio = audioRef.current;
       if (!audio) return;
-
-      try {
-        audio
-          .play()
-          .then(() => {
-            // confirmPlaying é chamado pelo evento 'play' do audio — não aqui
-          })
-          .catch((err: unknown) => {
-            confirmPaused();
-            const msg =
-              err instanceof Error ? err.message : String(err);
-            toast.error(
-              `Falha ao reproduzir: ${msg}. O arquivo pode estar privado ou o autoplay foi bloqueado.`
-            );
-          });
-      } catch (err: unknown) {
-        confirmPaused();
-        toast.error(`Erro inesperado: ${String(err)}`);
-      }
+      audio
+        .play()
+        .catch((err: unknown) => {
+          confirmPaused();
+          const msg = err instanceof Error ? err.message : String(err);
+          toast.error(
+            `Falha ao reproduzir: ${msg}. O arquivo pode estar privado ou o autoplay foi bloqueado.`
+          );
+        });
       return;
     }
 
     if (mediaType === "youtube") {
       const player = ytPlayerRef.current;
       if (!player) {
-        // Player ainda não carregou — flag para disparar no onReady
         pendingYTPlay.current = true;
         return;
       }
       try {
         player.playVideo();
-        // confirmPlaying será chamado pelo evento onPlay do react-youtube
       } catch (err: unknown) {
-        pendingYTPlay.current = true; // tenta novamente no onReady
+        pendingYTPlay.current = true;
         toast.error(`Não foi possível iniciar o vídeo: ${String(err)}`);
       }
     }
   }, [mediaType, audioRef, ytPlayerRef, confirmPaused]);
 
-  // ── 6. triggerPause — disparado DENTRO do onClick ──────────────────────
+  // ── 6. triggerPause ────────────────────────────────────────────────────
   const triggerPause = useCallback(() => {
     pendingYTPlay.current = false;
     pause();
@@ -230,14 +296,14 @@ export function MiniPlayer() {
   return (
     <div className="fixed bottom-16 inset-x-0 z-40 bg-card border-t border-white/10 shadow-2xl">
       {/*
-       * Container do react-youtube.
+       * Container do YT.Player.
        *
-       * REGRA CRÍTICA: o <iframe> NUNCA pode ter display:none nem 0x0.
+       * REGRA CRÍTICA: NUNCA usar display:none nem 0x0 no container.
        * A API do YouTube suspende a reprodução em elementos não visíveis.
        * Usamos position:absolute + opacity:0 + zIndex:-1 para
        * manter o iframe no layout sem exibi-lo ao usuário.
        */}
-      {mediaType === "youtube" && ytVideoId && (
+      {mediaType === "youtube" && currentMediaId && (
         <div
           style={{
             position: "absolute",
@@ -252,26 +318,7 @@ export function MiniPlayer() {
           }}
           aria-hidden="true"
         >
-          <YouTube
-            videoId={ytVideoId}
-            opts={{
-              width: "1",
-              height: "1",
-              playerVars: {
-                autoplay: 1,    // sinaliza intenção — .playVideo() no onClick garante
-                controls: 0,
-                disablekb: 1,
-                rel: 0,
-                modestbranding: 1,
-                playsinline: 1,
-              },
-            }}
-            onReady={handleYTReady}
-            onPlay={handleYTPlay}
-            onPause={handleYTPause}
-            onEnd={handleYTEnd}
-            onError={handleYTError}
-          />
+          <div ref={ytContainerRef} />
         </div>
       )}
 
