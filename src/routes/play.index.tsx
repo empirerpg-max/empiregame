@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")({
+export const Route = createFileRoute("/play/")(({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/play/")({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-});
+}));
 
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
@@ -135,6 +135,15 @@ function driveThumb(capa: string, size = 300): string {
   return capa;
 }
 
+/**
+ * Converte qualquer representação de data para um timestamp (ms).
+ * Suporta:
+ *   - "DD/MM/YYYY"
+ *   - "YYYY-MM-DD"
+ *   - Timestamp Unix em segundos (10 dígitos, ex: 1625310906)
+ *   - Timestamp Unix em milissegundos (13 dígitos, ex: 1625310906000)
+ *   - Qualquer string que new Date() consiga parsear
+ */
 function parseDataLancamento(item: SheetItem): number {
   const raw = getField(
     item,
@@ -150,15 +159,40 @@ function parseDataLancamento(item: SheetItem): number {
   );
   if (!raw || raw.trim() === "") return 0;
 
-  const brDate = raw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const s = raw.trim();
+
+  // DD/MM/YYYY
+  const brDate = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (brDate) {
     const iso = `${brDate[3]}-${brDate[2].padStart(2, "0")}-${brDate[1].padStart(2, "0")}`;
     const t = new Date(iso).getTime();
     return isNaN(t) ? 0 : t;
   }
 
-  const t = new Date(raw.trim()).getTime();
+  // Timestamp Unix puro (só dígitos)
+  if (/^\d+$/.test(s)) {
+    const n = parseInt(s, 10);
+    // 10 dígitos → segundos; 13 dígitos → milissegundos
+    return n < 1e12 ? n * 1000 : n;
+  }
+
+  // ISO / qualquer outro formato reconhecido pelo JS
+  const t = new Date(s).getTime();
   return isNaN(t) ? 0 : t;
+}
+
+/**
+ * Formata um timestamp (ms) para "DD/MM/YYYY".
+ * Retorna string vazia se o valor for 0 ou inválido.
+ */
+function formatDate(ts: number): string {
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "";
+  const day   = String(d.getUTCDate()).padStart(2, "0");
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const year  = d.getUTCFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 // Converte uma linha da API (campos snake_case) OU do CSV (campos literais) para PlayItem de música.
@@ -463,15 +497,37 @@ function RowTrack({
   item,
   queue,
   num,
-  dataLancamento,
+  rawDate,
 }: {
   item: PlayItem;
   queue: PlayItem[];
   num: number;
-  dataLancamento?: string;
+  /** Valor bruto do campo data vindo do SheetItem — será formatado aqui */
+  rawDate?: string;
 }) {
   const { play, state } = usePlay();
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
+
+  // Formata a data a partir do valor bruto, cobrindo todos os formatos possíveis
+  const dataFormatada = useMemo(() => {
+    if (!rawDate || rawDate.trim() === "") return "";
+    const s = rawDate.trim();
+
+    // Já está no formato DD/MM/YYYY — retorna direto
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
+
+    // Timestamp Unix puro (só dígitos)
+    if (/^\d+$/.test(s)) {
+      const n = parseInt(s, 10);
+      const ts = n < 1e12 ? n * 1000 : n;
+      return formatDate(ts);
+    }
+
+    // ISO ou outro formato reconhecido pelo JS
+    const t = new Date(s).getTime();
+    return isNaN(t) ? s : formatDate(t);
+  }, [rawDate]);
+
   return (
     <button
       onClick={() => play(item, queue, { autoPlay: true })}
@@ -501,8 +557,8 @@ function RowTrack({
         <p className={`text-xs font-black truncate uppercase tracking-tight ${isActive ? "text-primary" : ""}`}>{item.titulo || "—"}</p>
         <p className="text-[10px] text-muted-foreground truncate">
           {item.artista}
-          {dataLancamento && (
-            <span className="ml-1.5 opacity-50">· {dataLancamento}</span>
+          {dataFormatada && (
+            <span className="ml-1.5 opacity-50">· {dataFormatada}</span>
           )}
         </p>
       </div>
@@ -650,12 +706,20 @@ function HomeTab({
   const [homeSection, setHomeSection] = useState<"charts" | "lancamentos">("charts");
 
   // Usa musicasDB (API) como fonte — mesma que já funciona em Clipes/Fórum
-  const lancMusicas = useMemo<PlayItem[]>(
+  const lancMusicas = useMemo<{ item: PlayItem; rawDate: string }[]>(
     () =>
       [...musicasDB]
         .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
         .slice(0, 5)
-        .map((m) => toPlayItemMusica(m)),
+        .map((m) => ({
+          item: toPlayItemMusica(m),
+          rawDate: getField(
+            m,
+            "Data de lançamento", "Data de lancamento", "data_de_lancamento",
+            "datadelancamento", "data_lancamento", "datalancamento",
+            "data", "release_date", "releasedate",
+          ),
+        })),
     [musicasDB]
   );
 
@@ -727,7 +791,15 @@ function HomeTab({
                     onMore={() => onTabChange("musicas")}
                   />
                   <div className="space-y-1">
-                    {lancMusicas.map((item, i) => <RowTrack key={item.id} item={item} queue={lancMusicas} num={i + 1} />)}
+                    {lancMusicas.map(({ item, rawDate }, i) => (
+                      <RowTrack
+                        key={item.id}
+                        item={item}
+                        queue={lancMusicas.map((x) => x.item)}
+                        num={i + 1}
+                        rawDate={rawDate}
+                      />
+                    ))}
                   </div>
                 </div>
               )}
