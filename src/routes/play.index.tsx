@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")((((({
+export const Route = createFileRoute("/play/")(((((({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/play/")((((({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-})))));
+}))))))
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
 const API_URL =
@@ -104,10 +104,6 @@ function norm(s: string) {
     .replace(/[^a-z0-9]/g, "");
 }
 
-/**
- * Busca um campo em `item` pelos aliases fornecidos (normalização insensível a
- * acentos, espaços, underscores e maiúsculas).
- */
 function getField(
   item: Record<string, string>,
   ...aliases: string[]
@@ -138,11 +134,6 @@ function driveThumb(capa: string, size = 300): string {
   return capa;
 }
 
-/**
- * Faz o parse da coluna "Data de lançamento" (coluna A da aba Musicas).
- * Aceita formatos: DD/MM/YYYY, YYYY-MM-DD, MM/DD/YYYY e ISO 8601.
- * Retorna timestamp numérico para ordenação (0 se inválido).
- */
 function parseDataLancamento(item: SheetItem): number {
   const raw = getField(
     item,
@@ -158,7 +149,6 @@ function parseDataLancamento(item: SheetItem): number {
   );
   if (!raw || raw.trim() === "") return 0;
 
-  // DD/MM/YYYY  →  YYYY-MM-DD
   const brDate = raw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (brDate) {
     const iso = `${brDate[3]}-${brDate[2].padStart(2, "0")}-${brDate[1].padStart(2, "0")}`;
@@ -166,53 +156,34 @@ function parseDataLancamento(item: SheetItem): number {
     return isNaN(t) ? 0 : t;
   }
 
-  // qualquer outro formato (YYYY-MM-DD, ISO, etc.)
   const t = new Date(raw.trim()).getTime();
   return isNaN(t) ? 0 : t;
 }
 
-/**
- * Converte uma linha da aba "Musicas" em PlayItem.
- *
- * Colunas confirmadas pelo usuário:
- *   Data de lançamento | ID do tópico | ID do arquivo | Capa da música |
- *   Letra | Comentários para | ID do Criador | Nome da música
- *
- * IMPORTANTE: NÃO usa getFieldWithFallback para título/artista para evitar
- * que o fallback "primeiro valor não-vazio" retorne a data (coluna A).
- */
 function toPlayItemMusica(m: SheetItem): PlayItem {
   const idTopico = getField(m,
     "ID do tópico", "ID do topico", "id_do_topico", "idtopico", "id",
   );
 
   const titulo = getField(m,
-    // Coluna confirmada
     "Nome da música", "Nome da musica", "Nome da Música",
-    // Variações
     "nome_da_musica", "nomedamusica", "nome_musica", "nomemusica",
     "nome", "titulo", "title", "track", "song",
   );
 
   const artista = getField(m,
-    // Coluna confirmada
     "ID do Criador", "ID do criador", "iddocriador", "idcriador",
-    // Variações
     "act_principal", "actprincipal", "ACT Principal",
     "artista", "artist", "autor", "author",
   );
 
   const capa = getField(m,
-    // Coluna confirmada
     "Capa da música", "Capa da musica", "Capa da Música",
-    // Variações
     "capa_da_musica", "capadamusica", "capa", "cover", "thumb", "thumbnail",
   );
 
   const audioSrc = getField(m,
-    // Coluna confirmada
     "ID do arquivo", "ID do Arquivo", "id_do_arquivo", "idArquivo", "idarquivo",
-    // Variações
     "link", "url", "audio",
   );
 
@@ -231,10 +202,6 @@ function toPlayItemMusica(m: SheetItem): PlayItem {
   };
 }
 
-/**
- * Converte uma linha genérica (API ou outras abas) em PlayItem.
- * Usado para clipes, vídeos e charts.
- */
 function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
   const idTopico = getField(m,
     "id_do_topico", "idtopico", "id_topico", "id",
@@ -772,9 +739,6 @@ function HomeTab({
 // ─── Músicas Tab ───────────────────────────────────────────────────────────
 type MusicasSubTab = "lancamentos" | "albuns" | "lancar";
 
-/**
- * Formata timestamp para exibição: "DD/MM/YYYY" ou string original se inválida.
- */
 function formatDataDisplay(item: SheetItem): string {
   const raw = getField(
     item,
@@ -787,11 +751,7 @@ function formatDataDisplay(item: SheetItem): string {
     "data",
   );
   if (!raw) return "";
-
-  // Já está no formato DD/MM/YYYY → devolve direto
   if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw.trim())) return raw.trim();
-
-  // Tenta converter qualquer outro formato para DD/MM/YYYY
   const d = new Date(raw.trim());
   if (!isNaN(d.getTime())) {
     return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
@@ -812,19 +772,14 @@ function MusicasTab({ playMusicasDB, musicasDB, loading }: {
     { id: "lancar",      label: "Lançar",              icon: PlusCircle },
   ];
 
-  // Usa exclusivamente a aba "Musicas" do CSV (playMusicasDB),
-  // com toPlayItemMusica que conhece as colunas exatas da planilha.
-  const lancamentos = useMemo<{ item: PlayItem; dataDisplay: string }[]>(() => {
+  // 30 músicas mais recentes da aba "Musicas" da planilha,
+  // ordenadas por "Data de lançamento" (mais recente primeiro).
+  const lancamentos = useMemo<PlayItem[]>(() => {
     return [...playMusicasDB]
       .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
       .slice(0, 30)
-      .map((m) => ({
-        item: toPlayItemMusica(m),
-        dataDisplay: formatDataDisplay(m),
-      }));
+      .map((m) => toPlayItemMusica(m));
   }, [playMusicasDB]);
-
-  const lancamentosQueue = useMemo(() => lancamentos.map((l) => l.item), [lancamentos]);
 
   const albuns = useMemo(() => {
     const source = musicasDB.length > 0 ? musicasDB : [];
@@ -845,7 +800,8 @@ function MusicasTab({ playMusicasDB, musicasDB, loading }: {
     return Object.values(map);
   }, [musicasDB]);
 
-  if (loading && playMusicasDB.length === 0) return <SkeletonList rows={6} />;
+  // Mostra skeleton apenas na primeira carga
+  if (loading && playMusicasDB.length === 0) return <SkeletonGrid cols={3} rows={4} />;
 
   return (
     <div className="space-y-5">
@@ -867,25 +823,22 @@ function MusicasTab({ playMusicasDB, musicasDB, loading }: {
         ))}
       </div>
 
-      {/* Últimos lançamentos */}
+      {/* ── Últimos lançamentos: grid de cards com capa ── */}
       {subTab === "lancamentos" && (
-        <div className="space-y-1">
+        <div className="space-y-3">
           {lancamentos.length === 0 ? (
             <p className="text-center text-xs text-muted-foreground py-12 opacity-40">Nenhuma música ainda.</p>
           ) : (
             <>
-              <p className="text-[10px] text-muted-foreground/50 uppercase tracking-widest font-black px-3 pb-1">
+              <p className="text-[10px] text-muted-foreground/50 uppercase tracking-widest font-black px-1 pb-1">
                 {lancamentos.length} músicas · mais recente primeiro
               </p>
-              {lancamentos.map(({ item, dataDisplay }, i) => (
-                <RowTrack
-                  key={item.id || i}
-                  item={item}
-                  queue={lancamentosQueue}
-                  num={i + 1}
-                  dataLancamento={dataDisplay}
-                />
-              ))}
+              {/* Grid 3 colunas — mesmo padrão das demais playlists */}
+              <div className="grid grid-cols-3 gap-3">
+                {lancamentos.map((item) => (
+                  <SongCard key={item.id} item={item} queue={lancamentos} />
+                ))}
+              </div>
             </>
           )}
         </div>
@@ -916,7 +869,7 @@ function MusicasTab({ playMusicasDB, musicasDB, loading }: {
         </div>
       )}
 
-      {/* Lançar — placeholder para construção futura */}
+      {/* Lançar */}
       {subTab === "lancar" && (
         <div className="flex flex-col items-center gap-4 py-16 text-center">
           <div className="size-16 rounded-full bg-primary/10 grid place-items-center">
@@ -1135,6 +1088,10 @@ export default function PlayHomePage() {
   }, []);
 
   useEffect(() => {
+    // Lê diretamente a aba "Musicas" da planilha 1XYa6Pzd-...
+    // Colunas usadas: Data de lançamento, ID do tópico, ID do arquivo,
+    //                 Capa da música, Letra, Comentários para,
+    //                 ID do Criador, Nome da música
     const playPromise = Promise.all([
       fetchSheetValues("Musicas"),
       fetchSheetValues("Music Videos"),
