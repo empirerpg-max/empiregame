@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")({
+export const Route = createFileRoute("/play/")(({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -24,26 +24,23 @@ export const Route = createFileRoute("/play/")({
       { property: "og:description", content: "Ou\u00e7a as m\u00fasicas, clipes e v\u00eddeos do Empire RPG." },
     ],
   }),
-});
+}));
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
 const API_URL =
   "https://script.google.com/macros/s/AKfycby1S1mIBXdj4hLqc9RYv1ZJjL7d5ct6to18FNPmpJn1KOnZrYCKJKPNe2LP0dPW-G8HOg/exec";
 
-// Todas as abas (Musicas, Music Videos, Top_50_Spotify, etc.) estão na mesma planilha
-const SHEET_ID  = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
-const SHEETS_KEY = "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY";
+const SHEET_ID = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
 
-const SHEET_API = (aba: string) =>
-  `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(aba)}?key=${SHEETS_KEY}`;
+/**
+ * Busca uma aba da planilha pública como CSV — não exige API key.
+ * Funciona enquanto a planilha tiver acesso "Qualquer pessoa com o link pode ver".
+ */
+function sheetCsvUrl(aba: string): string {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`;
+}
 
 // ─── Configuração dos Charts ───────────────────────────────────────────────
-// Col A: Capa da música / Thumb  → capa
-// Col B: ID do tópico            → id
-// Col C: Link do áudio           → audioSrc
-// Col D: ID do criador           → artista
-// Col E: Nome da música / vídeo  → titulo
-// Col F: Posição                 → posicao
 const CHARTS_CONFIG = [
   {
     aba: "Top_50_Spotify",
@@ -103,7 +100,6 @@ export type ChartData = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
-/** Remove acentos, espaços e caracteres especiais → string comparável */
 function norm(s: string) {
   return String(s)
     .toLowerCase()
@@ -112,10 +108,6 @@ function norm(s: string) {
     .replace(/[^a-z0-9]/g, "");
 }
 
-/**
- * Busca um campo no objeto pelos aliases fornecidos, usando comparação
- * normalizada para tolerar variações de acento, espaço e maiúsculas.
- */
 function getField(item: Record<string, string>, ...aliases: string[]): string {
   if (!item) return "";
   const keys = Object.keys(item);
@@ -132,7 +124,6 @@ function extractDriveId(str: string): string | null {
   if (!str) return null;
   const m = String(str).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(str).match(/id=([a-zA-Z0-9_-]+)/);
   if (m) return m[1];
-  // string já é um ID puro (sem protocolo, sem barras)
   if (!/^https?:\/\//.test(str) && !str.includes("/") && str.length > 10) return str.trim();
   return null;
 }
@@ -203,42 +194,26 @@ function parseCSV(csv: string): string[][] {
   return rows;
 }
 
+/**
+ * Busca os valores de uma aba usando APENAS o endpoint de CSV público (gviz).
+ * Não depende de API key — funciona com planilha pública.
+ */
 async function fetchSheetValues(aba: string): Promise<{ values: string[][]; error?: string }> {
-  const v4url = SHEET_API(aba);
   try {
-    const res = await fetch(v4url);
-    if (res.ok) {
-      const j = await res.json();
-      if (j.values && j.values.length > 0) return { values: j.values as string[][] };
-      // v4 OK mas sem dados — tenta GViz como fallback
+    const res = await fetch(sheetCsvUrl(aba));
+    if (!res.ok) {
+      return { values: [], error: `HTTP ${res.status} ao buscar aba "${aba}"` };
     }
-    // Fallback: Google Visualization CSV export
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`;
-    const gvizRes = await fetch(gvizUrl);
-    if (gvizRes.ok) {
-      const csv = await gvizRes.text();
-      const parsed = parseCSV(csv);
-      if (parsed.length > 1) return { values: parsed };
-      return { values: [], error: `GViz: CSV vazio para aba "${aba}"` };
-    }
-    return { values: [], error: `v4 ${res.status} + gviz ${gvizRes.status} para aba "${aba}"` };
+    const csv = await res.text();
+    const parsed = parseCSV(csv);
+    if (parsed.length > 1) return { values: parsed };
+    return { values: [], error: `CSV vazio para aba "${aba}"` };
   } catch (e) {
     return { values: [], error: String(e) };
   }
 }
 
 // ─── processChart ──────────────────────────────────────────────────────────
-// Tolera variações nos nomes das colunas via norm() — acentos, maiúsculas,
-// espaços e caracteres especiais são ignorados na comparação.
-//
-// Ordem esperada das colunas (mesma para as 3 abas):
-//   Col A: Capa da música / Thumb
-//   Col B: ID do tópico
-//   Col C: Link do áudio
-//   Col D: ID do criador
-//   Col E: Nome da música / Nome do vídeo
-//   Col F: Posição
-
 function processChart(
   chartValues: string[][],
   isVideo: boolean,
@@ -250,16 +225,13 @@ function processChart(
 
   const entries: ChartEntry[] = rows
     .map((row) => {
-      // Posição — aceita "Posição", "Posicao", "posicao", "Pos", etc.
       const posStr = getField(row, "Posi\u00e7\u00e3o", "Posicao", "Pos", "position", "rank");
       const posicao = parseInt(posStr.replace(/\D/g, "")) || 0;
 
-      // Título — aceita "Nome da música", "Nome do vídeo" e variações sem acento
       const titulo = isVideo
         ? getField(row, "Nome do v\u00eddeo", "Nome do video", "nomedovideo", "titulo", "title")
         : getField(row, "Nome da m\u00fasica", "Nome da musica", "nomedamusica", "titulo", "title", "nome");
 
-      // Capa — "Capa da música" ou "Thumb" (vídeos)
       const capa = isVideo
         ? getField(row, "Thumb", "thumb", "thumbnail", "capa", "Capa da m\u00fasica", "Capa da musica")
         : getField(row, "Capa da m\u00fasica", "Capa da musica", "capadamusica", "capa", "cover");
@@ -268,7 +240,6 @@ function processChart(
       const linkAudio = getField(row, "Link do \u00e1udio", "Link do audio", "linkdoaudio", "link", "audio", "url");
       const criador   = getField(row, "ID do criador", "iddocriador", "criador", "artista", "artist");
 
-      // Linha sem posição ou título não é válida
       if (!posicao || !titulo) return null;
 
       const playItem: PlayItem = {
@@ -588,7 +559,6 @@ function HomeTab({
 
   return (
     <div className="space-y-6">
-      {/* Seletor Charts / Lançamentos */}
       <div className="grid grid-cols-2 gap-2 p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
         {(["charts", "lancamentos"] as const).map((s) => (
           <button
@@ -603,7 +573,6 @@ function HomeTab({
         ))}
       </div>
 
-      {/* ── Top Charts ─────────────────────────────────────────────────── */}
       {homeSection === "charts" && (
         <section className="space-y-4">
           <SectionHeader icon={<span>\ud83c\udfc6</span>} title="Top Charts" />
@@ -631,7 +600,6 @@ function HomeTab({
         </section>
       )}
 
-      {/* ── Lançamentos ─────────────────────────────────────────────────── */}
       {homeSection === "lancamentos" && (
         <section className="space-y-6">
           {loading ? (
@@ -944,19 +912,18 @@ export default function PlayHomePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Carrega lançamentos (aba Musicas/Music Videos) + Top Charts via Sheets API
+  // Carrega lançamentos (abas Musicas/Music Videos) + Top Charts via CSV público
   useEffect(() => {
     // Lançamentos para a seção Início > Lançamentos
     const playPromise = Promise.all([
-      fetch(SHEET_API("Musicas")).then((r) => r.json()).catch(() => ({ values: [] })),
-      fetch(SHEET_API("Music Videos")).then((r) => r.json()).catch(() => ({ values: [] })),
+      fetchSheetValues("Musicas"),
+      fetchSheetValues("Music Videos"),
     ]).then(([rm, rmv]) => {
-      setPlayMusicasDB(sheetRowsToObjects(rm.values || []));
-      setPlayMusicVideosDB(sheetRowsToObjects(rmv.values || []));
+      setPlayMusicasDB(sheetRowsToObjects(rm.values));
+      setPlayMusicVideosDB(sheetRowsToObjects(rmv.values));
     });
 
     // Top Charts — abas Top_50_Spotify / Top_Songs_Apple_Music / Top_Videos_YT
-    // Busca em paralelo e aceita qualquer número de entradas na planilha.
     const chartsPromise = Promise.all(
       CHARTS_CONFIG.map((cfg) =>
         fetchSheetValues(cfg.aba)
@@ -970,7 +937,7 @@ export default function PlayHomePage() {
           if (!values || values.length < 2) return null;
           const { entries, capaDaPlaylist } = processChart(values, cfg.isVideo, cfg.maxEntries);
           if (!entries.length) {
-            errors.push(`[${cfg.aba}] 0 entradas. Headers encontrados: ${values[0]?.join(" | ")}`);
+            errors.push(`[${cfg.aba}] 0 entradas. Headers: ${values[0]?.join(" | ")}`);
             return null;
           }
           return {
