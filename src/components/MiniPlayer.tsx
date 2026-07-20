@@ -5,7 +5,7 @@
  * ─ Google Drive → <audio> nativo com crossOrigin="anonymous".
  *   O .play() é disparado DENTRO do onClick (user-gesture).
  *   O estado visual só muda para "tocando" após a promise resolver.
- *   Em caso de erro (CORS/CORB), reverte para pause + toast.
+ *   Em caso de erro (CORS/CORB/permissão), reverte para pause + toast.
  *
  * ─ YouTube → YT.Player injetado em um <div> de 1×1 px invisível
  *   (opacity:0, position:absolute, zIndex:-1, pointerEvents:none).
@@ -99,9 +99,19 @@ export function MiniPlayer() {
     audio.addEventListener("play", confirmPlaying);
     audio.addEventListener("pause", confirmPaused);
     audio.addEventListener("ended", onEnded);
-    audio.addEventListener("error", () => {
+    audio.addEventListener("error", (e) => {
+      const mediaErr = (e.target as HTMLAudioElement).error;
+      console.error(
+        "[MiniPlayer] Erro ao carregar áudio:",
+        mediaErr?.code,
+        mediaErr?.message,
+        "| src:",
+        (e.target as HTMLAudioElement).src
+      );
       confirmPaused();
-      toast.error("Não foi possível reproduzir o arquivo. Verifique as permissões do Google Drive.");
+      toast.error(
+        "Não foi possível carregar a mídia. Verifique se o arquivo está público ou tente novamente mais tarde."
+      );
     });
 
     audioRef.current = audio;
@@ -243,6 +253,10 @@ export function MiniPlayer() {
 
   return (
     <div className="fixed bottom-16 inset-x-0 z-40 bg-card border-t border-white/10 shadow-2xl">
+      {/*
+       * Container do YouTube — NUNCA display:none nem size 0.
+       * Escondemos via opacity/position/z-index.
+       */}
       {mediaType === "youtube" && (
         <div
           style={{
