@@ -14,6 +14,14 @@ export const Route = createFileRoute("/playlists/")({
   }),
 });
 
+function playlistCover(p: PlaylistPayload): string | undefined {
+  // Prioridade: capa manual → capa da 1ª faixa
+  if (p.capa_url) return driveImg(p.capa_url, 200);
+  const firstCover = p.tracks?.[0]?.capa_url;
+  if (firstCover) return driveImg(firstCover, 200);
+  return undefined;
+}
+
 function PlaylistsPage() {
   const { user, ready } = useTelegramUser();
   const [list, setList] = useState<PlaylistPayload[] | null>(null);
@@ -60,32 +68,37 @@ function PlaylistsPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {list.map((p) => (
-            <Link
-              key={p.id}
-              to="/playlists/$id"
-              params={{ id: p.id! }}
-              className="flex items-center gap-3 p-2 rounded-xl bg-card hover:bg-secondary transition-colors"
-            >
-              <div className="size-14 rounded-lg bg-secondary overflow-hidden grid place-items-center shrink-0">
-                {p.capa_url ? (
-                  <img
-                    src={driveImg(p.capa_url, 200)}
-                    alt=""
-                    className="w-full h-full object-cover"
-                   loading="lazy" decoding="async"/>
-                ) : (
-                  <ListMusic className="size-6 text-muted-foreground" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-bold text-sm truncate">{p.titulo}</p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {p.tracks?.length || 0} faixas • {p.owner}
-                </p>
-              </div>
-            </Link>
-          ))}
+          {list.map((p) => {
+            const cover = playlistCover(p);
+            return (
+              <Link
+                key={p.id}
+                to="/playlists/$id"
+                params={{ id: p.id! }}
+                className="flex items-center gap-3 p-2 rounded-xl bg-card hover:bg-secondary transition-colors"
+              >
+                <div className="size-14 rounded-lg bg-secondary overflow-hidden grid place-items-center shrink-0">
+                  {cover ? (
+                    <img
+                      src={cover}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <ListMusic className="size-6 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-sm truncate">{p.titulo}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {p.tracks?.length || 0} faixas
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
     </main>
