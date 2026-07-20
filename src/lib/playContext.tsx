@@ -28,22 +28,11 @@ type PlayerState = {
   queue: PlayItem[];
   currentIdx: number | null;
   /**
-   * `playing` representa o estado CONFIRMADO pelos eventos nativos do player.
-   * Só vira true após 'play' (audio) ou onStateChange(PLAYING) (YouTube) dispararem.
-   * Nunca é definido como true otimisticamente no onClick.
+   * `playing` representa a INTENÇÃO do usuário.
+   * O estado visual real é confirmado pelos eventos onPlay/onStateChange.
+   * Nunca mude para `true` aqui sem ter certeza de que a mídia vai tocar.
    */
   playing: boolean;
-};
-
-/** Instância do YT.Player da YouTube IFrame API nativa */
-export type YTPlayerInstance = {
-  playVideo: () => void;
-  pauseVideo: () => void;
-  stopVideo: () => void;
-  loadVideoById: (videoId: string) => void;
-  cueVideoById: (videoId: string) => void;
-  destroy: () => void;
-  getPlayerState: () => number;
 };
 
 type PlayContextType = {
@@ -56,24 +45,22 @@ type PlayContextType = {
   close: () => void;
   mediaType: MediaType | null;
   currentMediaId: string | null;
-  /** Ref para o elemento <audio> nativo (Drive) */
   audioRef: React.RefObject<HTMLAudioElement | null>;
-  /** Ref para a instância interna do player do YouTube IFrame API */
-  ytPlayerRef: React.MutableRefObject<YTPlayerInstance | null>;
-  /** Chamado pelo player nativo quando a mídia REALMENTE começou a tocar */
+  ytPlayerRef: React.MutableRefObject<YT.Player | null>;
+  /** Chamado pelo player nativo quando a mídia de fato começou a tocar */
   confirmPlaying: () => void;
-  /** Chamado pelo player nativo quando a mídia REALMENTE parou/falhou */
+  /** Chamado pelo player nativo quando a mídia foi pausada/parou */
   confirmPaused: () => void;
   /** Chamado ao fim da faixa — avança a fila ou reseta */
   onEnded: () => void;
   /** @deprecated mantido para não quebrar imports existentes */
   iframeSrc: null;
-  /** @deprecated use confirmPlaying/confirmPaused */
+  /** @deprecated */
   syncPlaying: (v: boolean) => void;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers
+// Helpers de extração de ID
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function extractDriveId(str: string): string | null {
@@ -115,18 +102,18 @@ export function detectMediaType(audioSrc: string): MediaType {
 }
 
 /**
- * Proxy Cloudflare para contornar CORS/CORB do Google Drive.
- * Rota o stream pelo worker em vez de chamar o Drive diretamente.
+ * URL de stream do Google Drive via proxy Cloudflare.
+ * Evita CORS/CORB do Drive direto.
  */
-export function driveProxyUrl(idOrUrl: string): string {
+export function driveStreamUrl(idOrUrl: string): string {
   const id = extractDriveId(idOrUrl) ?? idOrUrl;
   return `https://empire-drive-proxy.empirerpg-forum.workers.dev/?id=${id}`;
 }
 
-/** @deprecated use driveProxyUrl */
-export const driveStreamUrl = driveProxyUrl;
-/** @deprecated use driveProxyUrl */
-export const driveAudioPreview = driveProxyUrl;
+/** @deprecated – use driveStreamUrl */
+export const driveAudioPreview = driveStreamUrl;
+/** @deprecated – use driveStreamUrl */
+export const driveProxyUrl = driveStreamUrl;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Context
@@ -142,9 +129,9 @@ export function PlayProvider({ children }: { children: ReactNode }) {
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const ytPlayerRef = useRef<YTPlayerInstance | null>(null);
+  const ytPlayerRef = useRef<YT.Player | null>(null);
 
-  // ── Derivados ───────────────────────────────────────────────────────────────
+  // ── Derivados ────────────────────────────────────────────────────────────
   const currentItem =
     state.currentIdx !== null ? state.queue[state.currentIdx] : null;
 
@@ -158,7 +145,7 @@ export function PlayProvider({ children }: { children: ReactNode }) {
       : (extractDriveId(currentItem.audioSrc) ?? currentItem.audioSrc)
     : null;
 
-  // ── Confirmações de estado (chamadas pelos eventos nativos) ───────────────
+  // ── Confirmações de estado real (chamadas pelo player nativo) ────────────
 
   const confirmPlaying = useCallback(() => {
     setState((s) => ({ ...s, playing: true }));
@@ -173,13 +160,8 @@ export function PlayProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, playing: v }));
   }, []);
 
-  // ── Actions ───────────────────────────────────────────────────────────────
+  // ── Actions ──────────────────────────────────────────────────────────────
 
-  /**
-   * Registra a faixa/fila. playing=false propositalmente:
-   * o MiniPlayer dispara .play() no onClick (user-gesture)
-   * e só então confirmPlaying() atualiza o estado.
-   */
   const play = useCallback((item: PlayItem, queue?: PlayItem[]) => {
     const newQueue = queue ?? [item];
     const idx = queue ? queue.findIndex((q) => q.id === item.id) : 0;
@@ -187,18 +169,25 @@ export function PlayProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const pause = useCallback(() => {
-    audioRef.current?.pause();
-    try { ytPlayerRef.current?.pauseVideo(); } catch { /* */ }
+    if (audioRef.current) audioRef.current.pause();
+    if (ytPlayerRef.current) {
+      try { ytPlayerRef.current.pauseVideo(); } catch { /* YT não iniciado */ }
+    }
     setState((s) => ({ ...s, playing: false }));
   }, []);
 
-  // resume é intencional sem setState — o MiniPlayer usa triggerPlay() no onClick
-  const resume = useCallback(() => {}, []);
+  const resume = useCallback(() => {
+    // Intencional: sem setState. O MiniPlayer cuida disso com triggerPlay().
+  }, []);
 
   const close = useCallback(() => {
-    audioRef.current?.pause();
-    if (audioRef.current) audioRef.current.src = "";
-    try { ytPlayerRef.current?.stopVideo(); } catch { /* */ }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+    }
+    if (ytPlayerRef.current) {
+      try { ytPlayerRef.current.stopVideo(); } catch { /* */ }
+    }
     setState({ queue: [], currentIdx: null, playing: false });
   }, []);
 
