@@ -29,15 +29,15 @@ type PlayerState = {
   currentIdx: number | null;
   /**
    * `playing` representa a INTENÇÃO do usuário.
-   * O estado visual real é confirmado pelos eventos onPlay/onStateChange.
-   * Nunca mude para `true` aqui sem ter certeza de que a mídia vai tocar.
+   * Quando autoPlay=true, já entra como true para o MiniPlayer acionar
+   * triggerPlay() automaticamente no useEffect.
    */
   playing: boolean;
 };
 
 type PlayContextType = {
   state: PlayerState;
-  play: (item: PlayItem, queue?: PlayItem[]) => void;
+  play: (item: PlayItem, queue?: PlayItem[], opts?: { autoPlay?: boolean }) => void;
   pause: () => void;
   resume: () => void;
   next: () => void;
@@ -131,7 +131,7 @@ export function PlayProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<YT.Player | null>(null);
 
-  // ── Derivados ───────────────────────────────────────────────────────────────
+  // ── Derivados ────────────────────────────────────────────────────────────
   const currentItem =
     state.currentIdx !== null ? state.queue[state.currentIdx] : null;
 
@@ -162,11 +162,23 @@ export function PlayProvider({ children }: { children: ReactNode }) {
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
-  const play = useCallback((item: PlayItem, queue?: PlayItem[]) => {
-    const newQueue = queue ?? [item];
-    const idx = queue ? queue.findIndex((q) => q.id === item.id) : 0;
-    setState({ queue: newQueue, currentIdx: idx >= 0 ? idx : 0, playing: false });
-  }, []);
+  /**
+   * Inicia a reprodução de um item.
+   * Se opts.autoPlay=true, playing já entra como true e o MiniPlayer
+   * aciona triggerPlay() automaticamente via useEffect.
+   */
+  const play = useCallback(
+    (item: PlayItem, queue?: PlayItem[], opts?: { autoPlay?: boolean }) => {
+      const newQueue = queue ?? [item];
+      const idx = queue ? queue.findIndex((q) => q.id === item.id) : 0;
+      setState({
+        queue: newQueue,
+        currentIdx: idx >= 0 ? idx : 0,
+        playing: opts?.autoPlay === true,
+      });
+    },
+    []
+  );
 
   const pause = useCallback(() => {
     if (audioRef.current) audioRef.current.pause();
