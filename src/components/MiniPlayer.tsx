@@ -3,9 +3,8 @@
  *
  * ┌─ Google Drive ────────────────────────────────────────────────────────────┐
  * │ • URL roteada pelo proxy Cloudflare (evita CORS/CORB do Drive direto).    │
- * │ • Elemento <audio> nativo (criado uma vez).                               │
- * │ • src + .play() definidos JUNTOS dentro do onClick (user-gesture).        │
- * │   Isso evita o erro "no supported sources" causado por load() prematuro.  │
+ * │ • Elemento <audio> nativo com crossOrigin="anonymous".                    │
+ * │ • .play() disparado DENTRO do onClick (user-gesture).                    │
  * │ • Estado visual muda para "tocando" APENAS após a Promise resolver.       │
  * │ • Erro (rede/bloqueio) → reverte para pause + toast.                     │
  * └───────────────────────────────────────────────────────────────────────────┘
@@ -126,7 +125,7 @@ export function MiniPlayer() {
   const ytContainerRef = useRef<HTMLDivElement>(null);
   // Flag: o usuário pediu play antes do player YT estar pronto
   const pendingYTPlay = useRef(false);
-  // Controla re-render quando o player YT fica pronto
+  // Guarda o videoId que está montado no player YT para evitar re-criações desnecessárias
   const [ytReady, setYtReady] = useState(false);
 
   // ── 1. Cria o <audio> nativo uma única vez ──────────────────────────────
@@ -135,9 +134,7 @@ export function MiniPlayer() {
 
     const audio = new Audio();
     audio.preload = "none";
-    // SEM crossOrigin aqui — o proxy Cloudflare já resolve o CORS.
-    // Setar crossOrigin="anonymous" num recurso que não retorna
-    // ACAO header correto faz o navegador rejeitar o stream.
+    audio.crossOrigin = "anonymous";
 
     audio.addEventListener("play", confirmPlaying);
     audio.addEventListener("pause", confirmPaused);
@@ -158,12 +155,17 @@ export function MiniPlayer() {
     if (mediaType !== "youtube" || !currentMediaId) return;
     if (!ytContainerRef.current) return;
 
-    const videoId = extractYouTubeId(currentMediaId) ?? currentMediaId;
+    const videoId =
+      extractYouTubeId(currentMediaId) ?? currentMediaId;
     if (!videoId) return;
 
     // Destrói player anterior se existir
     if (ytPlayerRef.current) {
-      try { ytPlayerRef.current.destroy(); } catch { /* ignora */ }
+      try {
+        ytPlayerRef.current.destroy();
+      } catch {
+        /* ignora */
+      }
       ytPlayerRef.current = null;
       setYtReady(false);
     }
@@ -215,20 +217,21 @@ export function MiniPlayer() {
       ytPlayerRef.current = player as unknown as YTPlayer;
     });
 
+    return () => {
+      // não destrói aqui pois o <div> pode ser reutilizado — destrói na próxima troca
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMediaId, mediaType]);
 
-  // ── 3. Para o áudio Drive quando a faixa troca (mas NÃO seta src aqui) ──
-  // O src é definido no triggerPlay, dentro do user-gesture, para evitar
-  // o erro "no supported sources" causado por load() antecipado.
+  // ── 3. Reage à troca de faixa (Drive) ──────────────────────────────────
   useEffect(() => {
-    if (mediaType !== "drive") return;
+    if (!currentMediaId || mediaType !== "drive") return;
+
     const audio = audioRef.current;
     if (!audio) return;
     audio.pause();
-    // Limpa src anterior para que o elemento fique em estado "vazio"
-    // sem disparar load() ainda. O src correto é atribuído no triggerPlay.
-    audio.removeAttribute("src");
+    audio.src = driveProxyUrl(currentMediaId);
+    audio.load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMediaId, mediaType]);
 
@@ -236,41 +239,29 @@ export function MiniPlayer() {
   useEffect(() => {
     return () => {
       audioRef.current?.pause();
-      try { ytPlayerRef.current?.destroy(); } catch { /* ignora */ }
+      try {
+        ytPlayerRef.current?.destroy();
+      } catch {
+        /* ignora */
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── 5. triggerPlay — disparado DENTRO do onClick (user-gesture) ─────────
-  //
-  // Para Drive: atribui src + load() + play() aqui dentro, onde o navegador
-  // ainda está no contexto do gesto do usuário. Isso resolve o erro
-  // "no supported sources" que ocorre quando src é atribuído antes (useEffect)
-  // e play() é chamado depois, fora do gesto.
   const triggerPlay = useCallback(() => {
     if (mediaType === "drive") {
       const audio = audioRef.current;
-      if (!audio || !currentMediaId) return;
-
-      const url = driveProxyUrl(currentMediaId);
-
-      // Se o src já é o correto e o áudio só está pausado → apenas play()
-      if (audio.src === url && audio.readyState >= 2) {
-        audio.play().catch((err: unknown) => {
+      if (!audio) return;
+      audio
+        .play()
+        .catch((err: unknown) => {
           confirmPaused();
-          toast.error(`Falha ao reproduzir: ${err instanceof Error ? err.message : String(err)}`);
+          const msg = err instanceof Error ? err.message : String(err);
+          toast.error(
+            `Falha ao reproduzir: ${msg}. O arquivo pode estar privado ou o autoplay foi bloqueado.`
+          );
         });
-        return;
-      }
-
-      // Caso contrário: atribui src e dispara play() — o navegador faz
-      // o load automaticamente quando play() é chamado sem src pronto.
-      audio.src = url;
-      audio.load();
-      audio.play().catch((err: unknown) => {
-        confirmPaused();
-        toast.error(`Falha ao reproduzir: ${err instanceof Error ? err.message : String(err)}`);
-      });
       return;
     }
 
@@ -287,7 +278,7 @@ export function MiniPlayer() {
         toast.error(`Não foi possível iniciar o vídeo: ${String(err)}`);
       }
     }
-  }, [mediaType, currentMediaId, audioRef, ytPlayerRef, confirmPaused]);
+  }, [mediaType, audioRef, ytPlayerRef, confirmPaused]);
 
   // ── 6. triggerPause ────────────────────────────────────────────────────
   const triggerPause = useCallback(() => {
