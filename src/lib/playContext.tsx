@@ -144,7 +144,7 @@ export function PlayProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<YTPlayerInstance | null>(null);
 
-  // ── Derivados ───────────────────────────────────────────────────────────────────
+  // ── Derivados ───────────────────────────────────────────────────────────────
   const currentItem =
     state.currentIdx !== null ? state.queue[state.currentIdx] : null;
 
@@ -158,7 +158,7 @@ export function PlayProvider({ children }: { children: ReactNode }) {
       : (extractDriveId(currentItem.audioSrc) ?? currentItem.audioSrc)
     : null;
 
-  // ── Confirmações de estado (chamadas pelos eventos nativos) ──────────────
+  // ── Confirmações de estado (chamadas pelos eventos nativos) ───────────────
 
   const confirmPlaying = useCallback(() => {
     setState((s) => ({ ...s, playing: true }));
@@ -173,49 +173,22 @@ export function PlayProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, playing: v }));
   }, []);
 
-  // ── Actions ──────────────────────────────────────────────────────────────────
+  // ── Actions ───────────────────────────────────────────────────────────────
 
   /**
-   * Registra a faixa/fila e já seta o src no elemento <audio>.
-   * playing=false propositalmente: o MiniPlayer dispara .play() no onClick
-   * (user-gesture) e só então confirmPlaying() atualiza o estado.
-   *
-   * Setar src aqui (e não só no useEffect do MiniPlayer) elimina a race
-   * condition onde o usuário clica em Play antes do useEffect rodar.
+   * Registra a faixa/fila. playing=false propositalmente:
+   * o MiniPlayer dispara .play() no onClick (user-gesture)
+   * e só então confirmPlaying() atualiza o estado.
    */
-  const play = useCallback(
-    (item: PlayItem, queue?: PlayItem[]) => {
-      const newQueue = queue ?? [item];
-      const idx = queue ? queue.findIndex((q) => q.id === item.id) : 0;
-      setState({
-        queue: newQueue,
-        currentIdx: idx >= 0 ? idx : 0,
-        playing: false,
-      });
-
-      // Pré-carrega o src no elemento <audio> imediatamente
-      // (sincronização com o useEffect do MiniPlayer, que também seta o src)
-      const type = detectMediaType(item.audioSrc);
-      if (type === "drive" && audioRef.current) {
-        const id = extractDriveId(item.audioSrc) ?? item.audioSrc;
-        const url = driveProxyUrl(id);
-        if (audioRef.current.src !== url) {
-          audioRef.current.pause();
-          audioRef.current.src = url;
-          audioRef.current.load();
-        }
-      }
-    },
-    []
-  );
+  const play = useCallback((item: PlayItem, queue?: PlayItem[]) => {
+    const newQueue = queue ?? [item];
+    const idx = queue ? queue.findIndex((q) => q.id === item.id) : 0;
+    setState({ queue: newQueue, currentIdx: idx >= 0 ? idx : 0, playing: false });
+  }, []);
 
   const pause = useCallback(() => {
     audioRef.current?.pause();
-    try {
-      ytPlayerRef.current?.pauseVideo();
-    } catch {
-      /* */
-    }
+    try { ytPlayerRef.current?.pauseVideo(); } catch { /* */ }
     setState((s) => ({ ...s, playing: false }));
   }, []);
 
@@ -225,11 +198,7 @@ export function PlayProvider({ children }: { children: ReactNode }) {
   const close = useCallback(() => {
     audioRef.current?.pause();
     if (audioRef.current) audioRef.current.src = "";
-    try {
-      ytPlayerRef.current?.stopVideo();
-    } catch {
-      /* */
-    }
+    try { ytPlayerRef.current?.stopVideo(); } catch { /* */ }
     setState({ queue: [], currentIdx: null, playing: false });
   }, []);
 
