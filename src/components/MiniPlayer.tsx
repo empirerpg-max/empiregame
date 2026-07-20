@@ -19,6 +19,17 @@
  *   2. playContext seta playing:true imediatamente
  *   3. useEffect [currentMediaId] → apenas configura src/carrega (sem play)
  *   4. useEffect [currentMediaId, playing] → vê playing:true → chama triggerPlay()
+ *
+ * Fluxo next/prev enquanto tocando:
+ *   1. onClick → next() / prev()
+ *   2. playContext troca currentIdx mas MANTÉM playing:true
+ *   3. useEffect [currentMediaId] → configura nova src
+ *   4. useEffect [currentMediaId, playing] → playing ainda true → triggerPlay()
+ *
+ * Fluxo resume após pausa:
+ *   1. onClick → resume() → context seta playing:true + triggerPlay() chamado
+ *   2. triggerPlay() chama .play() / .playVideo() com user-gesture garantido
+ *   3. confirmPlaying() atualiza estado via evento nativo (redundante mas seguro)
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -76,6 +87,7 @@ export function MiniPlayer() {
   const {
     state,
     pause,
+    resume,
     next,
     prev,
     close,
@@ -194,25 +206,22 @@ export function MiniPlayer() {
       audio.pause();
       audio.src = driveStreamUrl(currentMediaId);
       audio.load();
-      // Não chama audio.play() aqui — o efeito 4 cuida disso.
     }
 
     if (mediaType === "youtube") {
       if (!ytApiReady.current) return;
       if (ytActiveId.current !== currentMediaId) {
-        // autoStart=false: o efeito 4 decide se deve tocar.
         buildYTPlayer(currentMediaId, false);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMediaId, mediaType]);
 
-  // ── 4. Auto-play quando playing já é true ao trocar de faixa ────────────
-  //    Isso suporta o fluxo autoPlay=true E o avanço automático por onEnded.
+  // ── 4. Auto-play quando playing é true (troca de faixa OU resume) ────────
+  //    Suporta: autoPlay=true, next/prev enquanto tocando, onEnded, resume.
   useEffect(() => {
     if (!currentMediaId || !playing) return;
 
-    // Pequeno timeout para garantir que o efeito 3 já rodou e o src foi setado.
     const id = setTimeout(() => {
       if (mediaType === "drive") {
         const audio = audioRef.current;
@@ -253,7 +262,7 @@ export function MiniPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 6. triggerPlay ───────────────────────────────────────────────────────
+  // ── 6. triggerPlay — chamado com user-gesture garantido ─────────────────
   const triggerPlay = useCallback(() => {
     if (mediaType === "drive") {
       const audio = audioRef.current;
@@ -297,6 +306,18 @@ export function MiniPlayer() {
   const item = queue[currentIdx];
   const hasPrev = currentIdx > 0;
   const hasNext = currentIdx < queue.length - 1;
+
+  // Handler do botão play/pause:
+  // - Se tocando → pausa
+  // - Se pausado → resume() no contexto (seta playing:true) + triggerPlay() (user-gesture)
+  const handlePlayPause = () => {
+    if (playing) {
+      triggerPause();
+    } else {
+      resume();      // seta playing:true no contexto imediatamente
+      triggerPlay(); // dispara .play()/.playVideo() com user-gesture
+    }
+  };
 
   return (
     <div className="fixed bottom-16 inset-x-0 z-40 bg-card border-t border-white/10 shadow-2xl">
@@ -363,7 +384,7 @@ export function MiniPlayer() {
           </button>
 
           <button
-            onClick={playing ? triggerPause : triggerPlay}
+            onClick={handlePlayPause}
             className="size-9 rounded-full bg-primary text-primary-foreground grid place-items-center hover:scale-105 transition-transform"
             aria-label={playing ? "Pausar" : "Reproduzir"}
           >

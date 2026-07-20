@@ -188,8 +188,14 @@ export function PlayProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, playing: false }));
   }, []);
 
+  /**
+   * Resume: seta playing:true imediatamente para o botão refletir
+   * antes do evento 'play' chegar via confirmPlaying.
+   * O MiniPlayer ainda chama triggerPlay() no onClick para garantir
+   * o user-gesture no navegador.
+   */
   const resume = useCallback(() => {
-    // Intencional: sem setState. O MiniPlayer cuida disso com triggerPlay().
+    setState((s) => ({ ...s, playing: true }));
   }, []);
 
   const close = useCallback(() => {
@@ -203,12 +209,18 @@ export function PlayProvider({ children }: { children: ReactNode }) {
     setState({ queue: [], currentIdx: null, playing: false });
   }, []);
 
+  /**
+   * next/prev: preservam o estado de playing para que o efeito 4
+   * do MiniPlayer dispare triggerPlay() automaticamente na nova faixa
+   * quando o usuário já estava ouvindo.
+   */
   const next = useCallback(() => {
     setState((s) => {
       if (s.currentIdx === null) return s;
       const nextIdx = s.currentIdx + 1;
       if (nextIdx >= s.queue.length) return s;
-      return { ...s, currentIdx: nextIdx, playing: false };
+      // Mantém playing para o efeito [currentMediaId, playing] disparar.
+      return { ...s, currentIdx: nextIdx };
     });
   }, []);
 
@@ -217,7 +229,8 @@ export function PlayProvider({ children }: { children: ReactNode }) {
       if (s.currentIdx === null) return s;
       const prevIdx = s.currentIdx - 1;
       if (prevIdx < 0) return s;
-      return { ...s, currentIdx: prevIdx, playing: false };
+      // Mantém playing para o efeito [currentMediaId, playing] disparar.
+      return { ...s, currentIdx: prevIdx };
     });
   }, []);
 
