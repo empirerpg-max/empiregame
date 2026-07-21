@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")(({
+export const Route = createFileRoute("/play/")({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/play/")(({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-}));
+});
 
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
@@ -468,6 +468,115 @@ function SongCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
   );
 }
 
+// ─── SongCardWithDate ─────────────────────────────────────────────────────
+// Igual ao SongCard, mas exibe data de lançamento abaixo do artista
+// e um badge "Novo" na capa para músicas lançadas nos últimos 30 dias.
+function SongCardWithDate({
+  item,
+  queue,
+  rawDate,
+}: {
+  item: PlayItem;
+  queue: PlayItem[];
+  rawDate: string;
+}) {
+  const { play, state } = usePlay();
+  const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
+
+  const { dataFormatada, isNovo } = useMemo(() => {
+    if (!rawDate || rawDate.trim() === "") return { dataFormatada: "", isNovo: false };
+    const s = rawDate.trim();
+
+    let ts = 0;
+
+    // DD/MM/YYYY
+    const brDate = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (brDate) {
+      const iso = `${brDate[3]}-${brDate[2].padStart(2, "0")}-${brDate[1].padStart(2, "0")}`;
+      ts = new Date(iso).getTime();
+    } else if (/^\d+$/.test(s)) {
+      // Timestamp Unix puro
+      const n = parseInt(s, 10);
+      ts = n < 1e12 ? n * 1000 : n;
+    } else {
+      // ISO / qualquer outro formato
+      ts = new Date(s).getTime();
+    }
+
+    if (!ts || isNaN(ts)) return { dataFormatada: "", isNovo: false };
+
+    const diffDias = (Date.now() - ts) / (1000 * 60 * 60 * 24);
+    return {
+      dataFormatada: formatDate(ts),
+      isNovo: diffDias <= 30,
+    };
+  }, [rawDate]);
+
+  return (
+    <button
+      onClick={() => play(item, queue, { autoPlay: true })}
+      className="flex flex-col gap-2 text-left group w-full"
+    >
+      <div
+        className={`relative aspect-square w-full rounded-2xl overflow-hidden bg-primary/10 ${
+          isActive ? "ring-2 ring-primary" : ""
+        } transition-all`}
+      >
+        {item.capa ? (
+          <img
+            src={driveThumb(item.capa, 300)}
+            alt={item.titulo}
+            className="w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          <div className="w-full h-full grid place-items-center">
+            <Music className="size-8 text-primary/40" />
+          </div>
+        )}
+        {/* Badge Novo */}
+        {isNovo && (
+          <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-black uppercase tracking-widest">
+            Novo
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/0 group-active:bg-black/20 grid place-items-center">
+          <div className="size-10 rounded-full bg-primary/0 group-active:bg-primary/90 grid place-items-center transition-all">
+            <Play className="size-5 text-white opacity-0 group-active:opacity-100" fill="white" />
+          </div>
+        </div>
+        {isActive && (
+          <div className="absolute bottom-2 left-2 flex gap-0.5 items-end">
+            {[3, 5, 4].map((h, i) => (
+              <div
+                key={i}
+                className="w-1 bg-primary rounded-full animate-bounce"
+                style={{ height: `${h * 3}px`, animationDelay: `${i * 100}ms` }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="min-w-0">
+        <p
+          className={`text-xs font-black truncate uppercase tracking-tight ${
+            isActive ? "text-primary" : ""
+          }`}
+        >
+          {item.titulo || "—"}
+        </p>
+        <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
+        {dataFormatada && (
+          <p className="text-[9px] text-muted-foreground/50 truncate mt-0.5">
+            Lançada em {dataFormatada}
+          </p>
+        )}
+      </div>
+    </button>
+  );
+}
+
 function VideoCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
   const { play, state } = usePlay();
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
@@ -838,12 +947,26 @@ function MusicasTab({ musicasDB, loading }: {
     { id: "lancar",      label: "Lançar",              icon: PlusCircle },
   ];
 
-  // 30 músicas mais recentes — usa musicasDB (API) que já tem os campos normalizados
-  const lancamentos = useMemo<PlayItem[]>(() => {
+  // 30 músicas mais recentes — agora inclui rawDate para SongCardWithDate
+  const lancamentos = useMemo<{ item: PlayItem; rawDate: string }[]>(() => {
     return [...musicasDB]
       .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
       .slice(0, 30)
-      .map((m) => toPlayItemMusica(m));
+      .map((m) => ({
+        item: toPlayItemMusica(m),
+        rawDate: getField(
+          m,
+          "Data de lançamento",
+          "Data de lancamento",
+          "data_de_lancamento",
+          "datadelancamento",
+          "data_lancamento",
+          "datalancamento",
+          "data",
+          "release_date",
+          "releasedate",
+        ),
+      }));
   }, [musicasDB]);
 
   const albuns = useMemo(() => {
@@ -886,7 +1009,7 @@ function MusicasTab({ musicasDB, loading }: {
         ))}
       </div>
 
-      {/* ── Últimos lançamentos: grid de cards com capa ── */}
+      {/* ── Últimos lançamentos: grid de cards com capa, data e badge Novo ── */}
       {subTab === "lancamentos" && (
         <div className="space-y-3">
           {lancamentos.length === 0 ? (
@@ -896,10 +1019,14 @@ function MusicasTab({ musicasDB, loading }: {
               <p className="text-[10px] text-muted-foreground/50 uppercase tracking-widest font-black px-1 pb-1">
                 {lancamentos.length} músicas · mais recente primeiro
               </p>
-              {/* Grid 3 colunas — mesmo padrão das demais playlists */}
               <div className="grid grid-cols-3 gap-3">
-                {lancamentos.map((item) => (
-                  <SongCard key={item.id} item={item} queue={lancamentos} />
+                {lancamentos.map(({ item, rawDate }) => (
+                  <SongCardWithDate
+                    key={item.id}
+                    item={item}
+                    queue={lancamentos.map((x) => x.item)}
+                    rawDate={rawDate}
+                  />
                 ))}
               </div>
             </>
