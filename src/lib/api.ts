@@ -147,10 +147,42 @@ function qs(params: Record<string, string | number | undefined>) {
 }
 
 // --- Cache em memória SWR (stale-while-revalidate) ---
+// Persiste em sessionStorage para navegação instantânea entre rotas.
 const cache = new Map<string, { data: unknown; ts: number }>();
-const CACHE_FRESH = 60_000;
-const CACHE_STALE = 5 * 60_000;
+const CACHE_FRESH = 120_000; // 2 min: reduz refetch em navegação rápida
+const CACHE_STALE = 10 * 60_000; // 10 min: ainda serve enquanto revalida
 const inflight = new Map<string, Promise<unknown>>();
+const SS_KEY = "empire_api_cache_v1";
+
+// Hidrata cache do sessionStorage (uma vez, no boot)
+(() => {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    const raw = sessionStorage.getItem(SS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Array<[string, { data: unknown; ts: number }]>;
+    const cutoff = Date.now() - CACHE_STALE;
+    for (const [k, v] of parsed) if (v && v.ts > cutoff) cache.set(k, v);
+  } catch {}
+})();
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+function persistCache() {
+  if (typeof sessionStorage === "undefined") return;
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    try {
+      // Só entradas pequenas (evita estourar o storage)
+      const entries: Array<[string, { data: unknown; ts: number }]> = [];
+      for (const [k, v] of cache) {
+        const size = JSON.stringify(v.data).length;
+        if (size < 100_000) entries.push([k, v]);
+      }
+      sessionStorage.setItem(SS_KEY, JSON.stringify(entries));
+    } catch {}
+  }, 500);
+}
 
 async function rawCall<T = unknown>(params: Record<string, unknown>, base: string = SCRIPT_URL): Promise<T> {
   const isPost = params.payload || JSON.stringify(params).length > 1000;
@@ -171,6 +203,7 @@ function fetchAndStore<T>(key: string, params: Record<string, unknown>, base: st
     .then((data) => {
       cache.set(key, { data, ts: Date.now() });
       inflight.delete(key);
+      persistCache();
       return data;
     })
     .catch((e) => {
@@ -198,7 +231,11 @@ async function call<T = unknown>(params: Record<string, unknown>, opts: { cache?
 
 export function invalidateCache() {
   cache.clear();
+  if (typeof sessionStorage !== "undefined") {
+    try { sessionStorage.removeItem(SS_KEY); } catch {}
+  }
 }
+
 
 function normalizeArtist(a: Record<string, unknown>): Artist {
   return {
