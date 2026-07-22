@@ -87,19 +87,18 @@ export function openExternal(url: string) {
 export function useTelegramBackButton(show: boolean, onClick: () => void) {
   useEffect(() => {
     const bb = tg()?.BackButton;
-    if (!bb) return;
+    if (!bb || !tgVersionAtLeast("6.1")) return;
     if (show) {
-      bb.show();
-      bb.onClick(onClick);
+      try { bb.show(); bb.onClick(onClick); } catch {}
       return () => {
-        bb.offClick(onClick);
-        bb.hide();
+        try { bb.offClick(onClick); bb.hide(); } catch {}
       };
     } else {
-      bb.hide();
+      try { bb.hide(); } catch {}
     }
   }, [show, onClick]);
 }
+
 
 // ---------- Hook principal ----------
 export interface TgUser {
