@@ -422,14 +422,18 @@ function RootInner() {
   }, []);
 
   // Sincroniza cores do header/background do Telegram com o tema do app
+  // (apenas em versões que suportam — evita warnings em clientes v6.0)
   useEffect(() => {
     const w = window.Telegram?.WebApp;
     if (!w) return;
+    const v = (w.version || "0.0").split(".").map(Number);
+    if (v[0] * 1000 + (v[1] || 0) < 6001) return; // precisa de 6.1+
     try {
       w.setHeaderColor?.("#000000");
       w.setBackgroundColor?.("#000000");
     } catch {}
   }, []);
+
 
   // BackButton nativo do Telegram em rotas internas
   const isHome = pathname === "/";

@@ -8,6 +8,7 @@ declare global {
   interface Window {
     Telegram?: {
       WebApp?: {
+        version?: string;
         ready: () => void;
         expand: () => void;
         close?: () => void;
@@ -48,6 +49,17 @@ declare global {
   }
 }
 
+/** Compara versões "6.0" vs "6.1" — retorna true se v >= min */
+export function tgVersionAtLeast(min: string): boolean {
+  const v = (typeof window !== "undefined" ? window.Telegram?.WebApp?.version : "") || "0.0";
+  const [a1, a2 = "0"] = v.split(".");
+  const [b1, b2 = "0"] = min.split(".");
+  const na = parseInt(a1) * 1000 + parseInt(a2);
+  const nb = parseInt(b1) * 1000 + parseInt(b2);
+  return na >= nb;
+}
+
+
 // ---------- Helpers de UX nativa ----------
 const tg = () => (typeof window !== "undefined" ? window.Telegram?.WebApp : undefined);
 
@@ -75,19 +87,18 @@ export function openExternal(url: string) {
 export function useTelegramBackButton(show: boolean, onClick: () => void) {
   useEffect(() => {
     const bb = tg()?.BackButton;
-    if (!bb) return;
+    if (!bb || !tgVersionAtLeast("6.1")) return;
     if (show) {
-      bb.show();
-      bb.onClick(onClick);
+      try { bb.show(); bb.onClick(onClick); } catch {}
       return () => {
-        bb.offClick(onClick);
-        bb.hide();
+        try { bb.offClick(onClick); bb.hide(); } catch {}
       };
     } else {
-      bb.hide();
+      try { bb.hide(); } catch {}
     }
   }, [show, onClick]);
 }
+
 
 // ---------- Hook principal ----------
 export interface TgUser {

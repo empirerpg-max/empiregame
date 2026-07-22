@@ -49,10 +49,14 @@ import { driveImg } from "@/lib/api";
 // ─────────────────────────────────────────────────────────────────────────────
 declare global {
   interface Window {
-    YT: typeof YT;
+    YT: {
+      Player: new (el: HTMLElement | string, opts: Record<string, unknown>) => YT.Player;
+      PlayerState: { UNSTARTED: -1; ENDED: 0; PLAYING: 1; PAUSED: 2; BUFFERING: 3; CUED: 5 };
+    };
     onYouTubeIframeAPIReady: () => void;
   }
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook: garante que a YT IFrame API é carregada uma única vez
