@@ -550,24 +550,58 @@ function VideoModal({ item, onClose }: { item: PlayItem; onClose: () => void }) 
     );
   };
 
+  // ─── Minimized (PIP) ──────────────────────────────────────
+  if (minimized) {
+    return (
+      <div className="fixed bottom-20 right-3 z-[60] w-[260px] rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10">
+        <div className="flex items-center justify-between px-2 py-1.5 bg-black/80">
+          <p className="text-[10px] font-black text-white truncate uppercase tracking-tight flex-1 mr-2">{item.titulo}</p>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => setMinimized(false)}
+              className="size-7 rounded-full bg-white/10 grid place-items-center"
+              aria-label="Expandir"
+            >
+              <Maximize2 className="size-3 text-white" />
+            </button>
+            <button
+              onClick={onClose}
+              className="size-7 rounded-full bg-white/10 grid place-items-center"
+              aria-label="Fechar"
+            >
+              <X className="size-3 text-white" />
+            </button>
+          </div>
+        </div>
+        <div className="aspect-video bg-black">{renderPlayer()}</div>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/95 flex flex-col"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
+    <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-safe-top py-3 flex-shrink-0">
         <div className="min-w-0 flex-1 mr-3">
           <p className="text-xs font-black text-white truncate uppercase tracking-tight">{item.titulo}</p>
           {item.artista && <p className="text-[10px] text-white/50 truncate">{item.artista}</p>}
         </div>
-        <button
-          onClick={onClose}
-          className="size-9 rounded-full bg-white/10 grid place-items-center flex-shrink-0"
-          aria-label="Fechar"
-        >
-          <X className="size-4 text-white" />
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setMinimized(true)}
+            className="size-9 rounded-full bg-white/10 grid place-items-center"
+            aria-label="Minimizar"
+          >
+            <Minimize2 className="size-4 text-white" />
+          </button>
+          <button
+            onClick={onClose}
+            className="size-9 rounded-full bg-white/10 grid place-items-center"
+            aria-label="Fechar"
+          >
+            <X className="size-4 text-white" />
+          </button>
+        </div>
       </div>
 
       {/* Player 16:9 */}
