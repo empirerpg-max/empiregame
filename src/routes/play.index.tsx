@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem, extractYouTubeId, detectMediaType } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")({
+export const Route = createFileRoute("/play/")(({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -26,7 +26,7 @@ export const Route = createFileRoute("/play/")({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-});
+}));
 
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
@@ -303,7 +303,12 @@ function toPlayItemMusica(m: SheetItem): PlayItem {
     "Link do áudio", "Link do audio",
   );
 
-  const letra = getField(m, "letra", "lyrics", "Letra");
+  // FIX: busca letra com todos os aliases possíveis (acento, sem acento, maiúscula)
+  const letra = getField(m,
+    "letra", "Letra", "LETRA",
+    "lyrics", "Lyrics", "LYRICS",
+    "lyric", "Lyric",
+  );
 
   return {
     id: idTopico || audioSrc || `musica-${titulo}`,
@@ -372,7 +377,12 @@ function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
     );
   }
 
-  const letra = getField(m, "letra", "lyrics", "Letra");
+  // FIX: busca letra com todos os aliases possíveis
+  const letra = getField(m,
+    "letra", "Letra", "LETRA",
+    "lyrics", "Lyrics", "LYRICS",
+    "lyric", "Lyric",
+  );
 
   return {
     id: idTopico || audioSrc || `item-${titulo}`,
@@ -1222,6 +1232,7 @@ function InlineMediaPlayer({ item }: { item: PlayItem }) {
     );
   }
 
+  // FIX: usa resolveMediaUrl para rotear file_ids do Telegram pelo Worker
   if (isVideo && src) {
     const mediaSrc = resolveMediaUrl(src);
     return (
@@ -1282,6 +1293,7 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
   const [showPicker, setShowPicker] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
+  const [letraExpandida, setLetraExpandida] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -1425,14 +1437,30 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
           <InlineMediaPlayer item={item} />
         </div>
 
-        {/* Letra (collapsible) */}
+        {/* FIX: Letra completa — botão toggle + <pre> com scroll para textos longos */}
         {item.letra && (
-          <details className="border-t border-white/[0.06] px-4 py-3">
-            <summary className="text-[10px] font-black uppercase tracking-widest cursor-pointer text-primary select-none">
-              📝 Ver Letra
-            </summary>
-            <pre className="mt-3 whitespace-pre-wrap text-xs font-sans text-foreground/70 leading-relaxed">{item.letra}</pre>
-          </details>
+          <div className="border-t border-white/[0.06]">
+            <button
+              onClick={() => setLetraExpandida((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 text-[10px] font-black uppercase tracking-widest text-primary active:opacity-70 transition-opacity select-none"
+              aria-expanded={letraExpandida}
+            >
+              <span>📝 {letraExpandida ? "Ocultar Letra" : "Ver Letra Completa"}</span>
+              <ChevronRight
+                className={`size-3.5 transition-transform duration-200 ${letraExpandida ? "rotate-90" : ""}`}
+              />
+            </button>
+            {letraExpandida && (
+              <div className="px-4 pb-4">
+                <pre
+                  className="whitespace-pre-wrap font-sans text-xs text-foreground/75 leading-relaxed max-h-[60vh] overflow-y-auto pr-1"
+                  style={{ scrollbarWidth: "thin" }}
+                >
+                  {item.letra}
+                </pre>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Reações rápidas estilo Telegram */}
@@ -1590,7 +1618,7 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: {
   const [cat, setCat] = useState<"musicas" | "musicvideos" | "videos">("musicas");
   const [detalhe, setDetalhe] = useState<{ item: PlayItem; cat: string } | null>(null);
 
-  // FIX: músicas agora usa toPlayItemMusica (aliases corretos para audioSrc/capa)
+  // FIX: músicas agora usa toPlayItemMusica (aliases corretos para audioSrc/capa/letra)
   const list = useMemo<PlayItem[]>(() => {
     if (cat === "musicas") return musicasDB.map((m) => toPlayItemMusica(m));
     if (cat === "musicvideos") return musicVideosDB.map((m) => toPlayItem(m, "musicvideo"));
@@ -1654,8 +1682,13 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: {
               <div className="min-w-0 flex-1">
                 <p className="font-black text-xs truncate uppercase tracking-tight">{item.titulo || "—"}</p>
                 {item.artista && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{item.artista}</p>}
-                {/* Indicador de canal estilo Telegram */}
-                <p className="text-[9px] text-primary/50 mt-1 font-bold">{catIcon} Tópico aberto</p>
+                {/* Indicadores de conteúdo disponível */}
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-[9px] text-primary/50 font-bold">{catIcon} Tópico aberto</p>
+                  {item.letra && (
+                    <span className="text-[9px] text-muted-foreground/40 font-bold">· 📝 com letra</span>
+                  )}
+                </div>
               </div>
               {/* Seta + ícone de mensagem */}
               <div className="flex-shrink-0 flex items-center gap-1 text-muted-foreground/30">
