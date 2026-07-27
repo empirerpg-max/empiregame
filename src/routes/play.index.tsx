@@ -16,6 +16,8 @@ import {
   Smile,
   X,
   ExternalLink,
+  Minimize2,
+  Maximize2,
 } from "lucide-react";
 import { usePlay, type PlayItem, extractYouTubeId, detectMediaType } from "@/lib/playContext";
 
