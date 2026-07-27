@@ -137,12 +137,12 @@ export function driveStreamUrl(idOrUrl: string): string {
 }
 
 /**
- * URL de stream de arquivo do Telegram via Bot API proxy Cloudflare.
- * O Worker chama getFile + redireciona para file.telegram.org.
- * Funciona para áudios (qualquer tamanho) e vídeos até 20MB (Bot API limit).
+ * URL de stream de arquivo do Telegram via servidor MTProto (Render).
+ * Usa GramJS para baixar arquivos sem limite de tamanho (até 2GB).
+ * Suporta Range requests para seek em vídeos.
  */
 export function telegramStreamUrl(fileId: string): string {
-  return `https://empire-media-api.empirerpg-forum.workers.dev/tg?file_id=${encodeURIComponent(fileId)}`;
+  return `https://empire-tg-stream.onrender.com/tg?file_id=${encodeURIComponent(fileId)}`;
 }
 
 /** @deprecated – use driveStreamUrl */
