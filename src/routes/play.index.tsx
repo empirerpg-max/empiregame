@@ -209,6 +209,7 @@ function parseDataLancamento(item: SheetItem): number {
     item,
     "Data de lançamento", "Data de lancamento", "data_de_lancamento",
     "datadelancamento", "data_lancamento", "datalancamento",
+    "data_upload", "dataupload",
     "data", "release_date", "releasedate",
   );
   if (!raw || raw.trim() === "") return 0;
