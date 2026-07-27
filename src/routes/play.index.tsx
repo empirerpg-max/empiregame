@@ -13,10 +13,11 @@ import {
   ChevronLeft,
   AlertCircle,
   PlusCircle,
+  Smile,
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")(({
+export const Route = createFileRoute("/play/")({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/play/")(({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-}));
+});
 
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
@@ -37,10 +38,16 @@ const SHEET_ID = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
 // ─── Cloudflare Worker (proxy de mídia Telegram) ───────────────────────────
 const TG_WORKER = "https://falling-cloud-c041.empirerpg-forum.workers.dev";
 
+// ─── Emoji picker rápido ───────────────────────────────────────────────────
+const EMOJI_LIST = [
+  "😀","😂","🥹","😍","🤩","😎","🥶","😭","😤","🤯",
+  "🔥","❤️","💯","👏","🎵","🎶","🎤","🎸","🥁","🎧",
+  "🏆","⭐","✨","💥","👑","🙌","💪","🫶","🤝","👀",
+];
+
 /**
  * Resolve qualquer identificador de mídia para uma URL reproduzível.
- * - file_id do Telegram (≥ 20 chars, sem "/" e sem "http"): roteia pelo Worker
- * - URL do Google Drive: usa lh3.googleusercontent
+ * - file_id do Telegram (≥ 20 chars, sem "/" e sem "http"): roteia pelo Worker /file?id=
  * - Qualquer outra URL: retorna diretamente
  */
 function resolveMediaUrl(src: string): string {
@@ -166,13 +173,39 @@ function resolveThumb(capa: string, size = 300): string {
 }
 
 /**
+ * Detecta o tipo de mídia de uma string de reação:
+ * - GIF: URL terminando em .gif ou contendo /gif
+ * - Sticker Telegram: file_id longo sem http
+ * - Emoji nativo: qualquer outra coisa curta
+ */
+type ReacaoTipo = "emoji" | "gif" | "sticker";
+function detectReacaoTipo(val: string): ReacaoTipo {
+  if (!val) return "emoji";
+  if (val.startsWith("http") && (/\.gif(\?|$)/i.test(val) || /\/gif/i.test(val))) return "gif";
+  if (/^[A-Za-z0-9_-]{20,}$/.test(val) && !val.startsWith("http")) return "sticker";
+  return "emoji";
+}
+
+/**
+ * Renderiza o conteúdo da coluna reacoes:
+ * - Emoji nativo → <span>
+ * - GIF → <img> com max-h-12
+ * - Sticker Telegram → <img> via Worker
+ */
+function ReacaoMedia({ value }: { value: string }) {
+  const tipo = detectReacaoTipo(value);
+  if (tipo === "gif") {
+    return <img src={value} alt="reação" className="h-10 w-auto rounded-lg object-contain" loading="lazy" decoding="async" />;
+  }
+  if (tipo === "sticker") {
+    const url = `${TG_WORKER}/file?id=${value}`;
+    return <img src={url} alt="sticker" className="h-10 w-auto object-contain" loading="lazy" decoding="async" />;
+  }
+  return <span className="text-lg leading-none">{value}</span>;
+}
+
+/**
  * Converte qualquer representação de data para um timestamp (ms).
- * Suporta:
- *   - "DD/MM/YYYY"
- *   - "YYYY-MM-DD"
- *   - Timestamp Unix em segundos (10 dígitos, ex: 1625310906)
- *   - Timestamp Unix em milissegundos (13 dígitos, ex: 1625310906000)
- *   - Qualquer string que new Date() consiga parsear
  */
 function parseDataLancamento(item: SheetItem): number {
   const raw = getField(
@@ -191,7 +224,6 @@ function parseDataLancamento(item: SheetItem): number {
 
   const s = raw.trim();
 
-  // DD/MM/YYYY
   const brDate = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (brDate) {
     const iso = `${brDate[3]}-${brDate[2].padStart(2, "0")}-${brDate[1].padStart(2, "0")}`;
@@ -199,22 +231,15 @@ function parseDataLancamento(item: SheetItem): number {
     return isNaN(t) ? 0 : t;
   }
 
-  // Timestamp Unix puro (só dígitos)
   if (/^\d+$/.test(s)) {
     const n = parseInt(s, 10);
-    // 10 dígitos → segundos; 13 dígitos → milissegundos
     return n < 1e12 ? n * 1000 : n;
   }
 
-  // ISO / qualquer outro formato reconhecido pelo JS
   const t = new Date(s).getTime();
   return isNaN(t) ? 0 : t;
 }
 
-/**
- * Formata um timestamp (ms) para "DD/MM/YYYY".
- * Retorna string vazia se o valor for 0 ou inválido.
- */
 function formatDate(ts: number): string {
   if (!ts) return "";
   const d = new Date(ts);
@@ -225,49 +250,35 @@ function formatDate(ts: number): string {
   return `${day}/${month}/${year}`;
 }
 
-// Converte uma linha da API (campos snake_case) OU do CSV (campos literais) para PlayItem de música.
-// Cobre ambos os formatos para garantir que capa e título sempre apareçam.
 function toPlayItemMusica(m: SheetItem): PlayItem {
   const idTopico = getField(m,
-    // API (snake_case)
     "id_do_topico", "idtopico", "id_topico",
-    // CSV (literal)
     "ID do tópico", "ID do topico", "id",
   );
 
   const titulo = getField(m,
-    // API
     "nome_da_musica", "nomedamusica", "nome_musica", "nomemusica", "nome", "titulo", "title",
-    // CSV
     "Nome da música", "Nome da musica", "Nome da Música", "track", "song",
   );
 
   const artista = getField(m,
-    // API
     "act_principal", "actprincipal", "id_do_criador", "iddocriador", "idcriador",
     "artista", "artist", "autor", "author",
-    // CSV
     "ACT Principal", "ID do Criador", "ID do criador",
   );
 
   const capa = getField(m,
-    // API
     "capa_da_musica", "capadamusica", "capa", "cover", "thumb", "thumbnail",
-    // CSV
     "Capa da música", "Capa da musica", "Capa da Música",
   );
 
   const audioSrc = getField(m,
-    // API
     "id_do_arquivo", "idarquivo", "id_arquivo", "arquivo",
     "link_do_audio", "linkdoaudio", "link", "url", "audio",
-    // CSV
     "ID do arquivo", "ID do Arquivo",
   );
 
-  const letra = getField(m,
-    "letra", "lyrics", "Letra",
-  );
+  const letra = getField(m, "letra", "lyrics", "Letra");
 
   return {
     id: idTopico || audioSrc || `musica-${titulo}`,
@@ -1142,28 +1153,90 @@ function VideosTab({ videosDB, loading }: { videosDB: SheetItem[]; loading: bool
 }
 
 // ─── Forum Tab ─────────────────────────────────────────────────────────────
-type Comentario = { nome: string; texto: string };
+type Comentario = { nome: string; texto: string; reacao?: string };
 
 function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categoria: string; onBack: () => void }) {
   const [comentarios, setComentarios] = useState<Comentario[] | null>(null);
   const [nome, setNome] = useState("");
   const [texto, setTexto] = useState("");
+  const [emoji, setEmoji] = useState("");
+  const [showPicker, setShowPicker] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { play } = usePlay();
 
   const load = () =>
     fetch(`${API_URL}?action=comentarios&categoria=${categoria}&idTopico=${item.id}`)
       .then((r) => r.json())
-      .then((j) => setComentarios((j.data || []).map((c: Record<string, string>) => ({ nome: getField(c, "nome_do_jogador", "nome") || "Anônimo", texto: getField(c, "comentario", "texto") }))))
+      .then((j) =>
+        setComentarios(
+          (j.data || []).map((c: Record<string, string>) => ({
+            nome:
+              getField(c,
+                // snake_case API
+                "nome_do_jogador", "nomedojogador",
+                // possíveis variações
+                "autor", "author", "nome", "name",
+              ) || "Anônimo",
+            texto:
+              getField(c,
+                "comentario", "comentário",
+                "texto", "text", "mensagem", "message",
+              ),
+            reacao:
+              getField(c,
+                "reacao", "reação", "emoji", "reaction",
+              ) || undefined,
+          }))
+        )
+      )
       .catch(() => setComentarios([]));
 
   useEffect(() => { load(); }, [item.id, categoria]);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [texto]);
+
+  const insertEmoji = (e: string) => {
+    const el = textareaRef.current;
+    if (el) {
+      const start = el.selectionStart ?? texto.length;
+      const end = el.selectionEnd ?? texto.length;
+      const next = texto.slice(0, start) + e + texto.slice(end);
+      setTexto(next);
+      // Reposiciona cursor após o emoji inserido
+      requestAnimationFrame(() => {
+        el.selectionStart = el.selectionEnd = start + e.length;
+        el.focus();
+      });
+    } else {
+      setTexto((t) => t + e);
+    }
+    setShowPicker(false);
+  };
+
   const enviar = async () => {
     if (!texto.trim()) return;
     setEnviando(true);
-    await fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "novoComentario", categoria, idTopico: item.id, nomeJogador: nome.trim() || "Anônimo", comentario: texto.trim() }) });
+    await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "novoComentario",
+        categoria,
+        idTopico: item.id,
+        nomeJogador: nome.trim() || "Anônimo",
+        comentario: texto.trim(),
+        emoji: emoji.trim() || undefined,
+      }),
+    });
     setTexto("");
+    setEmoji("");
     setEnviando(false);
     load();
   };
@@ -1176,9 +1249,14 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
       <button onClick={onBack} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground active:text-primary transition-colors">
         <ChevronLeft className="size-4" /> Tópicos
       </button>
+
+      {/* Cabeçalho do tópico */}
       <div className="flex items-start gap-3 p-4 bg-white/[0.03] border border-white/5 rounded-[1.5rem]">
         <div className="size-14 rounded-2xl overflow-hidden bg-primary/10 flex-shrink-0">
-          {item.capa ? <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full grid place-items-center"><Music className="size-5 text-primary/40" /></div>}
+          {item.capa
+            ? <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" />
+            : <div className="w-full h-full grid place-items-center"><Music className="size-5 text-primary/40" /></div>
+          }
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-black text-sm truncate uppercase tracking-tight">{item.titulo}</p>
@@ -1196,29 +1274,110 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
           )}
         </div>
       </div>
+
+      {/* Letra */}
       {item.letra && (
         <details className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
           <summary className="text-[10px] font-black uppercase tracking-widest cursor-pointer text-primary">Ver Letra</summary>
           <pre className="mt-3 whitespace-pre-wrap text-xs font-sans text-foreground/80">{item.letra}</pre>
         </details>
       )}
+
+      {/* Lista de comentários */}
       <div className="space-y-2">
         {comentarios === null
-          ? Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-14 rounded-2xl bg-white/[0.03] animate-pulse" />)
+          ? Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-14 rounded-2xl bg-white/[0.03] animate-pulse" />
+            ))
           : comentarios.length === 0
           ? <p className="text-[10px] text-muted-foreground text-center py-6 opacity-50">Seja o primeiro a comentar.</p>
           : comentarios.map((c, i) => (
             <div key={i} className="bg-white/[0.03] border border-white/5 rounded-2xl px-4 py-3">
-              <p className="text-[10px] font-black uppercase tracking-wider text-primary mb-1">{c.nome}</p>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[10px] font-black uppercase tracking-wider text-primary">{c.nome}</p>
+                {c.reacao && (
+                  <div className="flex-shrink-0">
+                    <ReacaoMedia value={c.reacao} />
+                  </div>
+                )}
+              </div>
               <p className="text-xs text-foreground/80">{c.texto}</p>
             </div>
           ))
         }
       </div>
-      <div className="flex gap-2 pt-2">
-        <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Seu nome" className="h-10 flex-[0.4] bg-white/5 border border-white/10 rounded-2xl px-3 text-xs font-bold uppercase tracking-tight outline-none focus:border-primary/40" />
-        <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Comentar..." className="h-10 flex-1 bg-white/5 border border-white/10 rounded-2xl px-3 text-xs font-bold outline-none focus:border-primary/40" onKeyDown={(e) => e.key === "Enter" && enviar()} />
-        <button onClick={enviar} disabled={enviando || !texto.trim()} className="size-10 rounded-full bg-primary text-primary-foreground grid place-items-center disabled:opacity-30" aria-label="Enviar"><Send className="size-4" /></button>
+
+      {/* Formulário de comentário */}
+      <div className="space-y-2 pt-2">
+        <input
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          placeholder="Seu nome"
+          className="w-full h-10 bg-white/5 border border-white/10 rounded-2xl px-3 text-xs font-bold uppercase tracking-tight outline-none focus:border-primary/40"
+        />
+
+        <div className="relative">
+          <textarea
+            ref={textareaRef}
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                enviar();
+              }
+            }}
+            placeholder="Comentar... (Enter envia, Shift+Enter quebra linha)"
+            rows={1}
+            className="w-full bg-white/5 border border-white/10 rounded-2xl px-3 py-2.5 pr-10 text-xs font-bold outline-none focus:border-primary/40 resize-none overflow-hidden leading-relaxed"
+            style={{ minHeight: "40px", maxHeight: "120px" }}
+          />
+          {/* Botão emoji picker */}
+          <button
+            type="button"
+            onClick={() => setShowPicker((v) => !v)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/50 active:text-primary transition-colors"
+            aria-label="Inserir emoji"
+          >
+            <Smile className="size-4" />
+          </button>
+        </div>
+
+        {/* Emoji picker inline */}
+        {showPicker && (
+          <div className="bg-white/[0.06] border border-white/10 rounded-2xl p-3">
+            <div className="flex flex-wrap gap-1.5">
+              {EMOJI_LIST.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => insertEmoji(e)}
+                  className="text-xl leading-none p-1 rounded-lg active:bg-white/10 transition-colors"
+                  aria-label={e}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <input
+            value={emoji}
+            onChange={(e) => setEmoji(e.target.value)}
+            placeholder="Reação (emoji/URL opcional)"
+            className="h-9 flex-1 bg-white/5 border border-white/10 rounded-2xl px-3 text-xs font-bold outline-none focus:border-primary/40"
+          />
+          <button
+            onClick={enviar}
+            disabled={enviando || !texto.trim()}
+            className="size-9 rounded-full bg-primary text-primary-foreground grid place-items-center disabled:opacity-30 flex-shrink-0"
+            aria-label="Enviar"
+          >
+            <Send className="size-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
