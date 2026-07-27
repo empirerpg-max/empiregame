@@ -459,6 +459,21 @@ function VideoModal({ item, onClose }: { item: PlayItem; onClose: () => void }) 
       );
     }
 
+    // Raw Telegram file_id (não é URL) → stream via Worker
+    const isRawTgFileId = !!src && !/^https?:\/\//.test(src) && !src.includes("/") && /^[A-Za-z0-9_-]{20,}$/.test(src);
+    if (isRawTgFileId) {
+      return (
+        <video
+          src={`${TG_WORKER}/file?id=${src}`}
+          controls
+          autoPlay
+          className="w-full h-full"
+          playsInline
+          preload="metadata"
+        />
+      );
+    }
+
     // Google Drive
     if (mediaType === "drive" || extractDriveId(src)) {
       const driveId = extractDriveId(src);
