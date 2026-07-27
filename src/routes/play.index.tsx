@@ -14,10 +14,13 @@ import {
   AlertCircle,
   PlusCircle,
   Smile,
+  Heart,
+  ThumbsUp,
+  Laugh,
 } from "lucide-react";
-import { usePlay, type PlayItem } from "@/lib/playContext";
+import { usePlay, type PlayItem, extractYouTubeId, detectMediaType } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")({
+export const Route = createFileRoute("/play/")(({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -26,7 +29,7 @@ export const Route = createFileRoute("/play/")({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-});
+}));
 
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
@@ -51,6 +54,9 @@ const EMOJI_LIST = [
   "🔥","❤️","💯","👏","🎵","🎶","🎤","🎸","🥁","🎧",
   "🏆","⭐","✨","💥","👑","🙌","💪","🫶","🤝","👀",
 ];
+
+// ─── Reações rápidas estilo Telegram ──────────────────────────────────────
+const QUICK_REACTIONS = ["❤️", "🔥", "👏", "😂", "🤩", "😎", "💯", "👑"];
 
 /**
  * Resolve qualquer identificador de mídia para uma URL reproduzível.
@@ -334,18 +340,13 @@ function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
     "Thumb", "thumb", "thumbnail",
   );
 
-  // FIX: audioSrc expandido com todos os aliases conhecidos de vídeo e áudio
-  // para evitar Empty src attribute no MiniPlayer
   const audioSrc = getField(m,
-    // Arquivo de áudio (Drive file_id ou link)
     "id_do_arquivo", "idarquivo", "id_arquivo", "arquivo",
     "ID do Arquivo", "ID do arquivo",
     "Link do áudio", "Link do audio", "linkdoaudio",
-    // Vídeo (YouTube ID, link direto)
     "ID do vídeo", "ID do video", "idvideo", "id_video",
     "link_do_video", "linkdovideo", "Link do vídeo", "Link do video",
     "youtube_id", "youtubeid", "yt_id", "ytid",
-    // Genéricos
     "Link", "link", "url", "URL",
     "audio", "Audio",
     "video", "Video",
@@ -1181,15 +1182,67 @@ function VideosTab({ videosDB, loading }: { videosDB: SheetItem[]; loading: bool
 // ─── Forum Tab ─────────────────────────────────────────────────────────────
 type Comentario = { nome: string; texto: string; reacao?: string };
 
+// ─── InlineMediaPlayer ─────────────────────────────────────────────────────
+// Detecta o tipo correto e renderiza YouTube iframe OU <video> nativo OU botão play
+function InlineMediaPlayer({ item }: { item: PlayItem }) {
+  const { play } = usePlay();
+  const src = item.audioSrc || "";
+  const isVideo = item.categoria === "video" || item.categoria === "musicvideo";
+
+  // Detecta YouTube usando as funções já existentes no playContext
+  const ytId = extractYouTubeId(src);
+  const mediaType = detectMediaType(src);
+
+  // Caso 1: é vídeo E é YouTube → iframe embed
+  if (isVideo && (mediaType === "youtube" || ytId)) {
+    const embedId = ytId || src;
+    return (
+      <div className="mt-2 w-full rounded-xl overflow-hidden aspect-video bg-black">
+        <iframe
+          src={`https://www.youtube.com/embed/${embedId}?rel=0&modestbranding=1`}
+          className="w-full h-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          title={item.titulo}
+        />
+      </div>
+    );
+  }
+
+  // Caso 2: é vídeo E é Drive/Telegram → <video> nativo via resolveMediaUrl
+  if (isVideo && src) {
+    const mediaSrc = resolveMediaUrl(src);
+    return (
+      <video
+        src={mediaSrc}
+        controls
+        className="mt-2 w-full rounded-xl max-h-56 bg-black"
+        preload="metadata"
+        playsInline
+      />
+    );
+  }
+
+  // Caso 3: áudio / sem src → botão play do MiniPlayer
+  return (
+    <button
+      onClick={() => play(item, [item], { autoPlay: true })}
+      className="mt-2 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1"
+    >
+      <Play className="size-3" fill="currentColor" /> Tocar
+    </button>
+  );
+}
+
+// ─── Forum Topico Detalhe (estilo Telegram) ────────────────────────────────
 function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categoria: string; onBack: () => void }) {
   const [comentarios, setComentarios] = useState<Comentario[] | null>(null);
   const [nome, setNome] = useState("");
   const [texto, setTexto] = useState("");
-  const [emoji, setEmoji] = useState("");
   const [showPicker, setShowPicker] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [reacaoRapida, setReacaoRapida] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { play } = usePlay();
 
   const load = () =>
     fetch(`${API_URL}?action=comentarios&categoria=${categoria}&idTopico=${item.id}`)
@@ -1243,8 +1296,13 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
     setShowPicker(false);
   };
 
-  const enviar = async () => {
-    if (!texto.trim()) return;
+  const enviar = async (emojiOverride?: string) => {
+    const comentarioTexto = texto.trim();
+    const emojiEnvio = emojiOverride || reacaoRapida || undefined;
+
+    // Permite enviar só reação rápida sem texto
+    if (!comentarioTexto && !emojiEnvio) return;
+
     setEnviando(true);
     await fetch(API_URL, {
       method: "POST",
@@ -1254,110 +1312,152 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
         categoria,
         idTopico: item.id,
         nomeJogador: nome.trim() || "Anônimo",
-        comentario: texto.trim(),
-        emoji: emoji.trim() || undefined,
+        comentario: comentarioTexto || "👍",
+        emoji: emojiEnvio,
       }),
     });
     setTexto("");
-    setEmoji("");
+    setReacaoRapida(null);
     setEnviando(false);
     load();
   };
 
-  const mediaSrc = resolveMediaUrl(item.audioSrc || "");
-  const isVideo = item.categoria === "video" || item.categoria === "musicvideo";
-
   return (
     <div className="space-y-4">
+      {/* Back */}
       <button onClick={onBack} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground active:text-primary transition-colors">
         <ChevronLeft className="size-4" /> Tópicos
       </button>
 
-      <div className="flex items-start gap-3 p-4 bg-white/[0.03] border border-white/5 rounded-[1.5rem]">
-        <div className="size-14 rounded-2xl overflow-hidden bg-primary/10 flex-shrink-0">
-          {item.capa
-            ? <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" />
-            : <div className="w-full h-full grid place-items-center"><Music className="size-5 text-primary/40" /></div>
-          }
+      {/* Header do tópico — estilo mensagem Telegram */}
+      <div className="rounded-[1.5rem] overflow-hidden bg-white/[0.03] border border-white/[0.06]">
+        {/* capa + player */}
+        <div className="p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="size-14 rounded-2xl overflow-hidden bg-primary/10 flex-shrink-0">
+              {item.capa
+                ? <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" />
+                : <div className="w-full h-full grid place-items-center"><Music className="size-5 text-primary/40" /></div>
+              }
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-black text-sm uppercase tracking-tight leading-tight">{item.titulo}</p>
+              {item.artista && <p className="text-[10px] text-muted-foreground mt-0.5">{item.artista}</p>}
+            </div>
+          </div>
+
+          {/* Player inline — usa InlineMediaPlayer que detecta YouTube/Drive/audio */}
+          <InlineMediaPlayer item={item} />
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-black text-sm truncate uppercase tracking-tight">{item.titulo}</p>
-          {isVideo && mediaSrc ? (
-            <video
-              src={mediaSrc}
-              controls
-              className="mt-2 w-full rounded-xl max-h-48 bg-black"
-              preload="metadata"
-            />
-          ) : (
-            <button onClick={() => play(item, [item], { autoPlay: true })} className="mt-2 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1">
-              <Play className="size-3" fill="currentColor" /> Tocar
+
+        {/* Letra (collapsible) */}
+        {item.letra && (
+          <details className="border-t border-white/[0.06] px-4 py-3">
+            <summary className="text-[10px] font-black uppercase tracking-widest cursor-pointer text-primary select-none">
+              📝 Ver Letra
+            </summary>
+            <pre className="mt-3 whitespace-pre-wrap text-xs font-sans text-foreground/70 leading-relaxed">{item.letra}</pre>
+          </details>
+        )}
+
+        {/* Reações rápidas estilo Telegram */}
+        <div className="border-t border-white/[0.06] px-4 py-3 flex items-center gap-1.5 flex-wrap">
+          {QUICK_REACTIONS.map((e) => (
+            <button
+              key={e}
+              onClick={() => enviar(e)}
+              disabled={enviando}
+              className="text-lg leading-none px-2 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] active:bg-primary/20 active:border-primary/40 transition-all disabled:opacity-40"
+              aria-label={`Reagir com ${e}`}
+            >
+              {e}
             </button>
-          )}
+          ))}
         </div>
       </div>
 
-      {item.letra && (
-        <details className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
-          <summary className="text-[10px] font-black uppercase tracking-widest cursor-pointer text-primary">Ver Letra</summary>
-          <pre className="mt-3 whitespace-pre-wrap text-xs font-sans text-foreground/80">{item.letra}</pre>
-        </details>
-      )}
-
+      {/* Comentários — estilo balões Telegram */}
       <div className="space-y-2">
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 px-1">
+          💬 Comentários
+        </p>
         {comentarios === null
           ? Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="h-14 rounded-2xl bg-white/[0.03] animate-pulse" />
             ))
           : comentarios.length === 0
-          ? <p className="text-[10px] text-muted-foreground text-center py-6 opacity-50">Seja o primeiro a comentar.</p>
+          ? (
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <MessageSquare className="size-8 text-muted-foreground/20" />
+              <p className="text-[10px] text-muted-foreground/40 uppercase tracking-widest font-black">Seja o primeiro a comentar</p>
+            </div>
+          )
           : comentarios.map((c, i) => (
-            <div key={i} className="bg-white/[0.03] border border-white/5 rounded-2xl px-4 py-3">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[10px] font-black uppercase tracking-wider text-primary">{c.nome}</p>
+            // Balão de mensagem estilo Telegram
+            <div key={i} className="flex gap-2 items-end">
+              {/* Avatar circular com inicial */}
+              <div className="size-7 rounded-full bg-primary/20 flex-shrink-0 grid place-items-center mb-0.5">
+                <span className="text-[10px] font-black text-primary uppercase">
+                  {c.nome.charAt(0)}
+                </span>
+              </div>
+              <div className="max-w-[85%] bg-white/[0.05] border border-white/[0.07] rounded-[1.25rem] rounded-bl-sm px-3 py-2.5 space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-wide text-primary">{c.nome}</p>
+                <p className="text-xs text-foreground/80 leading-relaxed">{c.texto}</p>
                 {c.reacao && (
-                  <div className="flex-shrink-0">
+                  <div className="pt-1">
                     <ReacaoMedia value={c.reacao} />
                   </div>
                 )}
               </div>
-              <p className="text-xs text-foreground/80">{c.texto}</p>
             </div>
           ))
         }
       </div>
 
-      <div className="space-y-2 pt-2">
+      {/* Form de envio — estilo input Telegram */}
+      <div className="sticky bottom-0 pt-2 pb-1 space-y-2 bg-background/80" style={{ backdropFilter: "blur(16px)" }}>
         <input
           value={nome}
           onChange={(e) => setNome(e.target.value)}
-          placeholder="Seu nome"
-          className="w-full h-10 bg-white/5 border border-white/10 rounded-2xl px-3 text-xs font-bold uppercase tracking-tight outline-none focus:border-primary/40"
+          placeholder="Seu nome (opcional)"
+          className="w-full h-9 bg-white/5 border border-white/10 rounded-2xl px-3 text-xs font-bold uppercase tracking-tight outline-none focus:border-primary/40 transition-colors"
         />
 
-        <div className="relative">
-          <textarea
-            ref={textareaRef}
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                enviar();
-              }
-            }}
-            placeholder="Comentar... (Enter envia, Shift+Enter quebra linha)"
-            rows={1}
-            className="w-full bg-white/5 border border-white/10 rounded-2xl px-3 py-2.5 pr-10 text-xs font-bold outline-none focus:border-primary/40 resize-none overflow-hidden leading-relaxed"
-            style={{ minHeight: "40px", maxHeight: "120px" }}
-          />
+        <div className="flex items-end gap-2">
+          <div className="relative flex-1">
+            <textarea
+              ref={textareaRef}
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  enviar();
+                }
+              }}
+              placeholder="Escreva uma mensagem..."
+              rows={1}
+              className="w-full bg-white/5 border border-white/10 rounded-2xl px-3 py-2.5 pr-9 text-xs font-bold outline-none focus:border-primary/40 resize-none overflow-hidden leading-relaxed transition-colors"
+              style={{ minHeight: "40px", maxHeight: "120px" }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPicker((v) => !v)}
+              className="absolute right-2.5 bottom-2.5 text-muted-foreground/50 active:text-primary transition-colors"
+              aria-label="Inserir emoji"
+            >
+              <Smile className="size-4" />
+            </button>
+          </div>
+
           <button
-            type="button"
-            onClick={() => setShowPicker((v) => !v)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/50 active:text-primary transition-colors"
-            aria-label="Inserir emoji"
+            onClick={() => enviar()}
+            disabled={enviando || !texto.trim()}
+            className="size-10 rounded-full bg-primary text-primary-foreground grid place-items-center disabled:opacity-30 flex-shrink-0 transition-opacity"
+            aria-label="Enviar"
           >
-            <Smile className="size-4" />
+            <Send className="size-4" />
           </button>
         </div>
 
@@ -1378,28 +1478,12 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
             </div>
           </div>
         )}
-
-        <div className="flex gap-2">
-          <input
-            value={emoji}
-            onChange={(e) => setEmoji(e.target.value)}
-            placeholder="Reação (emoji/URL opcional)"
-            className="h-9 flex-1 bg-white/5 border border-white/10 rounded-2xl px-3 text-xs font-bold outline-none focus:border-primary/40"
-          />
-          <button
-            onClick={enviar}
-            disabled={enviando || !texto.trim()}
-            className="size-9 rounded-full bg-primary text-primary-foreground grid place-items-center disabled:opacity-30 flex-shrink-0"
-            aria-label="Enviar"
-          >
-            <Send className="size-4" />
-          </button>
-        </div>
       </div>
     </div>
   );
 }
 
+// ─── Forum Tab (lista de tópicos) ──────────────────────────────────────────
 function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: SheetItem[]; musicVideosDB: SheetItem[]; videosDB: SheetItem[]; loading: boolean }) {
   const [cat, setCat] = useState<"musicas" | "musicvideos" | "videos">("musicas");
   const [detalhe, setDetalhe] = useState<{ item: PlayItem; cat: string } | null>(null);
@@ -1425,19 +1509,32 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
           </button>
         ))}
       </div>
+
       <div className="space-y-2">
         {list.length === 0
-          ? <p className="text-center text-xs text-muted-foreground py-12 opacity-40">Nenhum tópico.</p>
+          ? (
+            <div className="flex flex-col items-center gap-3 py-12">
+              <MessageSquare className="size-10 text-muted-foreground/20" />
+              <p className="text-[10px] text-muted-foreground/40 uppercase tracking-widest font-black">Nenhum tópico ainda</p>
+            </div>
+          )
           : list.map((item) => (
             <button key={item.id} onClick={() => setDetalhe({ item, cat })}
               className="w-full flex items-center gap-3 p-3 bg-white/[0.03] border border-white/5 rounded-[1.5rem] active:border-primary/30 transition-colors text-left">
-              <div className="size-10 rounded-xl overflow-hidden bg-primary/10 flex-shrink-0">
-                {item.capa ? <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full grid place-items-center"><Music className="size-4 text-primary/40" /></div>}
+              <div className="size-12 rounded-xl overflow-hidden bg-primary/10 flex-shrink-0">
+                {item.capa
+                  ? <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  : <div className="w-full h-full grid place-items-center"><Music className="size-4 text-primary/40" /></div>
+                }
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-black text-xs truncate uppercase tracking-tight">{item.titulo || "—"}</p>
+                {item.artista && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{item.artista}</p>}
               </div>
-              <MessageSquare className="size-4 text-muted-foreground/40 flex-shrink-0" />
+              <div className="flex-shrink-0 flex items-center gap-1 text-muted-foreground/30">
+                <MessageSquare className="size-3.5" />
+                <ChevronRight className="size-3.5" />
+              </div>
             </button>
           ))
         }
@@ -1462,8 +1559,7 @@ export default function PlayHomePage() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const tabsRef = useRef<HTMLDivElement>(null);
 
-  // FIX 1: Busca musicas/clipes/vídeos direto via CSV da planilha (sem GAS)
-  // Isso elimina os ERR_CONNECTION_TIMED_OUT do Apps Script
+  // Busca musicas/clipes/vídeos direto via CSV da planilha (sem GAS, sem timeout)
   useEffect(() => {
     Promise.all([
       fetchSheetValues(ABA_MUSICAS),
@@ -1585,7 +1681,14 @@ export default function PlayHomePage() {
         )}
         {activeTab === "clipes"  && <ClipesTab musicVideosDB={musicVideosDB} loading={loading} />}
         {activeTab === "videos"  && <VideosTab videosDB={videosDB} loading={loading} />}
-        {activeTab === "forum"   && <ForumTab musicasDB={musicasDB} musicVideosDB={musicVideosDB} videosDB={videosDB} loading={loading} />}
+        {activeTab === "forum"   && (
+          <ForumTab
+            musicasDB={musicasDB}
+            musicVideosDB={musicVideosDB}
+            videosDB={videosDB}
+            loading={loading}
+          />
+        )}
       </div>
     </main>
   );
