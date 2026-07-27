@@ -475,9 +475,8 @@ function VideoModal({ item, onClose }: { item: PlayItem; onClose: () => void }) 
       }
     }
 
-    // Telegram — não embeddable, exibir botão de link externo
-    if (isTg || (src && /^[A-Za-z0-9_-]{20,}$/.test(src) && !src.startsWith("http"))) {
-      const externalUrl = isTg ? src : `https://t.me/`;
+    // Telegram t.me link — não embeddable, exibir botão externo
+    if (isTg) {
       return (
         <div className="flex flex-col items-center justify-center gap-4 h-full text-center px-6">
           <div className="size-16 rounded-full bg-white/10 grid place-items-center">
@@ -485,24 +484,32 @@ function VideoModal({ item, onClose }: { item: PlayItem; onClose: () => void }) 
           </div>
           <p className="text-sm font-black text-white uppercase tracking-tight">{item.titulo}</p>
           <p className="text-xs text-white/50 max-w-[28ch]">
-            Vídeos do Telegram não podem ser embutidos aqui por restrição do aplicativo.
+            Este vídeo está hospedado no Telegram e precisa ser aberto lá.
           </p>
-          {isTg && (
-            <a
-              href={externalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#2AABEE] text-white text-xs font-black uppercase tracking-widest"
-            >
-              <ExternalLink className="size-3.5" />
-              Abrir no Telegram
-            </a>
-          )}
+          <a
+            href={src}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#2AABEE] text-white text-xs font-black uppercase tracking-widest"
+          >
+            <ExternalLink className="size-3.5" />
+            Abrir no Telegram
+          </a>
         </div>
       );
     }
 
-    // MP4 / WebM / arquivo direto (incluindo file_id Telegram via Worker)
+    // Sem source
+    if (!src) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 h-full text-center px-6">
+          <AlertCircle className="size-8 text-white/40" />
+          <p className="text-xs text-white/60">Vídeo indisponível</p>
+        </div>
+      );
+    }
+
+    // MP4/WebM/arquivo direto + telegram_file_id (via Worker) + qualquer URL http
     const mediaSrc = resolveMediaUrl(src);
     return (
       <video
