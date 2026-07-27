@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { usePlay, type PlayItem } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")({
+export const Route = createFileRoute("/play/")(({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/play/")({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-});
+}));
 
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
@@ -33,6 +33,25 @@ const API_URL =
   "https://script.google.com/macros/s/AKfycby1S1mIBXdj4hLqc9RYv1ZJjL7d5ct6to18FNPmpJn1KOnZrYCKJKPNe2LP0dPW-G8HOg/exec";
 
 const SHEET_ID = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
+
+// ─── Cloudflare Worker (proxy de mídia Telegram) ───────────────────────────
+const TG_WORKER = "https://falling-cloud-c041.empirerpg-forum.workers.dev";
+
+/**
+ * Resolve qualquer identificador de mídia para uma URL reproduzível.
+ * - file_id do Telegram (≥ 20 chars, sem "/" e sem "http"): roteia pelo Worker
+ * - URL do Google Drive: usa lh3.googleusercontent
+ * - Qualquer outra URL: retorna diretamente
+ */
+function resolveMediaUrl(src: string): string {
+  if (!src) return "";
+  if (src.startsWith("http")) return src;
+  // file_id do Telegram: string alfanumérica longa sem barras
+  if (/^[A-Za-z0-9_-]{20,}$/.test(src)) {
+    return `${TG_WORKER}/file?id=${src}`;
+  }
+  return src;
+}
 
 function sheetCsvUrl(aba: string): string {
   return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(aba)}`;
@@ -128,9 +147,20 @@ function extractDriveId(str: string): string | null {
   return null;
 }
 
-function driveThumb(capa: string, size = 300): string {
+/**
+ * Resolve thumbnail de capa:
+ * - file_id do Telegram → Worker /file?id=<id>
+ * - Google Drive id / URL → lh3.googleusercontent
+ * - Qualquer outra URL → direto
+ */
+function resolveThumb(capa: string, size = 300): string {
   if (!capa) return "";
-  const id = extractDriveId(capa) || (capa.match(/^[a-zA-Z0-9_-]{20,}$/) ? capa : null);
+  // Telegram file_id puro
+  if (/^[A-Za-z0-9_-]{20,}$/.test(capa) && !capa.startsWith("http")) {
+    return `${TG_WORKER}/file?id=${capa}`;
+  }
+  // Google Drive
+  const id = extractDriveId(capa);
   if (id) return `https://lh3.googleusercontent.com/d/${id}=w${size}`;
   return capa;
 }
@@ -443,7 +473,7 @@ function SongCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
     <button onClick={() => play(item, queue, { autoPlay: true })} className="flex flex-col gap-2 text-left group w-full">
       <div className={`relative aspect-square w-full rounded-2xl overflow-hidden bg-primary/10 ${isActive ? "ring-2 ring-primary" : ""} transition-all`}>
         {item.capa ? (
-          <img src={driveThumb(item.capa, 300)} alt={item.titulo} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+          <img src={resolveThumb(item.capa, 300)} alt={item.titulo} className="w-full h-full object-cover" loading="lazy" decoding="async" />
         ) : (
           <div className="w-full h-full grid place-items-center"><Music className="size-8 text-primary/40" /></div>
         )}
@@ -469,8 +499,6 @@ function SongCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
 }
 
 // ─── SongCardWithDate ─────────────────────────────────────────────────────
-// Igual ao SongCard, mas exibe data de lançamento abaixo do artista
-// e um badge "Novo" na capa para músicas lançadas nos últimos 30 dias.
 function SongCardWithDate({
   item,
   queue,
@@ -489,17 +517,14 @@ function SongCardWithDate({
 
     let ts = 0;
 
-    // DD/MM/YYYY
     const brDate = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (brDate) {
       const iso = `${brDate[3]}-${brDate[2].padStart(2, "0")}-${brDate[1].padStart(2, "0")}`;
       ts = new Date(iso).getTime();
     } else if (/^\d+$/.test(s)) {
-      // Timestamp Unix puro
       const n = parseInt(s, 10);
       ts = n < 1e12 ? n * 1000 : n;
     } else {
-      // ISO / qualquer outro formato
       ts = new Date(s).getTime();
     }
 
@@ -524,7 +549,7 @@ function SongCardWithDate({
       >
         {item.capa ? (
           <img
-            src={driveThumb(item.capa, 300)}
+            src={resolveThumb(item.capa, 300)}
             alt={item.titulo}
             className="w-full h-full object-cover"
             loading="lazy"
@@ -535,7 +560,6 @@ function SongCardWithDate({
             <Music className="size-8 text-primary/40" />
           </div>
         )}
-        {/* Badge Novo */}
         {isNovo && (
           <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-black uppercase tracking-widest">
             Novo
@@ -584,7 +608,7 @@ function VideoCard({ item, queue }: { item: PlayItem; queue: PlayItem[] }) {
     <button onClick={() => play(item, queue, { autoPlay: true })} className="flex flex-col gap-2 text-left group w-full">
       <div className={`relative w-full rounded-2xl overflow-hidden bg-primary/10 aspect-video ${isActive ? "ring-2 ring-primary" : ""} transition-all`}>
         {item.capa ? (
-          <img src={driveThumb(item.capa, 400)} alt={item.titulo} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+          <img src={resolveThumb(item.capa, 400)} alt={item.titulo} className="w-full h-full object-cover" loading="lazy" decoding="async" />
         ) : (
           <div className="w-full h-full grid place-items-center"><Tv className="size-8 text-primary/40" /></div>
         )}
@@ -611,28 +635,23 @@ function RowTrack({
   item: PlayItem;
   queue: PlayItem[];
   num: number;
-  /** Valor bruto do campo data vindo do SheetItem — será formatado aqui */
   rawDate?: string;
 }) {
   const { play, state } = usePlay();
   const isActive = state.currentIdx !== null && state.queue[state.currentIdx]?.id === item.id;
 
-  // Formata a data a partir do valor bruto, cobrindo todos os formatos possíveis
   const dataFormatada = useMemo(() => {
     if (!rawDate || rawDate.trim() === "") return "";
     const s = rawDate.trim();
 
-    // Já está no formato DD/MM/YYYY — retorna direto
     if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
 
-    // Timestamp Unix puro (só dígitos)
     if (/^\d+$/.test(s)) {
       const n = parseInt(s, 10);
       const ts = n < 1e12 ? n * 1000 : n;
       return formatDate(ts);
     }
 
-    // ISO ou outro formato reconhecido pelo JS
     const t = new Date(s).getTime();
     return isNaN(t) ? s : formatDate(t);
   }, [rawDate]);
@@ -657,7 +676,7 @@ function RowTrack({
       </div>
       <div className="size-10 rounded-xl overflow-hidden bg-primary/10 flex-shrink-0">
         {item.capa ? (
-          <img src={driveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+          <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
         ) : (
           <div className="w-full h-full grid place-items-center"><Music className="size-4 text-primary/30" /></div>
         )}
@@ -710,7 +729,7 @@ function ChartRow({ entry, queue }: { entry: ChartEntry; queue: PlayItem[] }) {
       </div>
       <div className="size-10 rounded-xl overflow-hidden bg-white/[0.05] flex-shrink-0">
         {entry.capa ? (
-          <img src={driveThumb(entry.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+          <img src={resolveThumb(entry.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
         ) : (
           <div className="w-full h-full grid place-items-center"><Music className="size-4 text-white/10" /></div>
         )}
@@ -749,7 +768,7 @@ function ChartMiniCard({ chart, onOpen }: { chart: ChartData; onOpen: () => void
     >
       <div className="relative w-full aspect-square bg-white/[0.05] grid place-items-center">
         {chart.capaDaPlaylist ? (
-          <img src={driveThumb(chart.capaDaPlaylist, 300)} alt={chart.nome} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+          <img src={resolveThumb(chart.capaDaPlaylist, 300)} alt={chart.nome} className="w-full h-full object-cover" loading="lazy" decoding="async" />
         ) : (
           <span className="text-5xl">{chart.icone}</span>
         )}
@@ -773,7 +792,7 @@ function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => vo
       <div className="flex items-center gap-4 p-4 bg-white/[0.03] border border-white/[0.06] rounded-[1.5rem]">
         <div className="size-16 rounded-2xl overflow-hidden bg-white/[0.05] flex-shrink-0">
           {chart.capaDaPlaylist ? (
-            <img src={driveThumb(chart.capaDaPlaylist, 120)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+            <img src={resolveThumb(chart.capaDaPlaylist, 120)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
           ) : (
             <div className="w-full h-full grid place-items-center"><span className="text-3xl">{chart.icone}</span></div>
           )}
@@ -814,7 +833,6 @@ function HomeTab({
   const [openChart, setOpenChart] = useState<ChartData | null>(null);
   const [homeSection, setHomeSection] = useState<"charts" | "lancamentos">("charts");
 
-  // Usa musicasDB (API) como fonte — mesma que já funciona em Clipes/Fórum
   const lancMusicas = useMemo<{ item: PlayItem; rawDate: string }[]>(
     () =>
       [...musicasDB]
@@ -947,7 +965,6 @@ function MusicasTab({ musicasDB, loading }: {
     { id: "lancar",      label: "Lançar",              icon: PlusCircle },
   ];
 
-  // 30 músicas mais recentes — agora inclui rawDate para SongCardWithDate
   const lancamentos = useMemo<{ item: PlayItem; rawDate: string }[]>(() => {
     return [...musicasDB]
       .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
@@ -991,7 +1008,6 @@ function MusicasTab({ musicasDB, loading }: {
 
   return (
     <div className="space-y-5">
-      {/* Sub-tab bar */}
       <div className="flex gap-1.5 overflow-x-auto scrollbar-hide p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
         {SUB_TABS.map(({ id, label, icon: Icon }) => (
           <button
@@ -1009,7 +1025,6 @@ function MusicasTab({ musicasDB, loading }: {
         ))}
       </div>
 
-      {/* ── Últimos lançamentos: grid de cards com capa, data e badge Novo ── */}
       {subTab === "lancamentos" && (
         <div className="space-y-3">
           {lancamentos.length === 0 ? (
@@ -1034,7 +1049,6 @@ function MusicasTab({ musicasDB, loading }: {
         </div>
       )}
 
-      {/* Álbuns */}
       {subTab === "albuns" && (
         <div className="grid grid-cols-2 gap-3">
           {albuns.length === 0 ? (
@@ -1044,7 +1058,7 @@ function MusicasTab({ musicasDB, loading }: {
               <div key={a.title} className="flex flex-col gap-2">
                 <div className="aspect-square rounded-2xl overflow-hidden bg-primary/10">
                   {a.capa ? (
-                    <img src={driveThumb(a.capa, 300)} alt={a.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                    <img src={resolveThumb(a.capa, 300)} alt={a.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                   ) : (
                     <div className="w-full h-full grid place-items-center"><Music className="size-8 text-primary/30" /></div>
                   )}
@@ -1059,7 +1073,6 @@ function MusicasTab({ musicasDB, loading }: {
         </div>
       )}
 
-      {/* Lançar */}
       {subTab === "lancar" && (
         <div className="flex flex-col items-center gap-4 py-16 text-center">
           <div className="size-16 rounded-full bg-primary/10 grid place-items-center">
@@ -1155,6 +1168,9 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
     load();
   };
 
+  const mediaSrc = resolveMediaUrl(item.audioSrc || "");
+  const isVideo = item.categoria === "video" || item.categoria === "musicvideo";
+
   return (
     <div className="space-y-4">
       <button onClick={onBack} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground active:text-primary transition-colors">
@@ -1162,13 +1178,22 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
       </button>
       <div className="flex items-start gap-3 p-4 bg-white/[0.03] border border-white/5 rounded-[1.5rem]">
         <div className="size-14 rounded-2xl overflow-hidden bg-primary/10 flex-shrink-0">
-          {item.capa ? <img src={driveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full grid place-items-center"><Music className="size-5 text-primary/40" /></div>}
+          {item.capa ? <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full grid place-items-center"><Music className="size-5 text-primary/40" /></div>}
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-black text-sm truncate uppercase tracking-tight">{item.titulo}</p>
-          <button onClick={() => play(item, [item], { autoPlay: true })} className="mt-2 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1">
-            <Play className="size-3" fill="currentColor" /> Tocar
-          </button>
+          {isVideo && mediaSrc ? (
+            <video
+              src={mediaSrc}
+              controls
+              className="mt-2 w-full rounded-xl max-h-48 bg-black"
+              preload="metadata"
+            />
+          ) : (
+            <button onClick={() => play(item, [item], { autoPlay: true })} className="mt-2 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1">
+              <Play className="size-3" fill="currentColor" /> Tocar
+            </button>
+          )}
         </div>
       </div>
       {item.letra && (
@@ -1231,7 +1256,7 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
             <button key={item.id} onClick={() => setDetalhe({ item, cat })}
               className="w-full flex items-center gap-3 p-3 bg-white/[0.03] border border-white/5 rounded-[1.5rem] active:border-primary/30 transition-colors text-left">
               <div className="size-10 rounded-xl overflow-hidden bg-primary/10 flex-shrink-0">
-                {item.capa ? <img src={driveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full grid place-items-center"><Music className="size-4 text-primary/40" /></div>}
+                {item.capa ? <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full grid place-items-center"><Music className="size-4 text-primary/40" /></div>}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-black text-xs truncate uppercase tracking-tight">{item.titulo || "—"}</p>
@@ -1307,7 +1332,6 @@ export default function PlayHomePage() {
       if (errors.length) setChartsError(errors.join(" │ "));
     });
 
-    // Music Videos ainda vem do CSV para ter Data de lançamento
     const mvPromise = fetchSheetValues("Music Videos").then((res) => {
       setPlayMusicVideosDB(sheetRowsToObjects(res.values));
     });
