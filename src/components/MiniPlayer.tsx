@@ -2,17 +2,15 @@
  * MiniPlayer — player de áudio/vídeo background.
  *
  * Estratégia de reprodução:
- * ─ Google Drive → <audio> nativo com crossOrigin="anonymous".
- *   O .play() é disparado DENTRO do onClick (user-gesture) via triggerPlay().
- *   Quando autoPlay=true, o useEffect [currentMediaId, playing] chama
- *   triggerPlay() automaticamente após a troca de faixa.
+ * ─ Google Drive → <audio> nativo via proxy Cloudflare Worker.
  *
- * ─ YouTube → YT.Player injetado em um <div> de 1×1 px invisível
- *   (opacity:0, position:absolute, zIndex:-1, pointerEvents:none).
- *   NÃO usa display:none nem width/height 0 — a API para de funcionar.
- *   O .playVideo() é chamado via triggerPlay() no onClick OU pelo
- *   useEffect [currentMediaId, playing] quando playing já é true.
- *   Estado visual sincronizado via onStateChange (PLAYING/PAUSED).
+ * ─ Telegram → <audio> nativo via Bot API proxy Cloudflare Worker.
+ *   O Worker chama api.telegram.org/bot<TOKEN>/getFile e redireciona
+ *   para file.telegram.org/file/bot<TOKEN>/<path>.
+ *   Funciona sem WebSocket/MTProto, sem timeout. Limite: 20 MB (Bot API).
+ *   Nenhuma mudança no fluxo de play/pause — usa o mesmo <audio> do Drive.
+ *
+ * ─ YouTube → YT.Player injetado em um <div> de 1×1 px invisível.
  *
  * Fluxo com autoPlay=true (um único clique):
  *   1. onClick → play(item, queue, { autoPlay: true })
@@ -37,6 +35,7 @@ import { toast } from "sonner";
 import {
   usePlay,
   driveStreamUrl,
+  telegramStreamUrl,
   detectMediaType,
   extractYouTubeId,
   extractDriveId,
@@ -82,6 +81,15 @@ function useLoadYTApi(onReady: () => void) {
       document.head.appendChild(tag);
     }
   }, []);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: resolve a URL de stream para o <audio>, seja Drive ou Telegram
+// ─────────────────────────────────────────────────────────────────────────────
+function resolveAudioSrc(mediaType: "drive" | "telegram" | "youtube" | null, mediaId: string | null): string {
+  if (!mediaId) return "";
+  if (mediaType === "telegram") return telegramStreamUrl(mediaId);
+  return driveStreamUrl(mediaId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,7 +148,7 @@ export function MiniPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 2. Cria / recria o YT.Player ────────────────────────────────────────
+  // ── 2. Cria / recria o YT.Player ────────────────────────────────────
   const buildYTPlayer = useCallback(
     (videoId: string, autoStart: boolean) => {
       if (!ytContainerRef.current) return;
@@ -200,15 +208,16 @@ export function MiniPlayer() {
   useLoadYTApi(onYTApiReady);
 
   // ── 3. Reage à troca de faixa — configura src, NÃO inicia reprodução ────
+  //    Drive e Telegram usam o mesmo <audio>.
   //    A decisão de tocar ou não fica para o efeito 4.
   useEffect(() => {
     if (!currentMediaId) return;
 
-    if (mediaType === "drive") {
+    if (mediaType === "drive" || mediaType === "telegram") {
       const audio = audioRef.current;
       if (!audio) return;
       audio.pause();
-      audio.src = driveStreamUrl(currentMediaId);
+      audio.src = resolveAudioSrc(mediaType, currentMediaId);
       audio.load();
     }
 
@@ -222,12 +231,11 @@ export function MiniPlayer() {
   }, [currentMediaId, mediaType]);
 
   // ── 4. Auto-play quando playing é true (troca de faixa OU resume) ────────
-  //    Suporta: autoPlay=true, next/prev enquanto tocando, onEnded, resume.
   useEffect(() => {
     if (!currentMediaId || !playing) return;
 
     const id = setTimeout(() => {
-      if (mediaType === "drive") {
+      if (mediaType === "drive" || mediaType === "telegram") {
         const audio = audioRef.current;
         if (!audio) return;
         audio.play().catch(() => {
@@ -258,7 +266,7 @@ export function MiniPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMediaId, playing]);
 
-  // ── 5. Limpa ao desmontar ────────────────────────────────────────────────
+  // ── 5. Limpa ao desmontar ──────────────────────────────────────────
   useEffect(() => {
     return () => {
       audioRef.current?.pause();
@@ -266,9 +274,9 @@ export function MiniPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 6. triggerPlay — chamado com user-gesture garantido ─────────────────
+  // ── 6. triggerPlay — chamado com user-gesture garantido ───────────────
   const triggerPlay = useCallback(() => {
-    if (mediaType === "drive") {
+    if (mediaType === "drive" || mediaType === "telegram") {
       const audio = audioRef.current;
       if (!audio) return;
       audio
@@ -298,28 +306,25 @@ export function MiniPlayer() {
     }
   }, [mediaType, audioRef, ytPlayerRef, currentMediaId, buildYTPlayer, confirmPaused]);
 
-  // ── 7. triggerPause ──────────────────────────────────────────────────────
+  // ── 7. triggerPause ──────────────────────────────────────────────
   const triggerPause = useCallback(() => {
     pendingPlay.current = false;
     pause();
   }, [pause]);
 
-  // ── Guard ────────────────────────────────────────────────────────────────
+  // ── Guard ──────────────────────────────────────────────────────────────
   if (currentIdx === null || queue.length === 0) return null;
 
   const item = queue[currentIdx];
   const hasPrev = currentIdx > 0;
   const hasNext = currentIdx < queue.length - 1;
 
-  // Handler do botão play/pause:
-  // - Se tocando → pausa
-  // - Se pausado → resume() no contexto (seta playing:true) + triggerPlay() (user-gesture)
   const handlePlayPause = () => {
     if (playing) {
       triggerPause();
     } else {
-      resume();      // seta playing:true no contexto imediatamente
-      triggerPlay(); // dispara .play()/.playVideo() com user-gesture
+      resume();
+      triggerPlay();
     }
   };
 
