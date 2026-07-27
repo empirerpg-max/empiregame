@@ -36,8 +36,8 @@ const API_URL =
 
 const SHEET_ID = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
 
-const ABA_MUSICAS     = "musicas";
-const ABA_MUSICVIDEOS = "musicvideos";
+const ABA_MUSICAS     = "Musicas";
+const ABA_MUSICVIDEOS = "Music Videos";
 const ABA_VIDEOS      = "videos";
 
 // ─── Cloudflare Worker (proxy de mídia Telegram) ───────────────────────────
