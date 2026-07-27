@@ -19,9 +19,17 @@ import {
   Minimize2,
   Maximize2,
 } from "lucide-react";
-import { usePlay, type PlayItem, extractYouTubeId, detectMediaType } from "@/lib/playContext";
+import {
+  usePlay,
+  type PlayItem,
+  extractYouTubeId,
+  detectMediaType,
+  isTelegramFileId,
+  telegramStreamUrl,
+  extractDriveId as ctxExtractDriveId,
+} from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")({
+export const Route = createFileRoute("/play/")(  {
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -41,9 +49,6 @@ const SHEET_ID = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
 const ABA_MUSICAS     = "Musicas";
 const ABA_MUSICVIDEOS = "Music Videos";
 const ABA_VIDEOS      = "videos";
-
-// ─── Cloudflare Worker (proxy de mídia Telegram) ───────────────────────────
-const TG_WORKER = "https://falling-cloud-c041.empirerpg-forum.workers.dev";
 
 // ─── Emoji picker ──────────────────────────────────────────────────────────
 const EMOJI_LIST = [
@@ -136,24 +141,20 @@ function getField(item: Record<string, string>, ...aliases: string[]): string {
 }
 
 function extractDriveId(str: string): string | null {
-  if (!str) return null;
-  const m = String(str).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(str).match(/id=([a-zA-Z0-9_-]+)/);
-  if (m) return m[1];
-  if (!/^https?:\/\//.test(str) && !str.includes("/") && str.length > 10) return str.trim();
-  return null;
+  return ctxExtractDriveId(str);
 }
 
 /**
  * Resolve qualquer identificador de mídia para uma URL reproduzível.
- * - file_id do Telegram (≥ 20 chars, sem "/" e sem "http"): roteia pelo Worker /file?id=
- * - URL t.me/... ou telegram.me/...: exibir botão externo (não embeddable)
+ * - file_id do Telegram → telegramStreamUrl() (empire-media-api /tg?file_id=)
+ * - URL t.me/... ou telegram.me/...: retorna diretamente (tratado como link externo)
  * - Qualquer outra URL: retorna diretamente
  */
 function resolveMediaUrl(src: string): string {
   if (!src) return "";
   if (src.startsWith("http")) return src;
-  if (/^[A-Za-z0-9_-]{20,}$/.test(src)) {
-    return `${TG_WORKER}/file?id=${src}`;
+  if (isTelegramFileId(src)) {
+    return telegramStreamUrl(src);
   }
   return src;
 }
@@ -172,14 +173,14 @@ function sheetCsvUrl(aba: string): string {
 
 /**
  * Resolve thumbnail de capa:
- * - file_id do Telegram → Worker /file?id=<id>
+ * - file_id do Telegram → telegramStreamUrl()
  * - Google Drive id / URL → lh3.googleusercontent
  * - Qualquer outra URL → direto
  */
 function resolveThumb(capa: string, size = 300): string {
   if (!capa) return "";
-  if (/^[A-Za-z0-9_-]{20,}$/.test(capa) && !capa.startsWith("http")) {
-    return `${TG_WORKER}/file?id=${capa}`;
+  if (isTelegramFileId(capa)) {
+    return telegramStreamUrl(capa);
   }
   const id = extractDriveId(capa);
   if (id) return `https://lh3.googleusercontent.com/d/${id}=w${size}`;
@@ -190,7 +191,7 @@ type ReacaoTipo = "emoji" | "gif" | "sticker";
 function detectReacaoTipo(val: string): ReacaoTipo {
   if (!val) return "emoji";
   if (val.startsWith("http") && (/\.gif(\?|$)/i.test(val) || /\/gif/i.test(val))) return "gif";
-  if (/^[A-Za-z0-9_-]{20,}$/.test(val) && !val.startsWith("http")) return "sticker";
+  if (isTelegramFileId(val)) return "sticker";
   return "emoji";
 }
 
@@ -200,7 +201,7 @@ function ReacaoMedia({ value }: { value: string }) {
     return <img src={value} alt="reação" className="h-10 w-auto rounded-lg object-contain" loading="lazy" decoding="async" />;
   }
   if (tipo === "sticker") {
-    const url = `${TG_WORKER}/file?id=${value}`;
+    const url = telegramStreamUrl(value);
     return <img src={url} alt="sticker" className="h-10 w-auto object-contain" loading="lazy" decoding="async" />;
   }
   return <span className="text-lg leading-none">{value}</span>;
@@ -431,8 +432,11 @@ function processChart(
 // ─── Video Modal (fullscreen 16:9) ─────────────────────────────────────────
 /**
  * Modal dedicado para reprodução de vídeo.
- * Suporta: YouTube embed, Google Drive iframe, MP4/WebM nativo, Telegram (link externo).
- * FIX: substitui o drive-iframe-wrap sobreposto ao player de música.
+ * Suporta: YouTube embed, Google Drive iframe, MP4/WebM nativo, Telegram (stream via Worker).
+ *
+ * FIX: todos os file_ids do Telegram agora usam telegramStreamUrl() do playContext,
+ * que aponta para empire-media-api.empirerpg-forum.workers.dev/tg?file_id=
+ * (rota correta), eliminando a divergência com o Worker falling-cloud-c041.
  */
 function VideoModal({ item, onClose }: { item: PlayItem; onClose: () => void }) {
   const src = item.audioSrc || "";
@@ -471,12 +475,11 @@ function VideoModal({ item, onClose }: { item: PlayItem; onClose: () => void }) 
       );
     }
 
-    // Raw Telegram file_id (não é URL) → stream via Worker
-    const isRawTgFileId = !!src && !/^https?:\/\//.test(src) && !src.includes("/") && /^[A-Za-z0-9_-]{20,}$/.test(src);
-    if (isRawTgFileId) {
+    // Telegram file_id → stream via Worker centralizado (empire-media-api /tg?file_id=)
+    if (isTelegramFileId(src)) {
       return (
         <video
-          src={`${TG_WORKER}/file?id=${src}`}
+          src={telegramStreamUrl(src)}
           controls
           autoPlay
           className="w-full h-full"
@@ -536,7 +539,7 @@ function VideoModal({ item, onClose }: { item: PlayItem; onClose: () => void }) 
       );
     }
 
-    // MP4/WebM/arquivo direto + telegram_file_id (via Worker) + qualquer URL http
+    // MP4/WebM/arquivo direto + qualquer URL http
     const mediaSrc = resolveMediaUrl(src);
     return (
       <video
@@ -715,7 +718,6 @@ function SongCardWithDate({
 
 /**
  * VideoCard — abre o VideoModal dedicado ao invés de disparar o player de música.
- * FIX: resolve o conflito do drive-iframe-wrap sobreposto ao botão de play.
  */
 function VideoCard({ item, queue: _queue }: { item: PlayItem; queue: PlayItem[] }) {
   const [modalOpen, setModalOpen] = useState(false);
@@ -1184,7 +1186,6 @@ function ClipesTab({ musicVideosDB, loading }: { musicVideosDB: SheetItem[]; loa
   );
   const list = subTab === "novos" ? novos : top;
 
-  // FIX: se weeks_video não existe, avisa o usuário em vez de renderizar lista desorganizada
   const hasWeeksData = useMemo(
     () => musicVideosDB.some((m) => !!getField(m, "weeks_video", "weeksvideo")),
     [musicVideosDB]
@@ -1252,7 +1253,6 @@ type Comentario = {
 /**
  * InlineMediaPlayer — player inline no tópico do fórum.
  * Vídeos abrem o VideoModal; músicas disparam o player de áudio.
- * FIX: file_ids do Telegram roteados via Worker.
  */
 function InlineMediaPlayer({ item }: { item: PlayItem }) {
   const { play } = usePlay();
@@ -1446,371 +1446,286 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
             </button>
             {letraExpandida && (
               <div className="px-4 pb-4">
-                <pre
-                  className="whitespace-pre-wrap font-sans text-xs text-foreground/75 leading-relaxed max-h-[60vh] overflow-y-auto pr-1"
-                  style={{ scrollbarWidth: "thin" }}
-                >
-                  {item.letra}
-                </pre>
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-sans leading-relaxed">{item.letra}</pre>
               </div>
             )}
           </div>
         )}
 
-        <div className="border-t border-white/[0.06] px-4 py-3 flex items-center gap-1.5 flex-wrap">
-          {QUICK_REACTIONS.map((e) => (
-            <button
-              key={e}
-              onClick={() => enviar(e)}
-              disabled={enviando}
-              className="text-lg leading-none px-2 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] active:bg-primary/20 active:border-primary/40 transition-all disabled:opacity-40"
-              aria-label={`Reagir com ${e}`}
-            >
-              {e}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {comentarios && comentarios.length > 0 && (
-        <ReacoesAgrupadas comentarios={comentarios} />
-      )}
-
-      <div className="space-y-2">
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 px-1">
-          💬 {comentarios === null ? "..." : `${comentarios.length} comentário${comentarios.length !== 1 ? "s" : ""}`}
-        </p>
-
-        {comentarios === null
-          ? Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-14 rounded-2xl bg-white/[0.03] animate-pulse" />
-            ))
-          : comentarios.length === 0
-          ? (
-            <div className="flex flex-col items-center gap-2 py-8 text-center">
-              <MessageSquare className="size-8 text-muted-foreground/20" />
-              <p className="text-[10px] text-muted-foreground/40 uppercase tracking-widest font-black">Seja o primeiro a comentar</p>
-            </div>
-          )
-          : comentarios.map((c, i) => (
-            <div key={i} className="flex gap-2 items-end">
-              <div className="size-7 rounded-full bg-primary/20 flex-shrink-0 grid place-items-center mb-0.5">
-                <span className="text-[10px] font-black text-primary uppercase">{c.nome.charAt(0)}</span>
-              </div>
-              <div className="max-w-[85%] bg-white/[0.05] border border-white/[0.07] rounded-[1.25rem] rounded-bl-sm px-3 py-2.5 space-y-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-primary">{c.nome}</p>
-                  {c.timestamp && (
-                    <p className="text-[9px] text-muted-foreground/30 flex-shrink-0">{formatRelativo(c.timestamp)}</p>
-                  )}
-                </div>
-                <p className="text-xs text-foreground/80 leading-relaxed">{c.texto}</p>
-                {c.reacao && (
-                  <div className="pt-1">
-                    <ReacaoMedia value={c.reacao} />
+        <div className="border-t border-white/[0.06] p-4 space-y-3">
+          {comentarios === null ? (
+            <SkeletonList rows={3} />
+          ) : comentarios.length === 0 ? (
+            <p className="text-center text-[10px] text-muted-foreground/40 py-4">
+              Nenhum comentário ainda. Seja o primeiro!
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <ReacoesAgrupadas comentarios={comentarios} />
+              {comentarios.map((c, i) => (
+                <div key={i} className="flex gap-2.5">
+                  <div className="size-7 rounded-full bg-primary/20 grid place-items-center flex-shrink-0 mt-0.5">
+                    <span className="text-[10px] font-black text-primary">{(c.nome?.[0] ?? "?").toUpperCase()}</span>
                   </div>
-                )}
-              </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-black uppercase tracking-tight">{c.nome}</span>
+                      {c.timestamp && (
+                        <span className="text-[9px] text-muted-foreground/40">{formatRelativo(c.timestamp)}</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 break-words">{c.texto}</p>
+                    {c.reacao && (
+                      <div className="mt-1">
+                        <ReacaoMedia value={c.reacao} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div ref={bottomRef} />
             </div>
-          ))
-        }
-        <div ref={bottomRef} />
-      </div>
-
-      {enviado && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-primary/10 border border-primary/20">
-          <span className="text-primary text-xs font-black">✓ Enviado! Atualizando...</span>
+          )}
         </div>
-      )}
 
-      <div className="sticky bottom-0 pt-2 pb-1 space-y-2 bg-background/80" style={{ backdropFilter: "blur(16px)" }}>
-        <input
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          placeholder="Seu nome (opcional)"
-          className="w-full h-9 bg-white/5 border border-white/10 rounded-2xl px-3 text-xs font-bold uppercase tracking-tight outline-none focus:border-primary/40 transition-colors"
-        />
-        <div className="flex items-end gap-2">
-          <div className="relative flex-1">
+        <div className="border-t border-white/[0.06] p-4 space-y-3">
+          <input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Seu nome (opcional)"
+            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-2xl px-4 py-2.5 text-xs placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/40 transition-colors"
+          />
+          <div className="relative">
             <textarea
               ref={textareaRef}
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); }
-              }}
-              placeholder="Escreva uma mensagem..."
+              placeholder="Escreva um comentário..."
               rows={1}
-              className="w-full bg-white/5 border border-white/10 rounded-2xl px-3 py-2.5 pr-9 text-xs font-bold outline-none focus:border-primary/40 resize-none overflow-hidden leading-relaxed transition-colors"
-              style={{ minHeight: "40px", maxHeight: "120px" }}
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-2xl px-4 py-2.5 pr-10 text-xs placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/40 transition-colors resize-none overflow-hidden"
             />
             <button
-              type="button"
               onClick={() => setShowPicker((v) => !v)}
-              className="absolute right-2.5 bottom-2.5 text-muted-foreground/50 active:text-primary transition-colors"
-              aria-label="Inserir emoji"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 active:text-primary transition-colors"
+              aria-label="Emoji"
             >
               <Smile className="size-4" />
             </button>
           </div>
-          <button
-            onClick={() => enviar()}
-            disabled={enviando || !texto.trim()}
-            className="size-10 rounded-full bg-primary text-primary-foreground grid place-items-center disabled:opacity-30 flex-shrink-0 transition-opacity"
-            aria-label="Enviar"
-          >
-            {enviando
-              ? <span className="size-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-              : <Send className="size-4" />
-            }
-          </button>
-        </div>
-        {showPicker && (
-          <div className="bg-white/[0.06] border border-white/10 rounded-2xl p-3">
-            <div className="flex flex-wrap gap-1.5">
+
+          {showPicker && (
+            <div className="grid grid-cols-10 gap-1 p-2 bg-white/[0.06] border border-white/[0.10] rounded-2xl">
               {EMOJI_LIST.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  onClick={() => insertEmoji(e)}
-                  className="text-xl leading-none p-1 rounded-lg active:bg-white/10 transition-colors"
-                  aria-label={e}
-                >
+                <button key={e} onClick={() => insertEmoji(e)} className="text-lg leading-none p-1 rounded-lg active:bg-white/10 transition-colors">
                   {e}
                 </button>
               ))}
             </div>
+          )}
+
+          <div className="flex gap-2 items-center flex-wrap">
+            {QUICK_REACTIONS.map((e) => (
+              <button
+                key={e}
+                onClick={() => enviar(e)}
+                className="text-lg leading-none p-2 rounded-full bg-white/[0.04] border border-white/[0.08] active:bg-primary/20 active:border-primary/30 transition-all"
+                aria-label={`Reagir com ${e}`}
+              >
+                {e}
+              </button>
+            ))}
+            <button
+              onClick={() => enviar()}
+              disabled={enviando || (!texto.trim())}
+              className="ml-auto flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest disabled:opacity-40 transition-opacity"
+            >
+              {enviando ? (
+                <span className="animate-spin size-3 border border-current border-t-transparent rounded-full" />
+              ) : enviado ? (
+                "✓ Enviado"
+              ) : (
+                <><Send className="size-3" /> Enviar</>
+              )}
+            </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type ForumSubTab = "musicas" | "musicvideos" | "videos";
+
+function ForumTab({
+  musicasDB, musicVideosDB, videosDB, loading,
+}: {
+  musicasDB: SheetItem[];
+  musicVideosDB: SheetItem[];
+  videosDB: SheetItem[];
+  loading: boolean;
+}) {
+  const [subTab, setSubTab] = useState<ForumSubTab>("musicas");
+  const [selected, setSelected] = useState<{ item: PlayItem; cat: ForumSubTab } | null>(null);
+
+  const musicas = useMemo<PlayItem[]>(
+    () => [...musicasDB].sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a)).map((m) => toPlayItemMusica(m)),
+    [musicasDB]
+  );
+  const musicVideos = useMemo<PlayItem[]>(
+    () => [...musicVideosDB].sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a)).map((m) => toPlayItem(m, "musicvideo")),
+    [musicVideosDB]
+  );
+  const videos = useMemo<PlayItem[]>(
+    () => [...videosDB].sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a)).map((m) => toPlayItem(m, "video")),
+    [videosDB]
+  );
+
+  if (selected) {
+    return (
+      <ForumTopicoDetalhe
+        item={selected.item}
+        categoria={selected.cat}
+        onBack={() => setSelected(null)}
+      />
+    );
+  }
+
+  const SUB_FORUM_TABS: { id: ForumSubTab; label: string }[] = [
+    { id: "musicas",     label: "🎵 Músicas" },
+    { id: "musicvideos", label: "🎬 Clipes" },
+    { id: "videos",      label: "📺 Vídeos" },
+  ];
+
+  const activeList = subTab === "musicas" ? musicas : subTab === "musicvideos" ? musicVideos : videos;
+
+  if (loading) return <SkeletonList rows={6} />;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
+        {SUB_FORUM_TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setSubTab(id)}
+            className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap flex-shrink-0 transition-all ${
+              subTab === id ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-1">
+        {activeList.length === 0 ? (
+          <p className="text-center text-xs text-muted-foreground py-12 opacity-40">Nenhum item ainda.</p>
+        ) : (
+          activeList.map((item, i) => (
+            <button
+              key={item.id}
+              onClick={() => setSelected({ item, cat: subTab })}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-white/[0.04] border border-transparent transition-all text-left"
+            >
+              <div className="size-10 rounded-xl overflow-hidden bg-primary/10 flex-shrink-0">
+                {item.capa
+                  ? <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                  : <div className="w-full h-full grid place-items-center"><Music className="size-4 text-primary/30" /></div>
+                }
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black truncate uppercase tracking-tight">{item.titulo || "—"}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{item.artista}</p>
+              </div>
+              <MessageSquare className="size-3.5 text-muted-foreground/30 flex-shrink-0" />
+            </button>
+          ))
         )}
       </div>
     </div>
   );
 }
 
-function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: {
-  musicasDB: SheetItem[];
-  musicVideosDB: SheetItem[];
-  videosDB: SheetItem[];
-  loading: boolean;
-}) {
-  const [cat, setCat] = useState<"musicas" | "musicvideos" | "videos">("musicas");
-  const [detalhe, setDetalhe] = useState<{ item: PlayItem; cat: string } | null>(null);
-
-  const list = useMemo<PlayItem[]>(() => {
-    if (cat === "musicas") return musicasDB.map((m) => toPlayItemMusica(m));
-    if (cat === "musicvideos") return musicVideosDB.map((m) => toPlayItem(m, "musicvideo"));
-    return videosDB.map((m) => toPlayItem(m, "video"));
-  }, [cat, musicasDB, musicVideosDB, videosDB]);
-
-  if (loading) return <SkeletonList rows={5} />;
-  if (detalhe) return <ForumTopicoDetalhe item={detalhe.item} categoria={detalhe.cat} onBack={() => setDetalhe(null)} />;
-
-  const catIcon = cat === "musicas" ? "🎵" : cat === "musicvideos" ? "🎬" : "📺";
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 px-1">
-        <MessageSquare className="size-4 text-primary" />
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Empire Fórum</p>
-          <p className="text-[9px] text-muted-foreground/50">Comente e reaja às músicas e vídeos</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
-        {(["musicas", "musicvideos", "videos"] as const).map((t) => (
-          <button key={t} onClick={() => { setCat(t); setDetalhe(null); }}
-            className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-              cat === t ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground"
-            }`}>
-            {t === "musicas" ? "Músicas" : t === "musicvideos" ? "Clipes" : "Vídeos"}
-          </button>
-        ))}
-      </div>
-
-      <p className="text-[9px] text-muted-foreground/40 uppercase tracking-widest font-black px-1">
-        {catIcon} {list.length} tópico{list.length !== 1 ? "s" : ""}
-      </p>
-
-      <div className="space-y-2">
-        {list.length === 0
-          ? (
-            <div className="flex flex-col items-center gap-3 py-12">
-              <MessageSquare className="size-10 text-muted-foreground/20" />
-              <p className="text-[10px] text-muted-foreground/40 uppercase tracking-widest font-black">Nenhum tópico ainda</p>
-            </div>
-          )
-          : list.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setDetalhe({ item, cat })}
-              className="w-full flex items-center gap-3 p-3 bg-white/[0.03] border border-white/5 rounded-[1.5rem] active:border-primary/30 transition-colors text-left"
-            >
-              <div className="size-12 rounded-xl overflow-hidden bg-primary/10 flex-shrink-0">
-                {item.capa
-                  ? <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" />
-                  : <div className="w-full h-full grid place-items-center"><Music className="size-4 text-primary/40" /></div>
-                }
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-black text-xs truncate uppercase tracking-tight">{item.titulo || "—"}</p>
-                {item.artista && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{item.artista}</p>}
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-[9px] text-primary/50 font-bold">{catIcon} Tópico aberto</p>
-                  {item.letra && (
-                    <span className="text-[9px] text-muted-foreground/40 font-bold">· 📝 com letra</span>
-                  )}
-                </div>
-              </div>
-              <div className="flex-shrink-0 flex items-center gap-1 text-muted-foreground/30">
-                <MessageSquare className="size-3.5" />
-                <ChevronRight className="size-3.5" />
-              </div>
-            </button>
-          ))
-        }
-      </div>
-    </div>
-  );
-}
-
-// ─── Main Page ─────────────────────────────────────────────────────────────
-/**
- * FIX — Carregamento em 2 fases:
- * Fase 1 (init): busca só "musicas" → renderiza home, lançamentos, swiper → showLoading(false)
- * Fase 2 (background): busca musicvideos + videos + charts em paralelo sem bloquear a tela
- *
- * FIX — Lazy render: tabs secundárias (clipes, vídeos, fórum) só montam quando visitadas pela
- * primeira vez, via `visitedTabs` set. Zero DOM desnecessário no init.
- */
-export default function PlayHomePage() {
-  const [musicasDB, setMusicasDB]         = useState<SheetItem[]>([]);
+// ─── Main Page ───────────────────────────────────────────────────────────────
+function PlayHomePage() {
+  const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [musicasDB, setMusicasDB] = useState<SheetItem[]>([]);
   const [musicVideosDB, setMusicVideosDB] = useState<SheetItem[]>([]);
-  const [videosDB, setVideosDB]           = useState<SheetItem[]>([]);
-
-  // Fase 1 concluída quando músicas carregam
-  const [phase1Done, setPhase1Done]       = useState(false);
-  // Fase 2 concluída quando tudo carrega
-  const [phase2Done, setPhase2Done]       = useState(false);
-
-  const [charts, setCharts]               = useState<ChartData[]>([]);
+  const [videosDB, setVideosDB] = useState<SheetItem[]>([]);
+  const [charts, setCharts] = useState<ChartData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [chartsLoading, setChartsLoading] = useState(true);
-  const [chartsError, setChartsError]     = useState("");
+  const [chartsError, setChartsError] = useState("");
 
-  const [activeTab, setActiveTab]         = useState<Tab>("home");
-  // Lazy render: mantém quais tabs já foram visitadas
-  const [visitedTabs, setVisitedTabs]     = useState<Set<Tab>>(new Set(["home"]));
-  const tabsRef = useRef<HTMLDivElement>(null);
-
-  // ── Fase 1: só músicas (mais crítico para home) ──────────────────────────
+  // Carrega dados principais
   useEffect(() => {
-    fetchSheetValues(ABA_MUSICAS).then(({ values, error }) => {
-      setMusicasDB(sheetRowsToObjects(values));
-      if (error) console.warn("[Play] musicas:", error);
-      setPhase1Done(true);
-    });
-  }, []);
-
-  // ── Fase 2: clipes + vídeos + charts em background após fase 1 ──────────
-  useEffect(() => {
-    if (!phase1Done) return;
-
-    // MusicVideos + Videos em paralelo
     Promise.all([
+      fetchSheetValues(ABA_MUSICAS),
       fetchSheetValues(ABA_MUSICVIDEOS),
       fetchSheetValues(ABA_VIDEOS),
-    ]).then(([rmv, rv]) => {
-      setMusicVideosDB(sheetRowsToObjects(rmv.values));
-      setVideosDB(sheetRowsToObjects(rv.values));
-      if (rmv.error) console.warn("[Play] musicvideos:", rmv.error);
-      if (rv.error)  console.warn("[Play] videos:",      rv.error);
-      setPhase2Done(true);
+    ]).then(([mus, mv, vid]) => {
+      setMusicasDB(sheetRowsToObjects(mus.values));
+      setMusicVideosDB(sheetRowsToObjects(mv.values));
+      setVideosDB(sheetRowsToObjects(vid.values));
+      setLoading(false);
     });
-
-    // Charts em paralelo (independente de clipes/vídeos)
-    Promise.all(
-      CHARTS_CONFIG.map((cfg) =>
-        fetchSheetValues(cfg.aba).then((res) => ({ cfg, values: res.values, error: res.error }))
-      )
-    ).then((results) => {
-      const errors: string[] = [];
-      const built: ChartData[] = results
-        .map(({ cfg, values, error }) => {
-          if (error) errors.push(`[${cfg.aba}] ${error}`);
-          if (!values || values.length < 2) return null;
-          const { entries, capaDaPlaylist } = processChart(values, cfg.isVideo, cfg.maxEntries);
-          if (!entries.length) {
-            errors.push(`[${cfg.aba}] 0 entradas. Headers: ${values[0]?.join(" | ")}`);
-            return null;
-          }
-          return {
-            nome: cfg.nome,
-            subtitulo: cfg.subtitulo,
-            icone: cfg.icone,
-            cor: cfg.cor,
-            capaDaPlaylist,
-            entries,
-          } as ChartData;
-        })
-        .filter((c): c is ChartData => c !== null);
-      setCharts(built);
-      if (errors.length) setChartsError(errors.join(" │ "));
-    })
-    .catch((e) => setChartsError(String(e)))
-    .finally(() => setChartsLoading(false));
-  }, [phase1Done]);
-
-  const handleTabChange = useCallback((t: Tab) => {
-    setActiveTab(t);
-    setVisitedTabs((prev) => new Set([...prev, t]));
-    tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, []);
 
-  // Carregando Fase 1
-  const loading = !phase1Done;
-  // Clipes e vídeos ficam em loading até fase 2
-  const loadingSecundario = !phase2Done;
+  // Carrega charts
+  useEffect(() => {
+    Promise.all(
+      CHARTS_CONFIG.map((cfg) => fetchSheetValues(cfg.aba))
+    ).then((results) => {
+      const errors: string[] = [];
+      const loaded: ChartData[] = [];
+      results.forEach((r, i) => {
+        const cfg = CHARTS_CONFIG[i];
+        if (r.error) { errors.push(r.error); return; }
+        const { entries, capaDaPlaylist } = processChart(r.values, cfg.isVideo, cfg.maxEntries);
+        if (entries.length === 0) return;
+        loaded.push({
+          nome: cfg.nome,
+          subtitulo: cfg.subtitulo,
+          icone: cfg.icone,
+          cor: cfg.cor,
+          capaDaPlaylist,
+          entries,
+        });
+      });
+      setCharts(loaded);
+      setChartsError(errors.join(" | "));
+      setChartsLoading(false);
+    });
+  }, []);
 
   return (
-    <main className="flex-1 pb-40">
-      <div
-        className="px-4 pt-6 pb-6"
-        style={{ background: "linear-gradient(180deg, oklch(0.22 0.10 280 / 0.55), oklch(0.12 0 0) 100%)" }}
-      >
-        <div className="flex items-center gap-2 mb-1">
-          <Radio className="size-4 text-primary" />
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Empire Play</p>
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-white/[0.06] px-4 pt-safe-top">
+        <div className="flex items-center gap-2 py-3">
+          <Radio className="size-5 text-primary flex-shrink-0" />
+          <h1 className="text-sm font-black uppercase tracking-widest">Empire Play</h1>
         </div>
-        <h1 className="text-2xl font-black tracking-tighter">Ouça agora</h1>
-        <p className="text-xs text-muted-foreground mt-1">Músicas, clipes e vídeos do universo Empire</p>
-      </div>
-
-      <div
-        ref={tabsRef}
-        className="sticky top-[calc(4rem+env(safe-area-inset-top))] z-30 bg-background/90 border-b border-white/[0.06]"
-        style={{ backdropFilter: "blur(20px) saturate(160%)" }}
-      >
-        <div className="flex items-stretch overflow-x-auto scrollbar-hide px-2">
-          {TABS.map(({ id, label, icon: Icon }) => {
-            const active = activeTab === id;
-            return (
-              <button
-                key={id}
-                onClick={() => handleTabChange(id)}
-                className={`flex items-center gap-1.5 px-4 py-3.5 text-[11px] font-black uppercase tracking-widest whitespace-nowrap border-b-2 transition-all flex-shrink-0 ${
-                  active ? "border-primary text-primary" : "border-transparent text-muted-foreground active:text-foreground"
-                }`}
-              >
-                <Icon className="size-3.5" strokeWidth={active ? 2.5 : 2} />
-                {label}
-              </button>
-            );
-          })}
+        {/* Tabs */}
+        <div className="flex gap-0 overflow-x-auto scrollbar-hide -mb-px">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest whitespace-nowrap flex-shrink-0 border-b-2 transition-all ${
+                activeTab === id
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground"
+              }`}
+            >
+              <Icon className="size-3.5" />
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="px-4 pt-6">
-        {/* Home — sempre montada */}
+      {/* Content */}
+      <div className="px-4 py-5 pb-32">
         {activeTab === "home" && (
           <HomeTab
             musicasDB={musicasDB}
@@ -1819,43 +1734,21 @@ export default function PlayHomePage() {
             chartsLoading={chartsLoading}
             chartsError={chartsError}
             loading={loading}
-            onTabChange={handleTabChange}
+            onTabChange={setActiveTab}
           />
         )}
-
-        {/* Músicas — lazy: só monta quando visitada pela 1ª vez */}
-        {visitedTabs.has("musicas") && (
-          <div className={activeTab === "musicas" ? "" : "hidden"}>
-            <MusicasTab musicasDB={musicasDB} loading={loading} />
-          </div>
-        )}
-
-        {/* Clipes — lazy + espera fase 2 */}
-        {visitedTabs.has("clipes") && (
-          <div className={activeTab === "clipes" ? "" : "hidden"}>
-            <ClipesTab musicVideosDB={musicVideosDB} loading={loadingSecundario} />
-          </div>
-        )}
-
-        {/* Vídeos — lazy + espera fase 2 */}
-        {visitedTabs.has("videos") && (
-          <div className={activeTab === "videos" ? "" : "hidden"}>
-            <VideosTab videosDB={videosDB} loading={loadingSecundario} />
-          </div>
-        )}
-
-        {/* Fórum — lazy: dados das 3 fontes */}
-        {visitedTabs.has("forum") && (
-          <div className={activeTab === "forum" ? "" : "hidden"}>
-            <ForumTab
-              musicasDB={musicasDB}
-              musicVideosDB={musicVideosDB}
-              videosDB={videosDB}
-              loading={loading}
-            />
-          </div>
+        {activeTab === "musicas" && <MusicasTab musicasDB={musicasDB} loading={loading} />}
+        {activeTab === "clipes" && <ClipesTab musicVideosDB={musicVideosDB} loading={loading} />}
+        {activeTab === "videos" && <VideosTab videosDB={videosDB} loading={loading} />}
+        {activeTab === "forum" && (
+          <ForumTab
+            musicasDB={musicasDB}
+            musicVideosDB={musicVideosDB}
+            videosDB={videosDB}
+            loading={loading}
+          />
         )}
       </div>
-    </main>
+    </div>
   );
 }
