@@ -14,13 +14,10 @@ import {
   AlertCircle,
   PlusCircle,
   Smile,
-  Heart,
-  ThumbsUp,
-  Laugh,
 } from "lucide-react";
 import { usePlay, type PlayItem, extractYouTubeId, detectMediaType } from "@/lib/playContext";
 
-export const Route = createFileRoute("/play/")(({
+export const Route = createFileRoute("/play/")({
   component: PlayHomePage,
   head: () => ({
     meta: [
@@ -29,7 +26,7 @@ export const Route = createFileRoute("/play/")(({
       { property: "og:description", content: "Ouça as músicas, clipes e vídeos do Empire RPG." },
     ],
   }),
-}));
+});
 
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
@@ -40,7 +37,7 @@ const API_URL =
 // ID da planilha principal — conteúdo buscado via CSV direto (sem GAS, sem timeout)
 const SHEET_ID = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
 
-// Nomes das abas de conteúdo na planilha (ajuste se necessário)
+// Nomes das abas de conteúdo na planilha
 const ABA_MUSICAS      = "musicas";
 const ABA_MUSICVIDEOS  = "musicvideos";
 const ABA_VIDEOS       = "videos";
@@ -66,7 +63,6 @@ const QUICK_REACTIONS = ["❤️", "🔥", "👏", "😂", "🤩", "😎", "💯
 function resolveMediaUrl(src: string): string {
   if (!src) return "";
   if (src.startsWith("http")) return src;
-  // file_id do Telegram: string alfanumérica longa sem barras
   if (/^[A-Za-z0-9_-]{20,}$/.test(src)) {
     return `${TG_WORKER}/file?id=${src}`;
   }
@@ -175,11 +171,9 @@ function extractDriveId(str: string): string | null {
  */
 function resolveThumb(capa: string, size = 300): string {
   if (!capa) return "";
-  // Telegram file_id puro
   if (/^[A-Za-z0-9_-]{20,}$/.test(capa) && !capa.startsWith("http")) {
     return `${TG_WORKER}/file?id=${capa}`;
   }
-  // Google Drive
   const id = extractDriveId(capa);
   if (id) return `https://lh3.googleusercontent.com/d/${id}=w${size}`;
   return capa;
@@ -261,6 +255,22 @@ function formatDate(ts: number): string {
   const month = String(d.getUTCMonth() + 1).padStart(2, "0");
   const year  = d.getUTCFullYear();
   return `${day}/${month}/${year}`;
+}
+
+/**
+ * Retorna timestamp relativo estilo Telegram:
+ * "agora", "há 5m", "há 2h", "há 3d", "DD/MM/YYYY"
+ */
+function formatRelativo(isoStr: string): string {
+  if (!isoStr) return "";
+  const ts = new Date(isoStr).getTime();
+  if (isNaN(ts)) return isoStr;
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return "agora";
+  if (diff < 3_600_000) return `há ${Math.floor(diff / 60_000)}m`;
+  if (diff < 86_400_000) return `há ${Math.floor(diff / 3_600_000)}h`;
+  if (diff < 7 * 86_400_000) return `há ${Math.floor(diff / 86_400_000)}d`;
+  return formatDate(ts);
 }
 
 function toPlayItemMusica(m: SheetItem): PlayItem {
@@ -853,7 +863,7 @@ function ChartDetailView({ chart, onBack }: { chart: ChartData; onBack: () => vo
 // ─── Home Tab ──────────────────────────────────────────────────────────────
 function HomeTab({
   musicasDB,
-  playMusicVideosDB,
+  musicVideosDB,
   charts,
   chartsLoading,
   chartsError,
@@ -861,7 +871,7 @@ function HomeTab({
   onTabChange,
 }: {
   musicasDB: SheetItem[];
-  playMusicVideosDB: SheetItem[];
+  musicVideosDB: SheetItem[];
   charts: ChartData[];
   chartsLoading: boolean;
   chartsError: string;
@@ -888,13 +898,14 @@ function HomeTab({
     [musicasDB]
   );
 
+  // FIX: reutiliza musicVideosDB já carregado (antes buscava "Music Videos" separado)
   const lancVideos = useMemo<PlayItem[]>(
     () =>
-      [...playMusicVideosDB]
+      [...musicVideosDB]
         .sort((a, b) => parseDataLancamento(b) - parseDataLancamento(a))
         .slice(0, 5)
         .map((m) => toPlayItem(m, "musicvideo")),
-    [playMusicVideosDB]
+    [musicVideosDB]
   );
 
   if (openChart) return <ChartDetailView chart={openChart} onBack={() => setOpenChart(null)} />;
@@ -1179,21 +1190,23 @@ function VideosTab({ videosDB, loading }: { videosDB: SheetItem[]; loading: bool
   );
 }
 
-// ─── Forum Tab ─────────────────────────────────────────────────────────────
-type Comentario = { nome: string; texto: string; reacao?: string };
+// ─── Forum ─────────────────────────────────────────────────────────────────
+type Comentario = {
+  nome: string;
+  texto: string;
+  reacao?: string;
+  timestamp?: string;
+};
 
 // ─── InlineMediaPlayer ─────────────────────────────────────────────────────
-// Detecta o tipo correto e renderiza YouTube iframe OU <video> nativo OU botão play
 function InlineMediaPlayer({ item }: { item: PlayItem }) {
   const { play } = usePlay();
   const src = item.audioSrc || "";
   const isVideo = item.categoria === "video" || item.categoria === "musicvideo";
 
-  // Detecta YouTube usando as funções já existentes no playContext
   const ytId = extractYouTubeId(src);
   const mediaType = detectMediaType(src);
 
-  // Caso 1: é vídeo E é YouTube → iframe embed
   if (isVideo && (mediaType === "youtube" || ytId)) {
     const embedId = ytId || src;
     return (
@@ -1209,7 +1222,6 @@ function InlineMediaPlayer({ item }: { item: PlayItem }) {
     );
   }
 
-  // Caso 2: é vídeo E é Drive/Telegram → <video> nativo via resolveMediaUrl
   if (isVideo && src) {
     const mediaSrc = resolveMediaUrl(src);
     return (
@@ -1223,7 +1235,6 @@ function InlineMediaPlayer({ item }: { item: PlayItem }) {
     );
   }
 
-  // Caso 3: áudio / sem src → botão play do MiniPlayer
   return (
     <button
       onClick={() => play(item, [item], { autoPlay: true })}
@@ -1234,6 +1245,35 @@ function InlineMediaPlayer({ item }: { item: PlayItem }) {
   );
 }
 
+// ─── Reações agrupadas estilo Telegram ────────────────────────────────────
+function ReacoesAgrupadas({ comentarios }: { comentarios: Comentario[] }) {
+  const grupos = useMemo(() => {
+    const map: Record<string, number> = {};
+    comentarios.forEach((c) => {
+      if (c.reacao) {
+        map[c.reacao] = (map[c.reacao] || 0) + 1;
+      }
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }, [comentarios]);
+
+  if (!grupos.length) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1.5 px-1">
+      {grupos.map(([emoji, count]) => (
+        <div
+          key={emoji}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.06] border border-white/[0.10] text-[11px] font-bold"
+        >
+          <ReacaoMedia value={emoji} />
+          {count > 1 && <span className="text-muted-foreground">{count}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Forum Topico Detalhe (estilo Telegram) ────────────────────────────────
 function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categoria: string; onBack: () => void }) {
   const [comentarios, setComentarios] = useState<Comentario[] | null>(null);
@@ -1241,11 +1281,12 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
   const [texto, setTexto] = useState("");
   const [showPicker, setShowPicker] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  const [reacaoRapida, setReacaoRapida] = useState<string | null>(null);
+  const [enviado, setEnviado] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const load = () =>
-    fetch(`${API_URL}?action=comentarios&categoria=${categoria}&idTopico=${item.id}`)
+    fetch(`${API_URL}?action=comentarios&categoria=${categoria}&idTopico=${encodeURIComponent(item.id)}`)
       .then((r) => r.json())
       .then((j) =>
         setComentarios(
@@ -1264,6 +1305,10 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
               getField(c,
                 "reacao", "reação", "emoji", "reaction",
               ) || undefined,
+            timestamp:
+              getField(c,
+                "timestamp", "data", "criado_em", "created_at", "hora",
+              ) || undefined,
           }))
         )
       )
@@ -1278,6 +1323,13 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [texto]);
+
+  // Scroll para o fim ao carregar comentários
+  useEffect(() => {
+    if (comentarios !== null) {
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    }
+  }, [comentarios]);
 
   const insertEmoji = (e: string) => {
     const el = textareaRef.current;
@@ -1298,41 +1350,64 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
 
   const enviar = async (emojiOverride?: string) => {
     const comentarioTexto = texto.trim();
-    const emojiEnvio = emojiOverride || reacaoRapida || undefined;
+    const emojiEnvio = emojiOverride || undefined;
 
-    // Permite enviar só reação rápida sem texto
     if (!comentarioTexto && !emojiEnvio) return;
+    if (enviando) return;
 
     setEnviando(true);
-    await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "novoComentario",
-        categoria,
-        idTopico: item.id,
-        nomeJogador: nome.trim() || "Anônimo",
-        comentario: comentarioTexto || "👍",
-        emoji: emojiEnvio,
-      }),
-    });
-    setTexto("");
-    setReacaoRapida(null);
-    setEnviando(false);
-    load();
+    setEnviado(false);
+
+    try {
+      await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "novoComentario",
+          categoria,
+          idTopico: item.id,
+          nomeJogador: nome.trim() || "Anônimo",
+          comentario: comentarioTexto || emojiEnvio || "👍",
+          emoji: emojiEnvio,
+        }),
+      });
+      setTexto("");
+      setEnviado(true);
+      // FIX: aguarda 800ms para o GAS gravar antes de recarregar
+      setTimeout(() => {
+        load();
+        setEnviado(false);
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 150);
+      }, 800);
+    } catch {
+      // silencia erro de rede — comentário pode ter sido gravado mesmo assim
+    } finally {
+      setEnviando(false);
+    }
   };
+
+  const catLabel =
+    categoria === "musicas" ? "🎵 Músicas"
+    : categoria === "musicvideos" ? "🎬 Clipes"
+    : "📺 Vídeos";
 
   return (
     <div className="space-y-4">
-      {/* Back */}
+      {/* Back — estilo Telegram com nome do canal */}
       <button onClick={onBack} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground active:text-primary transition-colors">
-        <ChevronLeft className="size-4" /> Tópicos
+        <ChevronLeft className="size-4" />
+        <span>{catLabel}</span>
       </button>
 
-      {/* Header do tópico — estilo mensagem Telegram */}
+      {/* Header do tópico — card estilo mensagem Telegram fixada */}
       <div className="rounded-[1.5rem] overflow-hidden bg-white/[0.03] border border-white/[0.06]">
-        {/* capa + player */}
+        {/* capa + info */}
         <div className="p-4 space-y-3">
+          {/* Label de canal estilo Telegram */}
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-primary/70">{catLabel}</span>
+            <span className="text-[9px] text-muted-foreground/40">· tópico</span>
+          </div>
           <div className="flex items-start gap-3">
             <div className="size-14 rounded-2xl overflow-hidden bg-primary/10 flex-shrink-0">
               {item.capa
@@ -1346,7 +1421,7 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
             </div>
           </div>
 
-          {/* Player inline — usa InlineMediaPlayer que detecta YouTube/Drive/audio */}
+          {/* Player inline */}
           <InlineMediaPlayer item={item} />
         </div>
 
@@ -1376,11 +1451,17 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
         </div>
       </div>
 
-      {/* Comentários — estilo balões Telegram */}
+      {/* Reações agrupadas estilo Telegram */}
+      {comentarios && comentarios.length > 0 && (
+        <ReacoesAgrupadas comentarios={comentarios} />
+      )}
+
+      {/* Comentários — balões estilo Telegram */}
       <div className="space-y-2">
         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 px-1">
-          💬 Comentários
+          💬 {comentarios === null ? "..." : `${comentarios.length} comentário${comentarios.length !== 1 ? "s" : ""}`}
         </p>
+
         {comentarios === null
           ? Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="h-14 rounded-2xl bg-white/[0.03] animate-pulse" />
@@ -1402,7 +1483,12 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
                 </span>
               </div>
               <div className="max-w-[85%] bg-white/[0.05] border border-white/[0.07] rounded-[1.25rem] rounded-bl-sm px-3 py-2.5 space-y-1">
-                <p className="text-[10px] font-black uppercase tracking-wide text-primary">{c.nome}</p>
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-primary">{c.nome}</p>
+                  {c.timestamp && (
+                    <p className="text-[9px] text-muted-foreground/30 flex-shrink-0">{formatRelativo(c.timestamp)}</p>
+                  )}
+                </div>
                 <p className="text-xs text-foreground/80 leading-relaxed">{c.texto}</p>
                 {c.reacao && (
                   <div className="pt-1">
@@ -1413,7 +1499,15 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
             </div>
           ))
         }
+        <div ref={bottomRef} />
       </div>
+
+      {/* Feedback de envio */}
+      {enviado && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-primary/10 border border-primary/20">
+          <span className="text-primary text-xs font-black">✓ Enviado! Atualizando...</span>
+        </div>
+      )}
 
       {/* Form de envio — estilo input Telegram */}
       <div className="sticky bottom-0 pt-2 pb-1 space-y-2 bg-background/80" style={{ backdropFilter: "blur(16px)" }}>
@@ -1457,7 +1551,10 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
             className="size-10 rounded-full bg-primary text-primary-foreground grid place-items-center disabled:opacity-30 flex-shrink-0 transition-opacity"
             aria-label="Enviar"
           >
-            <Send className="size-4" />
+            {enviando
+              ? <span className="size-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+              : <Send className="size-4" />
+            }
           </button>
         </div>
 
@@ -1483,13 +1580,19 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
   );
 }
 
-// ─── Forum Tab (lista de tópicos) ──────────────────────────────────────────
-function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: SheetItem[]; musicVideosDB: SheetItem[]; videosDB: SheetItem[]; loading: boolean }) {
+// ─── Forum Tab (lista de tópicos estilo canal Telegram) ────────────────────
+function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: {
+  musicasDB: SheetItem[];
+  musicVideosDB: SheetItem[];
+  videosDB: SheetItem[];
+  loading: boolean;
+}) {
   const [cat, setCat] = useState<"musicas" | "musicvideos" | "videos">("musicas");
   const [detalhe, setDetalhe] = useState<{ item: PlayItem; cat: string } | null>(null);
 
+  // FIX: músicas agora usa toPlayItemMusica (aliases corretos para audioSrc/capa)
   const list = useMemo<PlayItem[]>(() => {
-    if (cat === "musicas") return musicasDB.map((m) => toPlayItem(m, "musica"));
+    if (cat === "musicas") return musicasDB.map((m) => toPlayItemMusica(m));
     if (cat === "musicvideos") return musicVideosDB.map((m) => toPlayItem(m, "musicvideo"));
     return videosDB.map((m) => toPlayItem(m, "video"));
   }, [cat, musicasDB, musicVideosDB, videosDB]);
@@ -1497,8 +1600,19 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
   if (loading) return <SkeletonList rows={5} />;
   if (detalhe) return <ForumTopicoDetalhe item={detalhe.item} categoria={detalhe.cat} onBack={() => setDetalhe(null)} />;
 
+  const catIcon = cat === "musicas" ? "🎵" : cat === "musicvideos" ? "🎬" : "📺";
+
   return (
     <div className="space-y-4">
+      {/* Header canal estilo Telegram */}
+      <div className="flex items-center gap-2 px-1">
+        <MessageSquare className="size-4 text-primary" />
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Empire Fórum</p>
+          <p className="text-[9px] text-muted-foreground/50">Comente e reaja às músicas e vídeos</p>
+        </div>
+      </div>
+
       <div className="grid grid-cols-3 gap-2 p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
         {(["musicas", "musicvideos", "videos"] as const).map((t) => (
           <button key={t} onClick={() => { setCat(t); setDetalhe(null); }}
@@ -1510,6 +1624,11 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
         ))}
       </div>
 
+      {/* Contagem */}
+      <p className="text-[9px] text-muted-foreground/40 uppercase tracking-widest font-black px-1">
+        {catIcon} {list.length} tópico{list.length !== 1 ? "s" : ""}
+      </p>
+
       <div className="space-y-2">
         {list.length === 0
           ? (
@@ -1519,18 +1638,26 @@ function ForumTab({ musicasDB, musicVideosDB, videosDB, loading }: { musicasDB: 
             </div>
           )
           : list.map((item) => (
-            <button key={item.id} onClick={() => setDetalhe({ item, cat })}
-              className="w-full flex items-center gap-3 p-3 bg-white/[0.03] border border-white/5 rounded-[1.5rem] active:border-primary/30 transition-colors text-left">
+            <button
+              key={item.id}
+              onClick={() => setDetalhe({ item, cat })}
+              className="w-full flex items-center gap-3 p-3 bg-white/[0.03] border border-white/5 rounded-[1.5rem] active:border-primary/30 transition-colors text-left"
+            >
+              {/* Capa */}
               <div className="size-12 rounded-xl overflow-hidden bg-primary/10 flex-shrink-0">
                 {item.capa
                   ? <img src={resolveThumb(item.capa, 80)} alt="" className="w-full h-full object-cover" loading="lazy" />
                   : <div className="w-full h-full grid place-items-center"><Music className="size-4 text-primary/40" /></div>
                 }
               </div>
+              {/* Info */}
               <div className="min-w-0 flex-1">
                 <p className="font-black text-xs truncate uppercase tracking-tight">{item.titulo || "—"}</p>
                 {item.artista && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{item.artista}</p>}
+                {/* Indicador de canal estilo Telegram */}
+                <p className="text-[9px] text-primary/50 mt-1 font-bold">{catIcon} Tópico aberto</p>
               </div>
+              {/* Seta + ícone de mensagem */}
               <div className="flex-shrink-0 flex items-center gap-1 text-muted-foreground/30">
                 <MessageSquare className="size-3.5" />
                 <ChevronRight className="size-3.5" />
@@ -1554,8 +1681,6 @@ export default function PlayHomePage() {
   const [chartsLoading, setChartsLoading] = useState(true);
   const [chartsError, setChartsError]     = useState("");
 
-  const [playMusicVideosDB, setPlayMusicVideosDB] = useState<SheetItem[]>([]);
-
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const tabsRef = useRef<HTMLDivElement>(null);
 
@@ -1570,16 +1695,17 @@ export default function PlayHomePage() {
         setMusicasDB(sheetRowsToObjects(rm.values));
         setMusicVideosDB(sheetRowsToObjects(rmv.values));
         setVideosDB(sheetRowsToObjects(rv.values));
-        if (rm.error)  console.warn("[Play] musicas:",      rm.error);
-        if (rmv.error) console.warn("[Play] musicvideos:",  rmv.error);
-        if (rv.error)  console.warn("[Play] videos:",       rv.error);
+        if (rm.error)  console.warn("[Play] musicas:",     rm.error);
+        if (rmv.error) console.warn("[Play] musicvideos:", rmv.error);
+        if (rv.error)  console.warn("[Play] videos:",      rv.error);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
+  // FIX: charts não busca mais "Music Videos" separado — usa musicVideosDB acima
   useEffect(() => {
-    const chartsPromise = Promise.all(
+    Promise.all(
       CHARTS_CONFIG.map((cfg) =>
         fetchSheetValues(cfg.aba)
           .then((res) => ({ cfg, values: res.values, error: res.error }))
@@ -1607,15 +1733,9 @@ export default function PlayHomePage() {
         .filter((c): c is ChartData => c !== null);
       setCharts(built);
       if (errors.length) setChartsError(errors.join(" │ "));
-    });
-
-    const mvPromise = fetchSheetValues("Music Videos").then((res) => {
-      setPlayMusicVideosDB(sheetRowsToObjects(res.values));
-    });
-
-    Promise.all([chartsPromise, mvPromise])
-      .catch((e) => setChartsError(String(e)))
-      .finally(() => setChartsLoading(false));
+    })
+    .catch((e) => setChartsError(String(e)))
+    .finally(() => setChartsLoading(false));
   }, []);
 
   const handleTabChange = (t: Tab) => {
@@ -1665,7 +1785,7 @@ export default function PlayHomePage() {
         {activeTab === "home" && (
           <HomeTab
             musicasDB={musicasDB}
-            playMusicVideosDB={playMusicVideosDB}
+            musicVideosDB={musicVideosDB}
             charts={charts}
             chartsLoading={chartsLoading}
             chartsError={chartsError}
