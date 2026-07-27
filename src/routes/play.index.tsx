@@ -30,10 +30,17 @@ export const Route = createFileRoute("/play/")({
 
 
 // ─── API URLs ──────────────────────────────────────────────────────────────
+// GAS mantido apenas para comentários do fórum (POST/leitura de comentários)
 const API_URL =
   "https://script.google.com/macros/s/AKfycby1S1mIBXdj4hLqc9RYv1ZJjL7d5ct6to18FNPmpJn1KOnZrYCKJKPNe2LP0dPW-G8HOg/exec";
 
+// ID da planilha principal — conteúdo buscado via CSV direto (sem GAS, sem timeout)
 const SHEET_ID = "1XYa6Pzd-lou3fzqaZgjhBYNb3Je2PB9Slu7ozzOghUo";
+
+// Nomes das abas de conteúdo na planilha (ajuste se necessário)
+const ABA_MUSICAS      = "musicas";
+const ABA_MUSICVIDEOS  = "musicvideos";
+const ABA_VIDEOS       = "videos";
 
 // ─── Cloudflare Worker (proxy de mídia Telegram) ───────────────────────────
 const TG_WORKER = "https://falling-cloud-c041.empirerpg-forum.workers.dev";
@@ -274,8 +281,10 @@ function toPlayItemMusica(m: SheetItem): PlayItem {
 
   const audioSrc = getField(m,
     "id_do_arquivo", "idarquivo", "id_arquivo", "arquivo",
-    "link_do_audio", "linkdoaudio", "link", "url", "audio",
+    "link_do_audio", "linkdoaudio",
+    "link", "url", "audio",
     "ID do arquivo", "ID do Arquivo",
+    "Link do áudio", "Link do audio",
   );
 
   const letra = getField(m, "letra", "lyrics", "Letra");
@@ -307,7 +316,7 @@ function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
           "tipo_de_clipe", "tipodeclipe", "tipo", "titulo", "title",
           "nome_do_clipe", "nomedoclipe",
           "Tipo de Clipe", "Nome do Clipe", "Nome do Vídeo", "nome do video",
-          "nomedovideo", "clipe", "video",
+          "nomedovideo", "clipe", "video", "nome",
         );
 
   const artista = getField(m,
@@ -325,15 +334,32 @@ function toPlayItem(m: SheetItem, cat: PlayItem["categoria"]): PlayItem {
     "Thumb", "thumb", "thumbnail",
   );
 
+  // FIX: audioSrc expandido com todos os aliases conhecidos de vídeo e áudio
+  // para evitar Empty src attribute no MiniPlayer
   const audioSrc = getField(m,
+    // Arquivo de áudio (Drive file_id ou link)
     "id_do_arquivo", "idarquivo", "id_arquivo", "arquivo",
     "ID do Arquivo", "ID do arquivo",
-    "Link do áudio", "Link do audio",
-    "Link", "link", "url", "URL",
+    "Link do áudio", "Link do audio", "linkdoaudio",
+    // Vídeo (YouTube ID, link direto)
     "ID do vídeo", "ID do video", "idvideo", "id_video",
-    "youtube_id", "youtubeid",
+    "link_do_video", "linkdovideo", "Link do vídeo", "Link do video",
+    "youtube_id", "youtubeid", "yt_id", "ytid",
+    // Genéricos
+    "Link", "link", "url", "URL",
     "audio", "Audio",
+    "video", "Video",
+    "src", "file", "File",
   );
+
+  if (!audioSrc && process.env.NODE_ENV === "development") {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[toPlayItem] audioSrc vazio — colunas disponíveis:",
+      Object.keys(m).join(" | "),
+      "| item:", m,
+    );
+  }
 
   const letra = getField(m, "letra", "lyrics", "Letra");
 
@@ -1173,9 +1199,7 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
           (j.data || []).map((c: Record<string, string>) => ({
             nome:
               getField(c,
-                // snake_case API
                 "nome_do_jogador", "nomedojogador",
-                // possíveis variações
                 "autor", "author", "nome", "name",
               ) || "Anônimo",
             texto:
@@ -1209,7 +1233,6 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
       const end = el.selectionEnd ?? texto.length;
       const next = texto.slice(0, start) + e + texto.slice(end);
       setTexto(next);
-      // Reposiciona cursor após o emoji inserido
       requestAnimationFrame(() => {
         el.selectionStart = el.selectionEnd = start + e.length;
         el.focus();
@@ -1250,7 +1273,6 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
         <ChevronLeft className="size-4" /> Tópicos
       </button>
 
-      {/* Cabeçalho do tópico */}
       <div className="flex items-start gap-3 p-4 bg-white/[0.03] border border-white/5 rounded-[1.5rem]">
         <div className="size-14 rounded-2xl overflow-hidden bg-primary/10 flex-shrink-0">
           {item.capa
@@ -1275,7 +1297,6 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
         </div>
       </div>
 
-      {/* Letra */}
       {item.letra && (
         <details className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
           <summary className="text-[10px] font-black uppercase tracking-widest cursor-pointer text-primary">Ver Letra</summary>
@@ -1283,7 +1304,6 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
         </details>
       )}
 
-      {/* Lista de comentários */}
       <div className="space-y-2">
         {comentarios === null
           ? Array.from({ length: 3 }).map((_, i) => (
@@ -1307,7 +1327,6 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
         }
       </div>
 
-      {/* Formulário de comentário */}
       <div className="space-y-2 pt-2">
         <input
           value={nome}
@@ -1332,7 +1351,6 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
             className="w-full bg-white/5 border border-white/10 rounded-2xl px-3 py-2.5 pr-10 text-xs font-bold outline-none focus:border-primary/40 resize-none overflow-hidden leading-relaxed"
             style={{ minHeight: "40px", maxHeight: "120px" }}
           />
-          {/* Botão emoji picker */}
           <button
             type="button"
             onClick={() => setShowPicker((v) => !v)}
@@ -1343,7 +1361,6 @@ function ForumTopicoDetalhe({ item, categoria, onBack }: { item: PlayItem; categ
           </button>
         </div>
 
-        {/* Emoji picker inline */}
         {showPicker && (
           <div className="bg-white/[0.06] border border-white/10 rounded-2xl p-3">
             <div className="flex flex-wrap gap-1.5">
@@ -1445,16 +1462,21 @@ export default function PlayHomePage() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const tabsRef = useRef<HTMLDivElement>(null);
 
+  // FIX 1: Busca musicas/clipes/vídeos direto via CSV da planilha (sem GAS)
+  // Isso elimina os ERR_CONNECTION_TIMED_OUT do Apps Script
   useEffect(() => {
     Promise.all([
-      fetch(`${API_URL}?action=conteudo&categoria=musicas`).then((r) => r.json()),
-      fetch(`${API_URL}?action=conteudo&categoria=musicvideos`).then((r) => r.json()),
-      fetch(`${API_URL}?action=conteudo&categoria=videos`).then((r) => r.json()),
+      fetchSheetValues(ABA_MUSICAS),
+      fetchSheetValues(ABA_MUSICVIDEOS),
+      fetchSheetValues(ABA_VIDEOS),
     ])
       .then(([rm, rmv, rv]) => {
-        setMusicasDB(rm.data || []);
-        setMusicVideosDB(rmv.data || []);
-        setVideosDB(rv.data || []);
+        setMusicasDB(sheetRowsToObjects(rm.values));
+        setMusicVideosDB(sheetRowsToObjects(rmv.values));
+        setVideosDB(sheetRowsToObjects(rv.values));
+        if (rm.error)  console.warn("[Play] musicas:",      rm.error);
+        if (rmv.error) console.warn("[Play] musicvideos:",  rmv.error);
+        if (rv.error)  console.warn("[Play] videos:",       rv.error);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
