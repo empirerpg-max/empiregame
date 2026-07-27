@@ -440,11 +440,21 @@ function VideoModal({ item, onClose }: { item: PlayItem; onClose: () => void }) 
   const mediaType = detectMediaType(src);
   const isTg = isTelegramSource(src);
 
-  // Bloqueia scroll do body enquanto modal está aberto
+  const [minimized, setMinimized] = useState(false);
+
+  // Bloqueia scroll do body apenas em fullscreen
   useEffect(() => {
+    if (minimized) return;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
-  }, []);
+  }, [minimized]);
+
+  // ESC fecha
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const renderPlayer = () => {
     // YouTube
