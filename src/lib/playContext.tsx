@@ -11,14 +11,14 @@ import {
 // Tipos
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type MediaType = "drive" | "youtube";
+export type MediaType = "drive" | "youtube" | "telegram";
 
 export type PlayItem = {
   id: string;
   titulo: string;
   artista: string;
   capa: string;
-  /** Drive file-id puro OU YouTube video-id puro (11 chars) ou URL completa */
+  /** Drive file-id puro OU YouTube video-id puro (11 chars) OU telegram_file_id (começa com BAA…) OU URL completa */
   audioSrc: string;
   letra?: string;
   categoria: "musica" | "musicvideo" | "video";
@@ -69,7 +69,8 @@ export function extractDriveId(str: string): string | null {
     String(str).match(/\/d\/([a-zA-Z0-9_-]+)/) ||
     String(str).match(/id=([a-zA-Z0-9_-]+)/);
   if (m) return m[1];
-  if (!/^https?:\/\//.test(str) && !str.includes("/")) return str.trim();
+  // Só retorna como Drive ID se NÃO for um telegram_file_id
+  if (!/^https?:\/\//.test(str) && !str.includes("/") && !isTelegramFileId(str)) return str.trim();
   return null;
 }
 
@@ -88,9 +89,29 @@ export function extractYouTubeId(str: string): string | null {
   return null;
 }
 
+/**
+ * Detecta se a string é um telegram_file_id.
+ * Formato típico: começa com "BAA", "AgA", "BAAC", etc. — base64url, 60+ chars.
+ * Nunca tem espaços ou "/" e é consideravelmente mais longo que um YouTube ID (11 chars).
+ */
+export function isTelegramFileId(str: string): boolean {
+  if (!str) return false;
+  const s = str.trim();
+  // Não é URL, não tem "/", tamanho ≥ 20 chars, apenas chars base64url
+  return (
+    !/^https?:\/\//.test(s) &&
+    !s.includes("/") &&
+    s.length >= 20 &&
+    /^[A-Za-z0-9_-]+$/.test(s) &&
+    // YouTube IDs têm exatamente 11 chars — se for maior, não é YT
+    s.length !== 11
+  );
+}
+
 export function detectMediaType(audioSrc: string): MediaType {
   if (!audioSrc) return "drive";
   const s = audioSrc.trim();
+
   if (
     s.includes("youtube") ||
     s.includes("youtu.be") ||
@@ -98,6 +119,11 @@ export function detectMediaType(audioSrc: string): MediaType {
   ) {
     return "youtube";
   }
+
+  if (isTelegramFileId(s)) {
+    return "telegram";
+  }
+
   return "drive";
 }
 
@@ -108,6 +134,15 @@ export function detectMediaType(audioSrc: string): MediaType {
 export function driveStreamUrl(idOrUrl: string): string {
   const id = extractDriveId(idOrUrl) ?? idOrUrl;
   return `https://empire-media-api.empirerpg-forum.workers.dev/?id=${id}`;
+}
+
+/**
+ * URL de stream de arquivo do Telegram via Bot API proxy Cloudflare.
+ * O Worker chama getFile + redireciona para file.telegram.org.
+ * Funciona para áudios (qualquer tamanho) e vídeos até 20MB (Bot API limit).
+ */
+export function telegramStreamUrl(fileId: string): string {
+  return `https://empire-media-api.empirerpg-forum.workers.dev/tg?file_id=${encodeURIComponent(fileId)}`;
 }
 
 /** @deprecated – use driveStreamUrl */
@@ -142,6 +177,8 @@ export function PlayProvider({ children }: { children: ReactNode }) {
   const currentMediaId: string | null = currentItem
     ? mediaType === "youtube"
       ? (extractYouTubeId(currentItem.audioSrc) ?? currentItem.audioSrc)
+      : mediaType === "telegram"
+      ? currentItem.audioSrc.trim()
       : (extractDriveId(currentItem.audioSrc) ?? currentItem.audioSrc)
     : null;
 
@@ -219,7 +256,6 @@ export function PlayProvider({ children }: { children: ReactNode }) {
       if (s.currentIdx === null) return s;
       const nextIdx = s.currentIdx + 1;
       if (nextIdx >= s.queue.length) return s;
-      // Mantém playing para o efeito [currentMediaId, playing] disparar.
       return { ...s, currentIdx: nextIdx };
     });
   }, []);
@@ -229,7 +265,6 @@ export function PlayProvider({ children }: { children: ReactNode }) {
       if (s.currentIdx === null) return s;
       const prevIdx = s.currentIdx - 1;
       if (prevIdx < 0) return s;
-      // Mantém playing para o efeito [currentMediaId, playing] disparar.
       return { ...s, currentIdx: prevIdx };
     });
   }, []);
@@ -239,8 +274,6 @@ export function PlayProvider({ children }: { children: ReactNode }) {
       if (s.currentIdx === null) return s;
       const nextIdx = s.currentIdx + 1;
       if (nextIdx < s.queue.length) {
-        // Avança para próxima faixa mantendo playing:true para
-        // o useEffect [currentMediaId, playing] disparar triggerPlay().
         return { ...s, currentIdx: nextIdx, playing: true };
       }
       return { ...s, playing: false };
