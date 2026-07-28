@@ -3,13 +3,21 @@
  * ─────────────────────────────────────────────────────────────
  * Página de detalhes de uma obra do catálogo Empire RPG.
  *
- * Regras de fallback aplicadas (REGRA RÍGIDA):
+ * Regras de fallback (REGRA RÍGIDA):
  *  • Título:  nome_da_musica || nome_do_video || nome || titulo
- *  • Artista: nome_do_criador || artista
+ *  • Artista: nome_do_criador || artista || id_do_criador
  *  • Capa:    capa_da_musica || capa || thumb || thumbnail_url
  *
- *  A URL de fetch busca categorias individualmente via:
- *    GET {GAS_URL}?action=nome_da_categoria
+ * Player de Vídeo:
+ *  • Se obra.telegram_file_id existir → botão "Assistir"
+ *  • Clique → GET ${GAS_URL}?action=getVideoUrl&file_id=...
+ *  • Retorno { url: '...' } → <video controls autoPlay> flutuante
+ *
+ * Fórum:
+ *  • Lista comentários via GET ?action=get_comments&topico_id=...
+ *  • Trava de segurança: const lista = Array.isArray(raw) ? raw : []
+ *  • Envio com Optimistic UI
+ *  • Nome lido do Telegram Mini App (ou 'Anônimo')
  */
 
 import { createFileRoute, useParams } from '@tanstack/react-router';
@@ -38,43 +46,32 @@ export const Route = createFileRoute('/catalogo/$id')({
 });
 
 // ─────────────────────────────────────────────────────────────
-// GAS URL — variável de ambiente com fallback para URL fixa
+// GAS URL — OBRIGATÓRIO: valor fixo conforme especificação
 // ─────────────────────────────────────────────────────────────
 
-const GAS_URL: string =
-  (import.meta as any).env?.VITE_GAS_URL ??
+const GAS_URL =
   'https://script.google.com/macros/s/AKfycby7Epe3MHPMvje5OKtSlNn-tSWpowLPOJ7DVflFJqgZNOKCnN9IcGwWYL1QSeRtgJrQ7w/exec';
 
 // ─────────────────────────────────────────────────────────────
 // Tipos
 // ─────────────────────────────────────────────────────────────
 
-/**
- * Interface da Obra — aceita propriedades dinâmicas snake_case
- * geradas pelo backend GAS a partir dos cabeçalhos do Google Sheets.
- * A assinatura de índice [key: string] garante compatibilidade total.
- */
 export interface Obra {
   id_do_topico: string;
-  // Título (fallback em cascata — mais específico primeiro)
   nome_da_musica?: string;
   nome_do_video?: string;
   nome?: string;
   titulo?: string;
-  // Artista / Criador (fallback em cascata)
   nome_do_criador?: string;
   artista?: string;
   id_do_criador?: string;
-  // Capa (fallback em cascata — mais específico primeiro)
   capa_da_musica?: string;
   capa?: string;
   thumb?: string;
   thumbnail_url?: string;
-  // Outros campos comuns
   letra?: string;
   tipo?: string;
   telegram_file_id?: string;
-  // Aceita qualquer chave snake_case extra sem quebrar TypeScript
   [key: string]: unknown;
 }
 
@@ -97,10 +94,9 @@ interface TelegramUser {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Helpers de fallback — REGRA RÍGIDA conforme especificação
+// Helpers de fallback — REGRA RÍGIDA
 // ─────────────────────────────────────────────────────────────
 
-/** Título: nome_da_musica → nome_do_video → nome → titulo */
 function resolverTitulo(obra: Obra): string {
   return (
     (obra.nome_da_musica as string | undefined) ||
@@ -111,7 +107,6 @@ function resolverTitulo(obra: Obra): string {
   );
 }
 
-/** Artista: nome_do_criador → artista */
 function resolverArtista(obra: Obra): string {
   return (
     (obra.nome_do_criador as string | undefined) ||
@@ -121,7 +116,6 @@ function resolverArtista(obra: Obra): string {
   );
 }
 
-/** Capa: capa_da_musica → capa → thumb → thumbnail_url */
 function resolverCapa(obra: Obra): string | undefined {
   return (
     (obra.capa_da_musica as string | undefined) ||
@@ -135,6 +129,21 @@ function resolverCapa(obra: Obra): string | undefined {
 // ─────────────────────────────────────────────────────────────
 // Utilitários
 // ─────────────────────────────────────────────────────────────
+
+/**
+ * Lê o nome do usuário nativamente do Telegram Mini App.
+ * Fallback: 'Anônimo' — conforme especificação obrigatória.
+ */
+function getTelegramNome(): string {
+  try {
+    return (
+      (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.first_name ||
+      'Anônimo'
+    );
+  } catch {
+    return 'Anônimo';
+  }
+}
 
 function getTelegramUser(): TelegramUser | null {
   try {
@@ -183,7 +192,6 @@ function stringToHsl(str: string): string {
 // Sub-componentes
 // ─────────────────────────────────────────────────────────────
 
-/** Avatar com inicial como fallback */
 function Avatar({
   nome,
   foto,
@@ -225,7 +233,6 @@ function Avatar({
   );
 }
 
-/** Separador de data estilo Telegram */
 function DateDivider({ data }: { data: string }) {
   return (
     <div className="flex items-center gap-3 my-4 px-2">
@@ -238,7 +245,6 @@ function DateDivider({ data }: { data: string }) {
   );
 }
 
-/** Balão de mensagem */
 function Balao({
   comentario,
   isMeu,
@@ -316,29 +322,31 @@ export default function CatalogoObraPage() {
   const router = useRouter();
 
   // ── Estado da obra ──────────────────────────────────────────
-  const [obra,       setObra      ] = useState<Obra | null>(null);
-  const [loadingObra,setLoadingObra] = useState(true);
-  const [erroObra,   setErroObra  ] = useState<string | null>(null);
+  const [obra,        setObra       ] = useState<Obra | null>(null);
+  const [loadingObra, setLoadingObra] = useState(true);
+  const [erroObra,    setErroObra   ] = useState<string | null>(null);
 
   // ── Estado do fórum ─────────────────────────────────────────
-  const [comentarios, setComentarios] = useState<Comentario[]>([]);
-  const [loadingForum,setLoadingForum] = useState(false);
-  const [texto,        setTexto      ] = useState('');
-  const [enviando,     setEnviando   ] = useState(false);
-  const [forumAberto,  setForumAberto] = useState(false);
+  const [comentarios,  setComentarios ] = useState<Comentario[]>([]);
+  const [loadingForum, setLoadingForum] = useState(false);
+  const [texto,        setTexto       ] = useState('');
+  const [enviando,     setEnviando    ] = useState(false);
+  const [forumAberto,  setForumAberto ] = useState(false);
 
-  // ── MiniPlayer Telegram ──────────────────────────────────────
+  // ── Player de Vídeo Telegram ─────────────────────────────────
   const [videoUrl,     setVideoUrl    ] = useState<string | null>(null);
-  const [loadingVideo, setLoadingVideo ] = useState(false);
-  const [playerAberto, setPlayerAberto ] = useState(false);
+  const [loadingVideo, setLoadingVideo] = useState(false);
+  const [playerAberto, setPlayerAberto] = useState(false);
 
-  const endRef    = useRef<HTMLDivElement>(null);
-  const inputRef  = useRef<HTMLTextAreaElement>(null);
-  const tgUser    = getTelegramUser();
+  const endRef   = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Nome do usuário Telegram (OBRIGATÓRIO: fallback 'Anônimo')
+  const nomeUsuario = getTelegramNome();
+  const tgUser      = getTelegramUser();
 
   // ──────────────────────────────────────────────────────────────
   // Busca a obra pelo id_do_topico
-  // Estratégia: tenta todas as categorias até encontrar a obra
   // ──────────────────────────────────────────────────────────────
   const CATEGORIAS = ['musicas', 'albuns', 'music_videos', 'videos', 'top50spotify'];
 
@@ -348,7 +356,6 @@ export default function CatalogoObraPage() {
 
     for (const categoria of CATEGORIAS) {
       try {
-        // Busca a categoria individualmente via ?action=nome_da_categoria
         const res = await fetch(`${GAS_URL}?action=${categoria}`);
         if (!res.ok) continue;
 
@@ -362,7 +369,6 @@ export default function CatalogoObraPage() {
           return;
         }
       } catch {
-        // Ignora erros por categoria e tenta a próxima
         continue;
       }
     }
@@ -380,20 +386,34 @@ export default function CatalogoObraPage() {
   // ──────────────────────────────────────────────────────────────
   const fetchComentarios = useCallback(async () => {
     if (!id) return;
+    setLoadingForum(true);
     try {
       const res = await fetch(`${GAS_URL}?action=get_comments&topico_id=${id}`);
       if (!res.ok) return;
-      const json = await res.json();
-      const lista = Array.isArray(json)
-        ? json
-        : Array.isArray(json?.data)
-          ? json.data
+      const raw = await res.json();
+
+      // ── TRAVA DE SEGURANÇA OBRIGATÓRIA ──────────────────────
+      // O retorno pode ser vazio ou não-array; garante sempre um array.
+      const lista: Comentario[] = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.data)
+          ? raw.data
           : [];
-      setComentarios(
-        lista.filter((c: Comentario) => !c.otimista),
-      );
+      // ────────────────────────────────────────────────────────
+
+      setComentarios((prev) => {
+        // Mantém otimistas que ainda não chegaram do servidor
+        const otimistas = prev.filter((c) => c.otimista);
+        const servidorIds = new Set(lista.map((c) => c.id));
+        const otimistasRestantes = otimistas.filter(
+          (c) => !servidorIds.has(c.id),
+        );
+        return [...lista, ...otimistasRestantes];
+      });
     } catch {
       // Silencia erros de polling
+    } finally {
+      setLoadingForum(false);
     }
   }, [id]);
 
@@ -404,34 +424,40 @@ export default function CatalogoObraPage() {
     return () => clearInterval(interval);
   }, [forumAberto, fetchComentarios]);
 
-  // Scroll automático ao abrir fórum
+  // Scroll automático ao abrir fórum ou novo comentário
   useEffect(() => {
     if (forumAberto) {
-      setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      setTimeout(
+        () => endRef.current?.scrollIntoView({ behavior: 'smooth' }),
+        100,
+      );
     }
   }, [forumAberto, comentarios.length]);
 
   // ──────────────────────────────────────────────────────────────
-  // Envio de comentário (Optimistic UI)
+  // Envio de comentário — Optimistic UI (Mutação Otimista)
   // ──────────────────────────────────────────────────────────────
   const enviarComentario = async () => {
     const textoCortado = texto.trim();
-    if (!textoCortado || !tgUser || enviando) return;
+    if (!textoCortado || enviando) return;
 
+    // Monta o comentário otimista antes do POST
     const otimista: Comentario = {
       id:           gerarIdOtimista(),
-      usuario_id:   String(tgUser.id),
-      usuario_nome: `${tgUser.first_name}${tgUser.last_name ? ` ${tgUser.last_name}` : ''}`,
-      usuario_foto: tgUser.photo_url,
+      usuario_id:   tgUser ? String(tgUser.id) : 'anonimo',
+      usuario_nome: nomeUsuario, // lido nativamente do Telegram ou 'Anônimo'
+      usuario_foto: tgUser?.photo_url,
       texto:        textoCortado,
       criado_em:    new Date().toISOString(),
       otimista:     true,
     };
 
+    // Aparece imediatamente na tela (Optimistic UI)
     setComentarios((prev) => [...prev, otimista]);
     setTexto('');
     setEnviando(true);
 
+    // POST no background — não bloqueia a UI
     try {
       await fetch(GAS_URL, {
         method:  'POST',
@@ -439,12 +465,13 @@ export default function CatalogoObraPage() {
         body:    JSON.stringify({
           action:       'add_comment',
           topico_id:    id,
-          usuario_id:   String(tgUser.id),
-          usuario_nome: otimista.usuario_nome,
-          usuario_foto: tgUser.photo_url ?? '',
+          usuario_id:   otimista.usuario_id,
+          usuario_nome: nomeUsuario,
+          usuario_foto: tgUser?.photo_url ?? '',
           texto:        textoCortado,
         }),
       });
+      // Sincroniza com o servidor após confirmação
       await fetchComentarios();
     } catch {
       // Mantém o otimista visível; próximo polling corrigirá
@@ -454,19 +481,24 @@ export default function CatalogoObraPage() {
   };
 
   // ──────────────────────────────────────────────────────────────
-  // MiniPlayer — busca URL temporária do Telegram
+  // Player de Vídeo Telegram
+  // Regra OBRIGATÓRIA: action=getVideoUrl (não get_video_url)
+  // Apenas renderiza <video> APÓS receber { url: '...' } com .mp4
   // ──────────────────────────────────────────────────────────────
   const abrirPlayer = async () => {
     if (!obra?.telegram_file_id) return;
     setLoadingVideo(true);
     try {
       const res = await fetch(
-        `${GAS_URL}?action=get_video_url&file_id=${obra.telegram_file_id}`,
+        `${GAS_URL}?action=getVideoUrl&file_id=${obra.telegram_file_id}`,
       );
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error('Resposta inválida do servidor');
       const json = await res.json();
+
+      // Extrai a URL do retorno { url: '...' }
       const url: string = json?.url ?? json?.data?.url ?? '';
-      if (!url) throw new Error();
+      if (!url) throw new Error('URL de vídeo não recebida');
+
       setVideoUrl(url);
       setPlayerAberto(true);
     } catch {
@@ -474,6 +506,11 @@ export default function CatalogoObraPage() {
     } finally {
       setLoadingVideo(false);
     }
+  };
+
+  const fecharPlayer = () => {
+    setPlayerAberto(false);
+    setVideoUrl(null);
   };
 
   // ──────────────────────────────────────────────────────────────
@@ -492,7 +529,7 @@ export default function CatalogoObraPage() {
   const gruposComentarios = agruparPorData(comentarios);
 
   // ──────────────────────────────────────────────────────────────
-  // Render
+  // Render — Loading / Erro
   // ──────────────────────────────────────────────────────────────
 
   if (loadingObra) {
@@ -526,7 +563,7 @@ export default function CatalogoObraPage() {
   return (
     <div className="min-h-screen bg-[#0f1923] text-white pb-24">
 
-      {/* ── Back button ── */}
+      {/* ── Barra de navegação ── */}
       <div className="sticky top-0 z-10 bg-[#0f1923]/90 backdrop-blur-sm px-4 py-3 flex items-center gap-3 border-b border-white/10">
         <button
           onClick={() => router.history.back()}
@@ -538,9 +575,9 @@ export default function CatalogoObraPage() {
         <span className="text-sm font-semibold text-white/80 truncate">{titulo}</span>
       </div>
 
-      {/* ── Hero ── */}
+      {/* ── Hero — Capa + Título + Artista ── */}
       <div className="relative">
-        {/* Capa de fundo (blur) */}
+        {/* Capa de fundo (blur decorativo) */}
         {capa && (
           <div
             className="absolute inset-0 bg-cover bg-center blur-2xl opacity-20 scale-110"
@@ -564,13 +601,17 @@ export default function CatalogoObraPage() {
             )}
           </div>
 
-          {/* Título e artista com fallbacks */}
+          {/* Título e artista — fallbacks rígidos aplicados */}
           <div className="text-center">
             <h1 className="text-xl font-bold leading-tight">{titulo}</h1>
             <p className="text-white/55 text-sm mt-0.5">{artista}</p>
           </div>
 
-          {/* Botão Assistir — aparece quando telegram_file_id existe */}
+          {/* ── Botão Assistir ──
+              Exibido SOMENTE quando obra.telegram_file_id existe.
+              Ao clicar: GET ?action=getVideoUrl&file_id=...
+              <video> renderizado APENAS após receber { url: '...' }
+          */}
           {obra.telegram_file_id && (
             <button
               onClick={abrirPlayer}
@@ -600,7 +641,13 @@ export default function CatalogoObraPage() {
         </div>
       )}
 
-      {/* ── Fórum (toggle) ── */}
+      {/* ──────────────────────────────────────────────────────
+          Fórum (Comentários)
+          ── TRAVA DE SEGURANÇA: Array.isArray antes do .map()
+          ── Mutação Otimista: comentário aparece imediatamente
+          ── Nome: window.Telegram?.WebApp?.initDataUnsafe?.user
+                   ?.first_name || 'Anônimo'
+      ────────────────────────────────────────────────────── */}
       <div className="mx-4 mt-4">
         <button
           onClick={() => setForumAberto((v) => !v)}
@@ -634,77 +681,90 @@ export default function CatalogoObraPage() {
                 </div>
               )}
 
-              {Array.from(gruposComentarios.entries()).map(([data, lista]) => (
-                <div key={data}>
-                  <DateDivider data={data} />
-                  {lista.map((c) => (
-                    <Balao
-                      key={c.id}
-                      comentario={c}
-                      isMeu={String(tgUser?.id) === c.usuario_id}
-                    />
-                  ))}
-                </div>
-              ))}
+              {/*
+                TRAVA DE SEGURANÇA OBRIGATÓRIA:
+                const lista = Array.isArray(comentarios) ? comentarios : []
+                Garante que .map() nunca vai quebrar por retorno vazio/nulo.
+              */}
+              {Array.from(gruposComentarios.entries()).map(([data, listaGrupo]) => {
+                // Trava de segurança no nível do grupo
+                const lista = Array.isArray(listaGrupo) ? listaGrupo : [];
+                return (
+                  <div key={data}>
+                    <DateDivider data={data} />
+                    {lista.map((c) => (
+                      <Balao
+                        key={c.id}
+                        comentario={c}
+                        isMeu={
+                          tgUser
+                            ? String(tgUser.id) === c.usuario_id
+                            : c.usuario_id === 'anonimo'
+                        }
+                      />
+                    ))}
+                  </div>
+                );
+              })}
               <div ref={endRef} />
             </div>
 
-            {/* Input de envio */}
-            {tgUser ? (
-              <div className="flex items-end gap-2 p-3 border-t border-white/10">
-                <Avatar nome={`${tgUser.first_name}`} foto={tgUser.photo_url} size={28} />
-                <textarea
-                  ref={inputRef}
-                  value={texto}
-                  onChange={(e) => setTexto(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      enviarComentario();
-                    }
-                  }}
-                  placeholder="Escreva um comentário…"
-                  rows={1}
-                  className="flex-1 resize-none bg-[#1a2a3a] rounded-2xl px-3 py-2
-                             text-sm text-white placeholder-white/30 border border-white/[0.07]
-                             focus:outline-none focus:border-[#2AABEE]/50
-                             max-h-28 overflow-y-auto"
-                  style={{ lineHeight: '1.4' }}
-                />
-                <button
-                  onClick={enviarComentario}
-                  disabled={!texto.trim() || enviando}
-                  className="p-2 rounded-full bg-[#2AABEE] text-white
-                             hover:bg-[#1a9bde] active:scale-95 transition-all
-                             disabled:opacity-40 disabled:cursor-not-allowed"
-                  aria-label="Enviar comentário"
-                >
-                  {enviando
-                    ? <Loader2 size={16} className="animate-spin" />
-                    : <Send size={16} />}
-                </button>
-              </div>
-            ) : (
-              <div className="text-center py-4 border-t border-white/10">
-                <p className="text-white/30 text-xs">Abra pelo Telegram para comentar</p>
-              </div>
-            )}
+            {/* Input de envio — disponível para qualquer usuário (Telegram ou não) */}
+            <div className="flex items-end gap-2 p-3 border-t border-white/10">
+              <Avatar nome={nomeUsuario} foto={tgUser?.photo_url} size={28} />
+              <textarea
+                ref={inputRef}
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    enviarComentario();
+                  }
+                }}
+                placeholder={`Comentar como ${nomeUsuario}…`}
+                rows={1}
+                className="flex-1 resize-none bg-[#1a2a3a] rounded-2xl px-3 py-2
+                           text-sm text-white placeholder-white/30 border border-white/[0.07]
+                           focus:outline-none focus:border-[#2AABEE]/50
+                           max-h-28 overflow-y-auto"
+                style={{ lineHeight: '1.4' }}
+              />
+              <button
+                onClick={enviarComentario}
+                disabled={!texto.trim() || enviando}
+                className="p-2 rounded-full bg-[#2AABEE] text-white
+                           hover:bg-[#1a9bde] active:scale-95 transition-all
+                           disabled:opacity-40 disabled:cursor-not-allowed"
+                aria-label="Enviar comentário"
+              >
+                {enviando
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : <Send size={16} />}
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* ── MiniPlayer de Vídeo ── */}
+      {/* ──────────────────────────────────────────────────────
+          Player de Vídeo Flutuante (HTML5 nativo)
+          Renderizado APENAS após receber { url: '...' } do GAS.
+          Usa <video controls autoPlay> nativo — sem lib externa.
+      ────────────────────────────────────────────────────── */}
       {playerAberto && videoUrl && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
           <div className="relative w-full max-w-sm">
             <button
-              onClick={() => { setPlayerAberto(false); setVideoUrl(null); }}
+              onClick={fecharPlayer}
               className="absolute -top-3 -right-3 z-10 p-1.5 rounded-full bg-[#1e2736]
                          border border-white/20 hover:bg-white/20 transition-colors"
               aria-label="Fechar player"
             >
               <X size={16} />
             </button>
+
+            {/* <video> nativo HTML5 — renderizado só após URL recebida */}
             <video
               src={videoUrl}
               controls
@@ -712,7 +772,10 @@ export default function CatalogoObraPage() {
               playsInline
               className="w-full rounded-2xl shadow-2xl"
             />
-            <p className="text-center text-white/60 text-xs mt-3 truncate px-2">{titulo}</p>
+
+            <p className="text-center text-white/60 text-xs mt-3 truncate px-2">
+              {titulo}
+            </p>
           </div>
         </div>
       )}
