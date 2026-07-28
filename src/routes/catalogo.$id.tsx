@@ -4,12 +4,17 @@
  * Página de detalhes de uma obra do catálogo Empire RPG.
  *
  * Funcionalidades:
- *  • Hero com capa, título e artista
+ *  • Hero com capa, título e artista (com fallbacks multi-campo)
  *  • Telegram Mini Player: busca URL temporária e renderiza <video> flutuante
  *  • Fórum com polling em tempo real, agrupado por data
  *  • Login silencioso via window.Telegram.WebApp.initDataUnsafe.user
  *  • Envio com Optimistic UI — atualiza o estado imediatamente, POST em background
  *  • Input com suporte a emoji nativo (sem biblioteca externa)
+ *
+ * CORREÇÕES APLICADAS:
+ *  1. Proteção Anti-Quebra (TypeError): Array.isArray() antes de iterar comentários
+ *  2. Mapeamento do Header: fallbacks multi-campo (nome_da_musica || nome, etc.)
+ *  3. MiniPlayer de Vídeo: botão Assistir aparece sempre que telegram_file_id existir
  */
 
 import { createFileRoute, useParams } from '@tanstack/react-router';
@@ -48,11 +53,28 @@ const GAS_URL =
 // Tipos
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Interface da Obra: aceita múltiplos formatos de campo
+ * para garantir compatibilidade com diferentes versões da API.
+ */
 interface Obra {
   id_do_topico: string;
-  nome: string;
-  artista: string;
+  // Título — múltiplos campos possíveis (fallback em cascata)
+  nome?: string;
+  nome_da_musica?: string;
+  titulo?: string;
+  name?: string;
+  // Artista — múltiplos campos possíveis
+  artista?: string;
+  artista_nome?: string;
+  artist?: string;
+  // Capa — múltiplos campos possíveis
   capa?: string;
+  cover?: string;
+  imagem?: string;
+  foto?: string;
+  thumbnail?: string;
+  // Outros
   letra?: string;
   tipo?: string;
   telegram_file_id?: string;
@@ -121,6 +143,41 @@ function stringToHsl(str: string): string {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
   return `hsl(${Math.abs(hash) % 360}, 55%, 48%)`;
+}
+
+/**
+ * CORREÇÃO 2 — Extrai o título da obra com fallbacks multi-campo,
+ * espelhando a mesma lógica usada no catálogo.index.tsx.
+ */
+function resolverTitulo(obra: Obra): string {
+  return (
+    obra.nome_da_musica ||
+    obra.nome ||
+    obra.titulo ||
+    obra.name ||
+    'Sem título'
+  );
+}
+
+/**
+ * CORREÇÃO 2 — Extrai o artista da obra com fallbacks multi-campo.
+ */
+function resolverArtista(obra: Obra): string {
+  return obra.artista || obra.artista_nome || obra.artist || 'Artista desconhecido';
+}
+
+/**
+ * CORREÇÃO 2 — Extrai a URL da capa com fallbacks multi-campo.
+ */
+function resolverCapa(obra: Obra): string | undefined {
+  return (
+    obra.capa ||
+    obra.cover ||
+    obra.imagem ||
+    obra.foto ||
+    obra.thumbnail ||
+    undefined
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -283,7 +340,13 @@ function LetraExpansivel({ letra }: { letra: string }) {
   );
 }
 
-/** Player flutuante nativo HTML5 */
+/**
+ * CORREÇÃO 3 — Player flutuante nativo HTML5.
+ * Só é montado quando obra.telegram_file_id existe.
+ * Busca a URL temporária em ?action=getVideoUrl&file_id=XYZ
+ * e renderiza <video> com controls + autoPlay + playsInline.
+ * Inclui retry manual em caso de falha.
+ */
 function VideoPlayer({
   telegramFileId,
   title,
@@ -297,25 +360,41 @@ function VideoPlayer({
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(false);
 
-  useEffect(() => {
+  const buscarUrl = useCallback(() => {
+    if (!telegramFileId) return;
     setLoading(true);
     setErro(false);
-    fetch(`${GAS_URL}?action=getVideoUrl&file_id=${encodeURIComponent(telegramFileId)}`)
+    setVideoUrl(null);
+    fetch(
+      `${GAS_URL}?action=getVideoUrl&file_id=${encodeURIComponent(telegramFileId)}`
+    )
       .then((r) => {
-        if (!r.ok) throw new Error('Erro ao buscar URL');
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then((data) => {
-        const url = data?.url ?? data?.videoUrl ?? data?.mp4Url ?? null;
-        if (!url) throw new Error('URL não encontrada na resposta');
+        // Aceita diferentes chaves de resposta da API
+        const url =
+          data?.url ??
+          data?.videoUrl ??
+          data?.mp4Url ??
+          data?.video_url ??
+          null;
+        if (!url || typeof url !== 'string') {
+          throw new Error('URL não encontrada na resposta da API');
+        }
         setVideoUrl(url);
       })
       .catch(() => setErro(true))
       .finally(() => setLoading(false));
   }, [telegramFileId]);
 
+  useEffect(() => {
+    buscarUrl();
+  }, [buscarUrl]);
+
   return (
-    /* Overlay escuro */
+    /* Overlay escuro — clique fora fecha */
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(8px)' }}
@@ -323,7 +402,10 @@ function VideoPlayer({
     >
       <div
         className="relative w-full max-w-lg mx-2 mb-4 sm:mb-0 rounded-2xl overflow-hidden shadow-2xl"
-        style={{ background: '#0b141d', border: '1px solid rgba(255,255,255,0.08)' }}
+        style={{
+          background: '#0b141d',
+          border: '1px solid rgba(255,255,255,0.08)',
+        }}
       >
         {/* Cabeçalho */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07]">
@@ -342,8 +424,9 @@ function VideoPlayer({
           </button>
         </div>
 
-        {/* Área do vídeo */}
+        {/* Área do vídeo — aspect-ratio 16/9 */}
         <div className="relative bg-black" style={{ aspectRatio: '16/9' }}>
+          {/* Estado: carregando */}
           {loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
               <Loader2 size={32} className="text-[#2AABEE] animate-spin" />
@@ -351,6 +434,7 @@ function VideoPlayer({
             </div>
           )}
 
+          {/* Estado: erro */}
           {erro && !loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
               <span className="text-3xl">⚠️</span>
@@ -360,21 +444,7 @@ function VideoPlayer({
                 Tente novamente em instantes.
               </p>
               <button
-                onClick={() => {
-                  setErro(false);
-                  setLoading(true);
-                  fetch(
-                    `${GAS_URL}?action=getVideoUrl&file_id=${encodeURIComponent(telegramFileId)}`
-                  )
-                    .then((r) => r.json())
-                    .then((d) => {
-                      const u = d?.url ?? d?.videoUrl ?? d?.mp4Url ?? null;
-                      if (!u) throw new Error();
-                      setVideoUrl(u);
-                    })
-                    .catch(() => setErro(true))
-                    .finally(() => setLoading(false));
-                }}
+                onClick={buscarUrl}
                 className="mt-1 px-4 py-1.5 rounded-full bg-[#2AABEE]/20 text-[#2AABEE] text-xs font-semibold hover:bg-[#2AABEE]/30 transition"
               >
                 Tentar novamente
@@ -382,6 +452,7 @@ function VideoPlayer({
             </div>
           )}
 
+          {/* Estado: vídeo pronto */}
           {videoUrl && !loading && !erro && (
             // eslint-disable-next-line jsx-a11y/media-has-caption
             <video
@@ -424,6 +495,10 @@ export default function CatalogoObraPage() {
   const [playerAberto, setPlayerAberto] = useState(false);
 
   // ── Estado do fórum ────────────────────────────────────────
+  /**
+   * CORREÇÃO 1 — Inicialização explícita com array vazio garante
+   * que comentarios nunca seja null/undefined.
+   */
   const [comentarios, setComentarios] = useState<Comentario[]>([]);
   const [loadingForum, setLoadingForum] = useState(true);
   const [texto, setTexto] = useState('');
@@ -463,11 +538,26 @@ export default function CatalogoObraPage() {
       const res = await fetch(
         `${GAS_URL}?action=getComentarios&id_do_topico=${encodeURIComponent(id)}`
       );
-      if (!res.ok) throw new Error();
-      const data: Comentario[] = await res.json();
-      setComentarios(data);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      /**
+       * CORREÇÃO 1 — Proteção Anti-Quebra (TypeError: comentarios is not iterable)
+       * A API pode retornar null, undefined, um objeto { comentarios: [...] },
+       * ou um array diretamente. Normalizamos aqui antes de setar o estado.
+       * O loop em comentariosAgrupados e o .map() do render só veem a listaComentarios.
+       */
+      const listaComentarios: Comentario[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.comentarios)
+          ? data.comentarios
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
+
+      setComentarios(listaComentarios);
     } catch {
-      // falha silenciosa — mantém estado anterior
+      // Falha silenciosa — mantém estado anterior (que já é array vazio ou válido)
     } finally {
       setLoadingForum(false);
     }
@@ -554,13 +644,18 @@ export default function CatalogoObraPage() {
   }
 
   // ── Agrupamento por data ────────────────────────────────────
+  /**
+   * CORREÇÃO 1 — Usa listaComentarios (garantidamente array)
+   * ao invés de iterar diretamente sobre `comentarios`.
+   */
   const comentariosAgrupados = (() => {
+    const listaComentarios = Array.isArray(comentarios) ? comentarios : [];
     const lista: Array<
       | { tipo: 'data'; data: string }
       | { tipo: 'msg'; comentario: Comentario }
     > = [];
     let ultimaData = '';
-    for (const c of comentarios) {
+    for (const c of listaComentarios) {
       const d = formatData(c.criado_em);
       if (d !== ultimaData) {
         lista.push({ tipo: 'data', data: d });
@@ -572,6 +667,15 @@ export default function CatalogoObraPage() {
   })();
 
   const meuId = String(telegramUser?.id ?? '');
+
+  // CORREÇÃO 2 — Campos resolvidos via helpers de fallback
+  const titulo = obra ? resolverTitulo(obra) : '';
+  const artista = obra ? resolverArtista(obra) : '';
+  const capaUrl = obra ? resolverCapa(obra) : undefined;
+
+  // CORREÇÃO 3 — Flag explícita para exibir o botão Assistir
+  const temVideo =
+    obra?.telegram_file_id != null && obra.telegram_file_id.trim() !== '';
 
   // ─────────────────────────────────────────────────────────────
   // Estados de carregamento / erro
@@ -624,11 +728,11 @@ export default function CatalogoObraPage() {
       {/* ───────────────── HERO DA OBRA ───────────────── */}
       <div className="relative overflow-hidden">
         {/* Fundo com blur da capa */}
-        {obra.capa && !capaErro && (
+        {capaUrl && !capaErro && (
           <div
             className="absolute inset-0 bg-cover bg-center"
             style={{
-              backgroundImage: `url(${obra.capa})`,
+              backgroundImage: `url(${capaUrl})`,
               filter: 'blur(32px) brightness(0.3) saturate(1.4)',
               transform: 'scale(1.15)',
             }}
@@ -651,13 +755,14 @@ export default function CatalogoObraPage() {
             className="w-[156px] h-[156px] rounded-[22px] overflow-hidden flex-shrink-0 flex items-center justify-center mb-4"
             style={{
               background: '#1a2a3a',
-              boxShadow: '0 24px 56px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)',
+              boxShadow:
+                '0 24px 56px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)',
             }}
           >
-            {obra.capa && !capaErro ? (
+            {capaUrl && !capaErro ? (
               <img
-                src={obra.capa}
-                alt={`Capa de ${obra.nome}`}
+                src={capaUrl}
+                alt={`Capa de ${titulo}`}
                 width={156}
                 height={156}
                 onError={() => setCapaErro(true)}
@@ -682,19 +787,26 @@ export default function CatalogoObraPage() {
             </span>
           )}
 
-          {/* Título */}
+          {/*
+           * CORREÇÃO 2 — Título e artista usando helpers com fallbacks.
+           * Antes: obra.nome / obra.artista (quebravam se o campo não existisse).
+           * Agora: resolverTitulo() / resolverArtista() cobrem todos os formatos.
+           */}
           <h1 className="text-[1.45rem] font-extrabold text-center leading-tight mb-1.5 px-3 tracking-tight">
-            {obra.nome}
+            {titulo}
           </h1>
 
-          {/* Artista */}
           <div className="flex items-center gap-1.5 text-white/50 text-sm">
             <Music2 size={12} />
-            <span className="font-medium">{obra.artista}</span>
+            <span className="font-medium">{artista}</span>
           </div>
 
-          {/* Botão Assistir */}
-          {obra.telegram_file_id && (
+          {/*
+           * CORREÇÃO 3 — Botão Assistir aparece OBRIGATORIAMENTE quando
+           * obra.telegram_file_id existe (verificado pela flag `temVideo`).
+           * O clique abre o VideoPlayer que faz GET ?action=getVideoUrl&file_id=XYZ.
+           */}
+          {temVideo && (
             <button
               onClick={() => setPlayerAberto(true)}
               className="mt-5 flex items-center gap-2.5 px-6 py-2.5 rounded-full font-bold text-sm text-white active:scale-95 transition-all duration-150"
@@ -702,7 +814,7 @@ export default function CatalogoObraPage() {
                 background: 'linear-gradient(135deg, #2AABEE 0%, #1a8dcc 100%)',
                 boxShadow: '0 8px 24px rgba(42,171,238,0.4)',
               }}
-              aria-label={`Assistir ${obra.nome}`}
+              aria-label={`Assistir ${titulo}`}
             >
               <Play size={14} fill="white" strokeWidth={0} />
               Assistir Vídeo
@@ -717,7 +829,10 @@ export default function CatalogoObraPage() {
       {/* ───────────────── FÓRUM ──────────────────────── */}
       <div
         className="flex flex-col flex-1"
-        style={{ background: '#0b141d', borderTop: '1px solid rgba(255,255,255,0.06)' }}
+        style={{
+          background: '#0b141d',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+        }}
       >
         {/* Header do fórum */}
         <div
@@ -736,6 +851,7 @@ export default function CatalogoObraPage() {
               title="Ao vivo"
             />
           </div>
+          {/* CORREÇÃO 1 — comentarios é sempre array aqui */}
           <span className="text-[11px] text-white/30 tabular-nums">
             {comentarios.length}{' '}
             {comentarios.length === 1 ? 'comentário' : 'comentários'}
@@ -750,7 +866,9 @@ export default function CatalogoObraPage() {
               {[...Array(5)].map((_, i) => (
                 <div
                   key={i}
-                  className={`flex gap-2 items-end ${i % 2 === 0 ? '' : 'flex-row-reverse'}`}
+                  className={`flex gap-2 items-end ${
+                    i % 2 === 0 ? '' : 'flex-row-reverse'
+                  }`}
                 >
                   <div
                     className="rounded-full flex-shrink-0"
@@ -781,6 +899,7 @@ export default function CatalogoObraPage() {
               </p>
             </div>
           ) : (
+            // CORREÇÃO 1 — Loop sobre comentariosAgrupados (derivado de listaComentarios)
             comentariosAgrupados.map((item, i) =>
               item.tipo === 'data' ? (
                 <DateDivider key={`d-${i}`} data={item.data} />
@@ -809,7 +928,9 @@ export default function CatalogoObraPage() {
           {telegramUser && (
             <div className="flex items-center gap-2 px-4 pt-2.5 pb-0">
               <Avatar
-                nome={`${telegramUser.first_name}${telegramUser.last_name ? ' ' + telegramUser.last_name : ''}`}
+                nome={`${telegramUser.first_name}${
+                  telegramUser.last_name ? ' ' + telegramUser.last_name : ''
+                }`}
                 foto={telegramUser.photo_url}
                 size={16}
               />
@@ -830,7 +951,6 @@ export default function CatalogoObraPage() {
               onKeyDown={handleKeyDown}
               placeholder="Escreva um comentário… (Enter para enviar)"
               rows={1}
-              // inputMode="text" permite teclado nativo com emoji no mobile
               inputMode="text"
               className="flex-1 text-white/90 placeholder-white/25 text-sm resize-none outline-none rounded-[18px] px-4 py-2.5 transition-colors duration-200"
               style={{
@@ -877,10 +997,14 @@ export default function CatalogoObraPage() {
       </div>
 
       {/* ───────────────── VIDEO PLAYER FLUTUANTE ─────── */}
-      {playerAberto && obra.telegram_file_id && (
+      {/*
+       * CORREÇÃO 3 — Só monta o player quando `temVideo` é true
+       * E o playerAberto foi ativado pelo clique no botão Assistir.
+       */}
+      {playerAberto && temVideo && (
         <VideoPlayer
-          telegramFileId={obra.telegram_file_id}
-          title={obra.nome}
+          telegramFileId={obra.telegram_file_id!}
+          title={titulo}
           onClose={() => setPlayerAberto(false)}
         />
       )}
