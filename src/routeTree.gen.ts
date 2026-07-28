@@ -35,6 +35,7 @@ import { Route as PontoIndexRouteImport } from './routes/ponto.index'
 import { Route as PlaylistsIndexRouteImport } from './routes/playlists.index'
 import { Route as PlayIndexRouteImport } from './routes/play.index'
 import { Route as GamesIndexRouteImport } from './routes/games.index'
+import { Route as CatalogoIndexRouteImport } from './routes/catalogo.index'
 import { Route as ArtistasIndexRouteImport } from './routes/artistas.index'
 import { Route as ToursNomeRouteImport } from './routes/tours.$nome'
 import { Route as PontoPlaylistsRouteImport } from './routes/ponto.playlists'
@@ -45,6 +46,7 @@ import { Route as GamesQueridometroRouteImport } from './routes/games.queridomet
 import { Route as GamesPaparazziEscapeRouteImport } from './routes/games.paparazzi-escape'
 import { Route as GamesMemoriaFamaRouteImport } from './routes/games.memoria-fama'
 import { Route as GamesHitsProducerRouteImport } from './routes/games.hits-producer'
+import { Route as CatalogoIdRouteImport } from './routes/catalogo.$id'
 import { Route as AlbumIdRouteImport } from './routes/album.$id'
 import { Route as AcoesTourRouteImport } from './routes/acoes.tour'
 import { Route as AcoesCinemaRouteImport } from './routes/acoes.cinema'
@@ -187,6 +189,11 @@ const GamesIndexRoute = GamesIndexRouteImport.update({
   path: '/games/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CatalogoIndexRoute = CatalogoIndexRouteImport.update({
+  id: '/catalogo/',
+  path: '/catalogo/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ArtistasIndexRoute = ArtistasIndexRouteImport.update({
   id: '/artistas/',
   path: '/artistas/',
@@ -235,6 +242,11 @@ const GamesMemoriaFamaRoute = GamesMemoriaFamaRouteImport.update({
 const GamesHitsProducerRoute = GamesHitsProducerRouteImport.update({
   id: '/games/hits-producer',
   path: '/games/hits-producer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CatalogoIdRoute = CatalogoIdRouteImport.update({
+  id: '/catalogo/$id',
+  path: '/catalogo/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AlbumIdRoute = AlbumIdRouteImport.update({
@@ -319,6 +331,7 @@ export interface FileRoutesByFullPath {
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
+  '/catalogo/$id': typeof CatalogoIdRoute
   '/games/hits-producer': typeof GamesHitsProducerRoute
   '/games/memoria-fama': typeof GamesMemoriaFamaRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
@@ -329,6 +342,7 @@ export interface FileRoutesByFullPath {
   '/ponto/playlists': typeof PontoPlaylistsRouteWithChildren
   '/tours/$nome': typeof ToursNomeRoute
   '/artistas/': typeof ArtistasIndexRoute
+  '/catalogo/': typeof CatalogoIndexRoute
   '/games/': typeof GamesIndexRoute
   '/play/': typeof PlayIndexRoute
   '/playlists/': typeof PlaylistsIndexRoute
@@ -368,6 +382,7 @@ export interface FileRoutesByTo {
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
+  '/catalogo/$id': typeof CatalogoIdRoute
   '/games/hits-producer': typeof GamesHitsProducerRoute
   '/games/memoria-fama': typeof GamesMemoriaFamaRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
@@ -378,6 +393,7 @@ export interface FileRoutesByTo {
   '/ponto/playlists': typeof PontoPlaylistsRouteWithChildren
   '/tours/$nome': typeof ToursNomeRoute
   '/artistas': typeof ArtistasIndexRoute
+  '/catalogo': typeof CatalogoIndexRoute
   '/games': typeof GamesIndexRoute
   '/play': typeof PlayIndexRoute
   '/playlists': typeof PlaylistsIndexRoute
@@ -418,6 +434,7 @@ export interface FileRoutesById {
   '/acoes/cinema': typeof AcoesCinemaRoute
   '/acoes/tour': typeof AcoesTourRoute
   '/album/$id': typeof AlbumIdRouteWithChildren
+  '/catalogo/$id': typeof CatalogoIdRoute
   '/games/hits-producer': typeof GamesHitsProducerRoute
   '/games/memoria-fama': typeof GamesMemoriaFamaRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
@@ -428,6 +445,7 @@ export interface FileRoutesById {
   '/ponto/playlists': typeof PontoPlaylistsRouteWithChildren
   '/tours/$nome': typeof ToursNomeRoute
   '/artistas/': typeof ArtistasIndexRoute
+  '/catalogo/': typeof CatalogoIndexRoute
   '/games/': typeof GamesIndexRoute
   '/play/': typeof PlayIndexRoute
   '/playlists/': typeof PlaylistsIndexRoute
@@ -469,6 +487,7 @@ export interface FileRouteTypes {
     | '/acoes/cinema'
     | '/acoes/tour'
     | '/album/$id'
+    | '/catalogo/$id'
     | '/games/hits-producer'
     | '/games/memoria-fama'
     | '/games/paparazzi-escape'
@@ -479,6 +498,7 @@ export interface FileRouteTypes {
     | '/ponto/playlists'
     | '/tours/$nome'
     | '/artistas/'
+    | '/catalogo/'
     | '/games/'
     | '/play/'
     | '/playlists/'
@@ -518,6 +538,7 @@ export interface FileRouteTypes {
     | '/acoes/cinema'
     | '/acoes/tour'
     | '/album/$id'
+    | '/catalogo/$id'
     | '/games/hits-producer'
     | '/games/memoria-fama'
     | '/games/paparazzi-escape'
@@ -528,6 +549,7 @@ export interface FileRouteTypes {
     | '/ponto/playlists'
     | '/tours/$nome'
     | '/artistas'
+    | '/catalogo'
     | '/games'
     | '/play'
     | '/playlists'
@@ -567,6 +589,7 @@ export interface FileRouteTypes {
     | '/acoes/cinema'
     | '/acoes/tour'
     | '/album/$id'
+    | '/catalogo/$id'
     | '/games/hits-producer'
     | '/games/memoria-fama'
     | '/games/paparazzi-escape'
@@ -577,6 +600,7 @@ export interface FileRouteTypes {
     | '/ponto/playlists'
     | '/tours/$nome'
     | '/artistas/'
+    | '/catalogo/'
     | '/games/'
     | '/play/'
     | '/playlists/'
@@ -617,6 +641,7 @@ export interface RootRouteChildren {
   AcoesCinemaRoute: typeof AcoesCinemaRoute
   AcoesTourRoute: typeof AcoesTourRoute
   AlbumIdRoute: typeof AlbumIdRouteWithChildren
+  CatalogoIdRoute: typeof CatalogoIdRoute
   GamesHitsProducerRoute: typeof GamesHitsProducerRoute
   GamesMemoriaFamaRoute: typeof GamesMemoriaFamaRoute
   GamesPaparazziEscapeRoute: typeof GamesPaparazziEscapeRoute
@@ -627,6 +652,7 @@ export interface RootRouteChildren {
   PontoPlaylistsRoute: typeof PontoPlaylistsRouteWithChildren
   ToursNomeRoute: typeof ToursNomeRoute
   ArtistasIndexRoute: typeof ArtistasIndexRoute
+  CatalogoIndexRoute: typeof CatalogoIndexRoute
   GamesIndexRoute: typeof GamesIndexRoute
   PlayIndexRoute: typeof PlayIndexRoute
   PlaylistsIndexRoute: typeof PlaylistsIndexRoute
@@ -821,6 +847,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GamesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/catalogo/': {
+      id: '/catalogo/'
+      path: '/catalogo'
+      fullPath: '/catalogo/'
+      preLoaderRoute: typeof CatalogoIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/artistas/': {
       id: '/artistas/'
       path: '/artistas'
@@ -889,6 +922,13 @@ declare module '@tanstack/react-router' {
       path: '/games/hits-producer'
       fullPath: '/games/hits-producer'
       preLoaderRoute: typeof GamesHitsProducerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/catalogo/$id': {
+      id: '/catalogo/$id'
+      path: '/catalogo/$id'
+      fullPath: '/catalogo/$id'
+      preLoaderRoute: typeof CatalogoIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/album/$id': {
@@ -1044,6 +1084,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcoesCinemaRoute: AcoesCinemaRoute,
   AcoesTourRoute: AcoesTourRoute,
   AlbumIdRoute: AlbumIdRouteWithChildren,
+  CatalogoIdRoute: CatalogoIdRoute,
   GamesHitsProducerRoute: GamesHitsProducerRoute,
   GamesMemoriaFamaRoute: GamesMemoriaFamaRoute,
   GamesPaparazziEscapeRoute: GamesPaparazziEscapeRoute,
@@ -1054,6 +1095,7 @@ const rootRouteChildren: RootRouteChildren = {
   PontoPlaylistsRoute: PontoPlaylistsRouteWithChildren,
   ToursNomeRoute: ToursNomeRoute,
   ArtistasIndexRoute: ArtistasIndexRoute,
+  CatalogoIndexRoute: CatalogoIndexRoute,
   GamesIndexRoute: GamesIndexRoute,
   PlayIndexRoute: PlayIndexRoute,
   PlaylistsIndexRoute: PlaylistsIndexRoute,
