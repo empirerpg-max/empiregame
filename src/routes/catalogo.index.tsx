@@ -1,165 +1,347 @@
+// src/routes/catalogo.index.tsx
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
-import { Search, Music, Film, TrendingUp, Star } from 'lucide-react';
-import type { Obra } from '../pages/ForumObra';
+import { useEffect, useRef, useState } from 'react';
+import { Home, Music, Disc3, Clapperboard, Video, MessagesSquare } from 'lucide-react';
 
+// ---------------------------------------------------------------------------
+// Route
+// ---------------------------------------------------------------------------
 export const Route = createFileRoute('/catalogo/')({ component: CatalogoPage });
 
+// ---------------------------------------------------------------------------
 // Telegram silent auth
+// ---------------------------------------------------------------------------
 function useTelegramUser() {
-  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
   return { id: tgUser?.id ?? 0, name: tgUser?.first_name ?? 'Anônimo' };
 }
 
-const FILTERS = ['Todos', 'Músicas', 'Vídeos', 'Em Alta'] as const;
-type Filter = (typeof FILTERS)[number];
+// ---------------------------------------------------------------------------
+// Interface — reflete as chaves snake_case da API do Google Apps Script
+// ---------------------------------------------------------------------------
+export interface ObraAPI {
+  // Chave primária — OBRIGATÓRIA para o clique
+  id_do_topico: string;
 
-const SORT_OPTIONS = [
-  { label: 'Mais Tocadas', value: 'streams' },
-  { label: 'Mais Recentes', value: 'recent' },
-  { label: 'A–Z', value: 'az' },
-] as const;
+  // Título (fallbacks lógicos)
+  nome?: string;
+  titulo?: string;
 
+  // Artista / Criador (fallbacks lógicos)
+  nome_do_criador?: string;
+  artista?: string;
+
+  // Capa (fallbacks lógicos)
+  capa?: string;
+  thumb?: string;
+  thumbnail_url?: string;
+
+  // Campos extras (não obrigatórios no catálogo)
+  streams?: number;
+  tipo?: string;
+  [key: string]: unknown; // tolera campos extras sem quebrar a tipagem
+}
+
+// ---------------------------------------------------------------------------
+// Helpers para extrair os campos com fallback lógico
+// ---------------------------------------------------------------------------
+const getTitle  = (item: ObraAPI) => item.nome || item.titulo || 'Sem Título';
+const getArtist = (item: ObraAPI) => item.nome_do_criador || item.artista || 'Desconhecido';
+const getCover  = (item: ObraAPI) =>
+  item.capa || item.thumb || item.thumbnail_url || '';
+
+// ---------------------------------------------------------------------------
+// Abas do menu superior
+// ---------------------------------------------------------------------------
+type Tab = 'inicio' | 'musicas' | 'albuns' | 'clipes' | 'videos' | 'forum';
+
+interface TabConfig {
+  id: Tab;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  action: string; // parâmetro enviado à API: ?action=<action>
+}
+
+const TABS: TabConfig[] = [
+  { id: 'inicio',  label: 'Início',  icon: Home,           action: 'inicio'  },
+  { id: 'musicas', label: 'Músicas', icon: Music,          action: 'musicas' },
+  { id: 'albuns',  label: 'Álbuns',  icon: Disc3,          action: 'albuns'  },
+  { id: 'clipes',  label: 'Clipes',  icon: Clapperboard,   action: 'clipes'  },
+  { id: 'videos',  label: 'Vídeos',  icon: Video,          action: 'videos'  },
+  { id: 'forum',   label: 'Fórum',   icon: MessagesSquare, action: 'forum'   },
+];
+
+// ---------------------------------------------------------------------------
+// URL base da API do Google Apps Script
+// Defina VITE_GAS_API_URL no seu .env com a URL do Web App publicado.
+// ---------------------------------------------------------------------------
+const GAS_BASE_URL =
+  (import.meta.env.VITE_GAS_API_URL as string | undefined) ??
+  'https://script.google.com/macros/s/SEU_DEPLOYMENT_ID/exec';
+
+// ---------------------------------------------------------------------------
+// Cache em memória (Map<action, ObraAPI[]>)
+// Evita re-fetch enquanto a página estiver montada.
+// Se SWR já estiver instalado, substitua pelo hook:
+//   const { data, isLoading } = useSWR(`${GAS_BASE_URL}?action=${activeTab}`, fetcher);
+// ---------------------------------------------------------------------------
+const memoryCache = new Map<string, ObraAPI[]>();
+
+async function fetchByAction(action: string): Promise<ObraAPI[]> {
+  if (memoryCache.has(action)) return memoryCache.get(action)!;
+
+  const res = await fetch(`${GAS_BASE_URL}?action=${action}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const json = await res.json();
+  // A API pode retornar { data: [...] } ou diretamente um array
+  const items: ObraAPI[] = Array.isArray(json) ? json : (json?.data ?? []);
+  memoryCache.set(action, items);
+  return items;
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton Card (estado de carregamento)
+// ---------------------------------------------------------------------------
+function SkeletonCard() {
+  return (
+    <div className="bg-[#1e2736] rounded-2xl overflow-hidden animate-pulse">
+      <div className="aspect-square bg-white/10" />
+      <div className="p-2 space-y-1.5">
+        <div className="h-3 bg-white/10 rounded-full w-4/5" />
+        <div className="h-2.5 bg-white/10 rounded-full w-3/5" />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Obra Card
+// ---------------------------------------------------------------------------
+function ObraCard({ obra }: { obra: ObraAPI }) {
+  const title  = getTitle(obra);
+  const artist = getArtist(obra);
+  const cover  = getCover(obra);
+
+  return (
+    <Link
+      to="/catalogo/$id"
+      params={{ id: obra.id_do_topico }}
+      className="group relative bg-[#1e2736] rounded-2xl overflow-hidden shadow-lg
+                 hover:scale-[1.02] active:scale-[0.98] transition-transform"
+    >
+      {/* Capa */}
+      <div className="aspect-square relative overflow-hidden bg-white/5">
+        {cover ? (
+          <img
+            src={cover}
+            alt={title}
+            loading="lazy"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = 'none';
+            }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Music size={32} className="text-white/20" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+      </div>
+
+      {/* Info */}
+      <div className="p-2">
+        <p className="text-white text-xs font-semibold truncate">{title}</p>
+        <p className="text-white/50 text-[11px] truncate">{artist}</p>
+      </div>
+    </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
+function EmptyState({ tab }: { tab: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 px-8 text-center gap-3">
+      <Disc3 size={40} className="text-white/20" />
+      <p className="text-white/40 text-sm">
+        Nenhum conteúdo encontrado em{' '}
+        <span className="text-white/60 font-medium">{tab}</span>.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Componente principal
+// ---------------------------------------------------------------------------
 export default function CatalogoPage() {
   const user = useTelegramUser();
-  const [obras, setObras] = useState<Obra[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('Todos');
-  const [sort, setSort] = useState<string>('streams');
+  const [activeTab, setActiveTab] = useState<Tab>('inicio');
+  const [obras, setObras] = useState<ObraAPI[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Referência para abortar fetch anterior se o usuário trocar de aba rápido
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    window.Telegram?.WebApp?.ready();
-    fetch('/api/catalogo')
-      .then((r) => r.json())
-      .then((data: Obra[]) => setObras(data))
-      .catch(() => setObras([]))
-      .finally(() => setLoading(false));
+    (window as any).Telegram?.WebApp?.ready();
   }, []);
 
-  const filtered = obras
-    .filter((o) => {
-      const matchesQuery = o.title.toLowerCase().includes(query.toLowerCase()) ||
-        o.artist.toLowerCase().includes(query.toLowerCase());
-      const matchesFilter =
-        filter === 'Todos' ||
-        (filter === 'Músicas' && o.type === 'music') ||
-        (filter === 'Vídeos' && o.type === 'video') ||
-        (filter === 'Em Alta' && o.streams > 100000);
-      return matchesQuery && matchesFilter;
-    })
-    .sort((a, b) => {
-      if (sort === 'streams') return b.streams - a.streams;
-      if (sort === 'az') return a.title.localeCompare(b.title);
-      return 0; // recent handled by API order
-    });
+  // Dispara fetch ao trocar de aba
+  useEffect(() => {
+    const tabConfig = TABS.find((t) => t.id === activeTab)!;
+
+    // Fórum não exige listagem de obras — renderiza tela diferente
+    if (activeTab === 'forum') {
+      setObras([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    // Cancela fetch anterior se ainda estiver em voo
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+
+    setLoading(true);
+    setError(null);
+
+    fetchByAction(tabConfig.action)
+      .then((data) => {
+        setObras(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (err?.name === 'AbortError') return;
+        setError('Erro ao carregar. Tente novamente.');
+        setLoading(false);
+      });
+  }, [activeTab]);
+
+  const activeTabConfig = TABS.find((t) => t.id === activeTab)!;
 
   return (
     <div className="min-h-screen bg-[#0f1923] text-white pb-24">
-      {/* Top Header */}
-      <div className="sticky top-0 z-10 bg-[#0f1923]/95 backdrop-blur-sm border-b border-white/10 px-4 pt-4 pb-3">
-        <div className="flex items-center justify-between mb-3">
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Header sticky com menu de abas                                       */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="sticky top-0 z-10 bg-[#0f1923]/95 backdrop-blur-sm border-b border-white/10">
+
+        {/* Linha do usuário */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
           <div>
-            <h1 className="text-xl font-bold">Catálogo</h1>
-            <p className="text-white/40 text-xs">Olá, {user.name} 👋</p>
+            <h1 className="text-lg font-bold leading-tight">Catálogo</h1>
+            <p className="text-white/40 text-[11px]">Olá, {user.name} 👋</p>
           </div>
-          <TrendingUp size={20} className="text-[#2AABEE]" />
         </div>
 
-        {/* Search */}
-        <div className="flex items-center gap-2 bg-[#1e2736] rounded-full px-4 py-2 mb-3">
-          <Search size={15} className="text-white/40" />
-          <input
-            className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/30"
-            placeholder="Buscar músicas, artistas..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-
-        {/* Filters */}
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                filter === f
-                  ? 'bg-[#2AABEE] text-white'
-                  : 'bg-white/10 text-white/60 hover:bg-white/20'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
+        {/* Menu de abas */}
+        <div
+          className="flex overflow-x-auto scrollbar-none gap-1 px-3 pb-3"
+          role="tablist"
+          aria-label="Categorias do catálogo"
+        >
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActiveTab(tab.id)}
+                className={`
+                  flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full
+                  text-xs font-medium transition-all duration-200
+                  ${isActive
+                    ? 'bg-[#2AABEE] text-white shadow-lg shadow-[#2AABEE]/25'
+                    : 'bg-white/8 text-white/55 hover:bg-white/15 hover:text-white/80'
+                  }
+                `}
+              >
+                <Icon size={12} />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Sort Row */}
-      <div className="flex gap-2 px-4 pt-3 pb-2 overflow-x-auto scrollbar-none">
-        {SORT_OPTIONS.map((s) => (
-          <button
-            key={s.value}
-            onClick={() => setSort(s.value)}
-            className={`flex-shrink-0 text-xs px-3 py-1 rounded-full border transition-colors ${
-              sort === s.value
-                ? 'border-[#2AABEE] text-[#2AABEE]'
-                : 'border-white/10 text-white/40'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
+      {/* ------------------------------------------------------------------ */}
+      {/* Conteúdo da aba                                                      */}
+      {/* ------------------------------------------------------------------ */}
 
-      {/* Grid */}
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="w-8 h-8 border-2 border-[#2AABEE] border-t-transparent rounded-full animate-spin" />
+      {/* Aba Fórum — renderização especial */}
+      {activeTab === 'forum' && (
+        <div className="flex flex-col items-center justify-center py-20 px-8 text-center gap-4">
+          <MessagesSquare size={48} className="text-[#2AABEE]/60" />
+          <div>
+            <p className="text-white font-semibold text-base">Fórum da Comunidade</p>
+            <p className="text-white/40 text-sm mt-1">
+              Selecione uma obra no catálogo para acessar o fórum dela.
+            </p>
+          </div>
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center text-white/30 py-20 text-sm">Nenhuma obra encontrada.</div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 px-4 pt-2">
-          {filtered.map((obra) => (
-            <Link
-              key={obra.id}
-              to="/catalogo/$id"
-              params={{ id: obra.id }}
-              className="group relative bg-[#1e2736] rounded-2xl overflow-hidden shadow-lg hover:scale-[1.02] transition-transform"
-            >
-              {/* Cover */}
-              <div className="aspect-square relative overflow-hidden">
-                <img
-                  src={obra.cover}
-                  alt={obra.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                {/* Type badge */}
-                <span className="absolute top-2 left-2 bg-black/50 backdrop-blur-sm rounded-full p-1">
-                  {obra.type === 'music'
-                    ? <Music size={11} className="text-[#2AABEE]" />
-                    : <Film size={11} className="text-purple-400" />}
-                </span>
-                {/* Streams badge */}
-                <span className="absolute bottom-2 right-2 bg-black/60 text-white/70 text-[10px] rounded-full px-2 py-0.5 flex items-center gap-1">
-                  <Star size={9} className="fill-yellow-400 text-yellow-400" />
-                  {obra.streams > 1000000
-                    ? `${(obra.streams / 1000000).toFixed(1)}M`
-                    : obra.streams > 1000
-                    ? `${(obra.streams / 1000).toFixed(0)}K`
-                    : obra.streams}
-                </span>
-              </div>
-              {/* Info */}
-              <div className="p-2">
-                <p className="text-white text-xs font-semibold truncate">{obra.title}</p>
-                <p className="text-white/50 text-[11px] truncate">{obra.artist}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
+      )}
+
+      {/* Demais abas */}
+      {activeTab !== 'forum' && (
+        <>
+          {/* Loading: skeletons */}
+          {loading && (
+            <div className="grid grid-cols-2 gap-3 px-4 pt-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          )}
+
+          {/* Erro */}
+          {!loading && error && (
+            <div className="text-center py-16 px-8">
+              <p className="text-white/40 text-sm mb-4">{error}</p>
+              <button
+                onClick={() => {
+                  // Limpa o cache da aba atual para forçar novo fetch
+                  const tabConfig = TABS.find((t) => t.id === activeTab)!;
+                  memoryCache.delete(tabConfig.action);
+                  setActiveTab((prev) => {
+                    // Força re-trigger do useEffect mantendo a aba atual
+                    setError(null);
+                    setLoading(true);
+                    fetchByAction(tabConfig.action)
+                      .then(setObras)
+                      .catch(() => setError('Erro ao carregar. Tente novamente.'))
+                      .finally(() => setLoading(false));
+                    return prev;
+                  });
+                }}
+                className="text-[#2AABEE] text-sm underline underline-offset-2"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
+
+          {/* Vazio */}
+          {!loading && !error && obras.length === 0 && (
+            <EmptyState tab={activeTabConfig.label} />
+          )}
+
+          {/* Grid de obras */}
+          {!loading && !error && obras.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 px-4 pt-4">
+              {obras.map((obra) => (
+                <ObraCard key={obra.id_do_topico} obra={obra} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
