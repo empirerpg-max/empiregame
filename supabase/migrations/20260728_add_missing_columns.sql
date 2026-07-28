@@ -14,7 +14,3 @@ ALTER TABLE "Music Videos"
 -- telegram_message_id em Comentarios_Videos
 ALTER TABLE "Comentarios_Videos"
   ADD COLUMN IF NOT EXISTS telegram_message_id bigint;
-
--- telegram_message_id em Comentarios_MV (se a tabela existir)
-ALTER TABLE "Comentarios_MV"
-  ADD COLUMN IF NOT EXISTS telegram_message_id bigint;
