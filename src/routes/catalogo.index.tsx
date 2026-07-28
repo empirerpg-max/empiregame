@@ -1,60 +1,94 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
-// ⚠️ COLE A SUA URL DO GOOGLE APPS SCRIPT AQUI DENTRO DAS ASPAS:
+// URL global do Web App do Google Apps Script
 const GAS_URL = 'https://script.google.com/macros/s/AKfycby7Epe3MHPMvje5OKtSlNn-tSWpowLPOJ7DVflFJqgZNOKCnN9IcGwWYL1QSeRtgJrQ7w/exec';
 
 export const Route = createFileRoute('/catalogo/')({ component: CatalogoPage });
 
 const MENUS = [
-  { label: 'Início', action: 'top50spotify' },
-  { label: 'Músicas', action: 'musicas' },
-  { label: 'Álbuns', action: 'albuns' },
-  { label: 'Clipes', action: 'music_videos' },
-  { label: 'Vídeos', action: 'videos' }
+  { label: 'Início',   action: 'top50spotify', isForum: false },
+  { label: 'Músicas',  action: 'musicas',       isForum: false },
+  { label: 'Álbuns',   action: 'albuns',         isForum: false },
+  { label: 'Clipes',   action: 'music_videos',   isForum: false },
+  { label: 'Vídeos',   action: 'videos',         isForum: false },
+  { label: 'Fórum',    action: 'forum',          isForum: true  },
+];
+
+const FORUM_SUBMENUS = [
+  { label: 'Músicas', action: 'musicas'      },
+  { label: 'Álbuns',  action: 'albuns'       },
+  { label: 'Clipes',  action: 'music_videos' },
+  { label: 'Vídeos',  action: 'videos'       },
 ];
 
 export default function CatalogoPage() {
-  const [obras, setObras] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [abaAtiva, setAbaAtiva] = useState(MENUS);
-  const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+  const [obras, setObras]           = useState<any[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [abaAtiva, setAbaAtiva]     = useState(MENUS[0]);
+  const [forumSub, setForumSub]     = useState(FORUM_SUBMENUS[0]);
+
+  const tgUser  = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
   const userName = tgUser?.first_name || 'Jogador';
+
+  // Determina qual action usar no fetch
+  const fetchAction = abaAtiva.isForum ? forumSub.action : abaAtiva.action;
 
   useEffect(() => {
     (window as any).Telegram?.WebApp?.ready();
     setLoading(true);
     setObras([]);
 
-    fetch(`${GAS_URL}?action=${abaAtiva.action}`)
+    fetch(`${GAS_URL}?action=${fetchAction}`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setObras(data);
         else setObras([]);
       })
-      .catch((err) => console.error(err))
+      .catch((err) => console.error('[Catálogo] Erro no fetch:', err))
       .finally(() => setLoading(false));
-  }, [abaAtiva]);
+  }, [fetchAction]);
 
   return (
     <div className="p-4 bg-[#0f172a] text-white min-h-screen pb-24">
       <h1 className="text-2xl font-bold mb-2">Empire Play</h1>
       <p className="text-sm text-gray-400 mb-6">Olá, {userName}!</p>
 
-      {/* Menu Superior */}
-      <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide">
+      {/* Menu Principal */}
+      <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
         {MENUS.map((menu) => (
           <button
             key={menu.label}
             onClick={() => setAbaAtiva(menu)}
             className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              abaAtiva.action === menu.action ? 'bg-[#2AABEE] text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'
+              abaAtiva.label === menu.label
+                ? 'bg-[#2AABEE] text-white'
+                : 'bg-white/10 text-white/60 hover:bg-white/20'
             }`}
           >
             {menu.label}
           </button>
         ))}
       </div>
+
+      {/* Submenu do Fórum */}
+      {abaAtiva.isForum && (
+        <div className="flex gap-2 overflow-x-auto pb-4 mt-3 scrollbar-hide">
+          {FORUM_SUBMENUS.map((sub) => (
+            <button
+              key={sub.label}
+              onClick={() => setForumSub(sub)}
+              className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                forumSub.action === sub.action
+                  ? 'border-[#2AABEE] text-[#2AABEE]'
+                  : 'border-white/20 text-white/50 hover:border-white/40'
+              }`}
+            >
+              {sub.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Grid de Conteúdo */}
       {loading ? (
@@ -64,18 +98,28 @@ export default function CatalogoPage() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {obras.map((obra, i) => {
-            // Mapeamento à prova de falhas:
-            const id = obra.id_do_topico || obra.telegram_topic_id || i;
+            const id     = obra.id_do_topico || obra.telegram_topic_id || i;
             const titulo = obra.nome_da_musica || obra.nome_do_video || obra.nome || obra.titulo || 'Sem Título';
-            const artista = obra.nome_do_criador || obra.artista || obra.id_do_criador || 'Desconhecido';
-            const capa = obra.capa_da_musica || obra.capa || obra.thumb || obra.thumbnail_url;
+            const artista = obra.nome_do_criador || obra.artista || obra.nome_do_jogador || 'Desconhecido';
+            const capa   = obra.capa_da_musica || obra.capa || obra.thumb || obra.thumbnail_url;
 
             return (
-              <Link key={id} to={`/catalogo/${id}`} className="group relative bg-[#1e2736] rounded-xl overflow-hidden shadow-lg hover:scale-105 transition-transform flex flex-col">
+              <Link
+                key={`${id}-${i}`}
+                to={`/catalogo/${id}`}
+                className="group relative bg-[#1e2736] rounded-xl overflow-hidden shadow-lg hover:scale-105 transition-transform flex flex-col"
+              >
                 {capa ? (
-                  <img src={capa} alt={titulo} className="w-full aspect-square object-cover" loading="lazy" />
+                  <img
+                    src={capa}
+                    alt={titulo}
+                    className="w-full aspect-square object-cover"
+                    loading="lazy"
+                  />
                 ) : (
-                  <div className="w-full aspect-square bg-gray-800 flex items-center justify-center text-xs text-gray-500">Sem Capa</div>
+                  <div className="w-full aspect-square bg-gray-800 flex items-center justify-center text-xs text-gray-500">
+                    Sem Capa
+                  </div>
                 )}
                 <div className="p-3">
                   <h3 className="font-bold text-sm truncate">{titulo}</h3>
