@@ -4,72 +4,101 @@ import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROXY PARA O GOOGLE APPS SCRIPT — substitua pela sua URL real antes do deploy
+// Tabelas suportadas por /api/catalogo?action=<action>
 // ─────────────────────────────────────────────────────────────────────────────
-const GAS_URL = 'COLE_AQUI_A_URL_DO_GAS';
+const ACTION_TABLE: Record<string, string> = {
+  albuns:       'Albuns',
+  musicas:      'Musicas',
+  videos:       'Videos',
+  music_videos: 'Music Videos',
+};
 
 const CORS_HEADERS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Handler de /api/catalogo — consulta Supabase REST diretamente
+// ─────────────────────────────────────────────────────────────────────────────
 async function handleCatalogoApi(request: Request): Promise<Response> {
   const url = new URL(request.url);
 
-  // Responde ao preflight CORS
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  // ── GET: repassa todos os query params para o GAS ──────────────────────────
-  if (request.method === 'GET') {
-    const gasTarget = `${GAS_URL}${url.search}`; // mantém ?action=... + outros params
-    try {
-      const gasRes = await fetch(gasTarget, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        redirect: 'follow',
-      });
-      const data = await gasRes.text();
-      return new Response(data, {
-        status: gasRes.status,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json; charset=utf-8' },
-      });
-    } catch (err) {
-      console.error('[Worker] Erro ao chamar GAS (GET):', err);
-      return new Response(JSON.stringify({ error: 'Falha ao contatar o servidor de dados.' }), {
-        status: 502,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
-    }
+  const action = url.searchParams.get('action') ?? '';
+  const table  = ACTION_TABLE[action];
+
+  if (!table) {
+    return new Response(
+      JSON.stringify({ error: `Ação desconhecida: "${action}". Use: ${Object.keys(ACTION_TABLE).join(', ')}.` }),
+      { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+    );
   }
 
-  // ── POST: repassa o body JSON para o GAS ───────────────────────────────────
-  if (request.method === 'POST') {
-    try {
-      const body = await request.text();
-      const gasRes = await fetch(GAS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-        redirect: 'follow',
-      });
-      const data = await gasRes.text();
-      return new Response(data, {
-        status: gasRes.status,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json; charset=utf-8' },
-      });
-    } catch (err) {
-      console.error('[Worker] Erro ao chamar GAS (POST):', err);
-      return new Response(JSON.stringify({ error: 'Falha ao salvar os dados.' }), {
-        status: 502,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
-    }
+  // Lê credenciais do ambiente (Cloudflare Workers env ou Node process.env)
+  // Em Cloudflare Workers as variáveis chegam pelo objeto `env`; como
+  // o handler foi desenhado para receber apenas `request`, lemos de
+  // process.env que o bundler injeta via define() no vite.config.
+  const supabaseUrl  = (typeof process !== 'undefined' && process.env?.SUPABASE_URL)
+    || (globalThis as any).__SUPABASE_URL__
+    || '';
+  const serviceKey   = (typeof process !== 'undefined' && process.env?.SUPABASE_SERVICE_ROLE_KEY)
+    || (globalThis as any).__SUPABASE_SERVICE_ROLE_KEY__
+    || '';
+
+  if (!supabaseUrl || !serviceKey) {
+    console.error('[api/catalogo] Variáveis SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY não configuradas.');
+    return new Response(
+      JSON.stringify({ error: 'Configuração do servidor incompleta. Contate o administrador.' }),
+      { status: 503, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+    );
   }
 
-  return new Response('Método não suportado.', { status: 405, headers: CORS_HEADERS });
+  // Monta a URL da REST API do Supabase
+  // Tabelas com espaço precisam ser codificadas: "Music Videos" → "Music%20Videos"
+  const encodedTable = encodeURIComponent(table);
+  const restUrl = `${supabaseUrl}/rest/v1/${encodedTable}?select=*`;
+
+  try {
+    console.log(`[api/catalogo] Buscando tabela "${table}" em:`, restUrl);
+
+    const res = await fetch(restUrl, {
+      method: 'GET',
+      headers: {
+        'apikey':        serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+        'Content-Type':  'application/json',
+        'Prefer':        'return=representation',
+      },
+    });
+
+    const body = await res.text();
+
+    if (!res.ok) {
+      console.error(`[api/catalogo] Supabase retornou HTTP ${res.status}:`, body);
+      return new Response(
+        JSON.stringify({ error: `Erro ao consultar tabela "${table}".`, detail: body }),
+        { status: res.status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`[api/catalogo] Tabela "${table}" OK — ${body.length} bytes`);
+    return new Response(body, {
+      status: 200,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json; charset=utf-8' },
+    });
+
+  } catch (err) {
+    console.error('[api/catalogo] Exceção ao consultar Supabase:', err);
+    return new Response(
+      JSON.stringify({ error: 'Erro interno ao buscar dados. Tente novamente.' }),
+      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -129,12 +158,19 @@ export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const url = new URL(request.url);
 
-    // ── Intercepta /api/catalogo antes do SSR ──────────────────────────────
+    // Injeta vars do env do Cloudflare Workers no globalThis para o handler acima
+    if (env && typeof env === 'object') {
+      const e = env as Record<string, string>;
+      if (e.SUPABASE_URL)              (globalThis as any).__SUPABASE_URL__ = e.SUPABASE_URL;
+      if (e.SUPABASE_SERVICE_ROLE_KEY) (globalThis as any).__SUPABASE_SERVICE_ROLE_KEY__ = e.SUPABASE_SERVICE_ROLE_KEY;
+    }
+
+    // Intercepta /api/catalogo antes do SSR
     if (url.pathname.startsWith('/api/catalogo')) {
       return handleCatalogoApi(request);
     }
 
-    // ── Rota normal: SSR do TanStack Start ────────────────────────────────
+    // Rota normal: SSR do TanStack Start
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
