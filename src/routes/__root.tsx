@@ -69,7 +69,6 @@ function GlobalLinkModal({ onClose }: { onClose: () => void }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [linking, setLinking] = useState(false);
 
-  // Form criar
   const [novoNome, setNovoNome] = useState("");
   const [novoFoto, setNovoFoto] = useState("");
   const [novoGravadora, setNovoGravadora] = useState("");
@@ -155,7 +154,6 @@ function GlobalLinkModal({ onClose }: { onClose: () => void }) {
           <h3 className="text-lg font-black tracking-tighter mb-1 text-center">Gerenciar Artistas</h3>
           <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest text-center mb-4 opacity-60">Vincule existentes ou crie um novo</p>
 
-          {/* Tabs */}
           <div className="grid grid-cols-2 gap-2 p-1 bg-white/[0.03] border border-white/5 rounded-2xl mb-4">
             <button
               onClick={() => setTab("link")}
@@ -359,7 +357,6 @@ function BottomNav() {
   const { pathname } = useLocation();
   const items = [
     { to: "/", label: "Hub", icon: Home },
-    // Artistas agora abre o diretório completo (filter=all)
     { to: "/artistas", search: { filter: "all" }, label: "Artistas", icon: Library },
     { to: "/charts", label: "Charts", icon: TrendingUp },
     { to: "/ponto", label: "Ponto", icon: Target },
@@ -378,7 +375,6 @@ function BottomNav() {
           className="relative flex items-stretch gap-0.5 rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-1 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)]"
           style={{ backdropFilter: "blur(28px) saturate(180%)" }}
         >
-          {/* Glow gradient interno */}
           <span className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/[0.06] to-transparent" />
           {items.map((it) => {
             const active = pathname === it.to || (it.to !== "/" && pathname.startsWith(it.to));
@@ -436,21 +432,17 @@ function RootInner() {
     (window as any).setShowLinkModal = setShowLinkModal;
   }, []);
 
-  // Sincroniza cores do header/background do Telegram com o tema do app
-  // (apenas em versões que suportam — evita warnings em clientes v6.0)
   useEffect(() => {
     const w = window.Telegram?.WebApp;
     if (!w) return;
     const v = (w.version || "0.0").split(".").map(Number);
-    if (v[0] * 1000 + (v[1] || 0) < 6001) return; // precisa de 6.1+
+    if (v[0] * 1000 + (v[1] || 0) < 6001) return;
     try {
       w.setHeaderColor?.("#000000");
       w.setBackgroundColor?.("#000000");
     } catch {}
   }, []);
 
-
-  // BackButton nativo do Telegram em rotas internas
   const isHome = pathname === "/";
   const handleBack = () => {
     haptic.light();
@@ -458,14 +450,12 @@ function RootInner() {
   };
   useTelegramBackButton(!isHome, handleBack);
 
-  // Scroll para o topo a cada navegação (UX padrão de apps mobile)
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
     }
   }, [pathname]);
 
-  // Fechar menu hamburguer ao navegar
   useEffect(() => {
     setIsOpen(false);
   }, [pathname]);
@@ -485,9 +475,7 @@ function RootInner() {
         className="fixed top-0 inset-x-0 z-[60] flex items-center justify-between px-5 sm:px-6 border-b border-white/[0.06] bg-gradient-to-b from-background/85 via-background/70 to-background/40 pt-[env(safe-area-inset-top)]"
         style={{ height: "calc(4rem + env(safe-area-inset-top))", backdropFilter: "blur(28px) saturate(180%)" }}
       >
-        {/* highlight superior */}
         <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
-        {/* glow do primário no rodapé */}
         <span className="pointer-events-none absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
         <Link to="/" className="flex items-center gap-2.5 relative" onClick={() => haptic.selection()}>
@@ -517,9 +505,10 @@ function RootInner() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
-            className="fixed inset-0 z-50 bg-background pt-20 px-6 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-background overflow-y-auto overscroll-contain"
+            style={{ paddingTop: "calc(4rem + env(safe-area-inset-top))", paddingBottom: "calc(6rem + env(safe-area-inset-bottom))" }}
           >
-             <div className="space-y-4 pb-12">
+             <div className="space-y-4 px-4 pt-4">
                 <Link
                   to="/acesso-rapido"
                   onClick={() => setIsOpen(false)}
@@ -661,7 +650,6 @@ function RootInner() {
 
       <RouteTransitionOverlay />
       <Outlet />
-      {/* MiniPlayer flutuante — renderiza acima da BottomNav (z-40 + bottom-16) */}
       <GlobalMiniPlayer />
       <BottomNav />
       <Toaster position="top-center" richColors closeButton offset={80} />
@@ -695,13 +683,14 @@ function RouteTransitionOverlay() {
 }
 
 function MenuCategory({ title, icon: Icon, items, onClose }: any) {
-  const [expanded, setExpanded] = useState(true);
+  // Começa fechado para não sobrecarregar a tela em mobile
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div className="space-y-2">
       <button 
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-4 rounded-3xl bg-white/[0.02] border border-white/5 text-left group"
+        className="w-full flex items-center justify-between p-4 rounded-3xl bg-white/[0.02] border border-white/5 text-left group active:scale-[0.98] transition-all"
       >
         <div className="flex items-center gap-3">
            <div className="size-8 rounded-xl bg-primary/10 text-primary grid place-items-center">
@@ -709,27 +698,42 @@ function MenuCategory({ title, icon: Icon, items, onClose }: any) {
            </div>
            <span className="font-black uppercase tracking-widest text-xs group-hover:text-primary transition-colors">{title}</span>
         </div>
-        <ChevronDown className={`size-4 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
+            {items.length} itens
+          </span>
+          <ChevronDown className={`size-4 text-muted-foreground transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+        </div>
       </button>
 
-      {expanded && (
-        <div className="grid grid-cols-2 gap-2 px-1">
-          {items.map((it: any, i: number) => (
-            <Link
-              key={i}
-              to={it.to}
-              search={it.search}
-              onClick={onClose}
-              className="flex flex-col items-center justify-center gap-2 p-5 rounded-[2rem] bg-card border border-white/5 hover:border-primary/20 transition-all text-center group"
-            >
-              <div className="size-11 rounded-2xl bg-white/5 text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-all grid place-items-center">
-                <it.icon className="size-5" />
-              </div>
-              <span className="font-black uppercase tracking-widest text-[10px] text-muted-foreground/60 group-hover:text-foreground">{it.label}</span>
-            </Link>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="grid grid-cols-2 gap-2 px-1 pb-1">
+              {items.map((it: any, i: number) => (
+                <Link
+                  key={i}
+                  to={it.to}
+                  search={it.search}
+                  onClick={() => { haptic.selection(); onClose(); }}
+                  className="flex flex-col items-center justify-center gap-2 p-5 rounded-[2rem] bg-card border border-white/5 hover:border-primary/20 active:scale-95 transition-all text-center group min-h-[90px]"
+                >
+                  <div className="size-11 rounded-2xl bg-white/5 text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-all grid place-items-center">
+                    <it.icon className="size-5" />
+                  </div>
+                  <span className="font-black uppercase tracking-widest text-[10px] text-muted-foreground/60 group-hover:text-foreground leading-tight">{it.label}</span>
+                </Link>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
