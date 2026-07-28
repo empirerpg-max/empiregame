@@ -1,36 +1,38 @@
 /**
- * MiniPlayer — player de áudio/vídeo background.
+ * MiniPlayer — player de áudio/vídeo flutuante.
  *
- * Estratégia de reprodução:
- * ─ Google Drive → <audio> nativo via proxy Cloudflare Worker.
+ * ══════════════════════════════════════════════════════════════════
+ * LÓGICA UNIVERSAL DE RENDERIZAÇÃO DE VÍDEO (Music Videos)
+ * ══════════════════════════════════════════════════════════════════
  *
- * ─ Telegram → <audio> nativo via Bot API proxy Cloudflare Worker.
- *   O Worker chama api.telegram.org/bot<TOKEN>/getFile e redireciona
- *   para file.telegram.org/file/bot<TOKEN>/<path>.
- *   Funciona sem WebSocket/MTProto, sem timeout. Limite: 20 MB (Bot API).
- *   Nenhuma mudança no fluxo de play/pause — usa o mesmo <audio> do Drive.
+ * A prop `videoSrc` (passada internamente via `currentItem.audioSrc`)
+ * é avaliada pela função `resolveVideoMode` antes de renderizar:
  *
- * ─ YouTube → YT.Player injetado em um <div> de 1×1 px invisível.
+ *  ┌─ URL contém 'youtube.com' | 'youtu.be' | ID YT (11 chars)
+ *  │   → <iframe> com embed do YouTube
+ *  │
+ *  ├─ URL contém 'drive.google.com'
+ *  │   → <iframe> com Google Drive preview
+ *  │
+ *  ├─ URL contém 'api.telegram.org/file'
+ *  │   → <video controls autoPlay> nativo HTML5
+ *  │
+ *  └─ URL termina com .mp4 (qualquer host)
+ *      → <video controls autoPlay> nativo HTML5
  *
- * Fluxo com autoPlay=true (um único clique):
- *   1. onClick → play(item, queue, { autoPlay: true })
- *   2. playContext seta playing:true imediatamente
- *   3. useEffect [currentMediaId] → apenas configura src/carrega (sem play)
- *   4. useEffect [currentMediaId, playing] → vê playing:true → chama triggerPlay()
+ * Para categorias que NÃO são 'musicvideo', o player de áudio original
+ * (Drive/Telegram via proxy + YT invisible player) continua funcionando
+ * exatamente como antes.
  *
- * Fluxo next/prev enquanto tocando:
- *   1. onClick → next() / prev()
- *   2. playContext troca currentIdx mas MANTÉM playing:true
- *   3. useEffect [currentMediaId] → configura nova src
- *   4. useEffect [currentMediaId, playing] → playing ainda true → triggerPlay()
- *
- * Fluxo resume após pausa:
- *   1. onClick → resume() → context seta playing:true + triggerPlay() chamado
- *   2. triggerPlay() chama .play() / .playVideo() com user-gesture garantido
- *   3. confirmPlaying() atualiza estado via evento nativo (redundante mas seguro)
+ * ══════════════════════════════════════════════════════════════════
+ * Fluxo de áudio (mantido do original):
+ * ──────────────────────────────────────────────────────────────────
+ * autoPlay=true  → play() → playing:true → useEffect → triggerPlay()
+ * next/prev      → troca currentIdx, mantém playing:true → triggerPlay()
+ * resume         → resume() → playing:true → triggerPlay() no onClick
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { toast } from "sonner";
 import {
   usePlay,
@@ -40,11 +42,11 @@ import {
   extractYouTubeId,
   extractDriveId,
 } from "@/lib/playContext";
-import { ChevronLeft, ChevronRight, X, Music } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Music, Minimize2, Maximize2 } from "lucide-react";
 import { driveImg } from "@/lib/api";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// YT API type shim — remova se @types/youtube estiver instalado
+// YT API type shim
 // ─────────────────────────────────────────────────────────────────────────────
 declare global {
   interface Window {
@@ -56,9 +58,72 @@ declare global {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tipos
+// ─────────────────────────────────────────────────────────────────────────────
+
+type VideoMode =
+  | { kind: "youtube-iframe"; embedUrl: string }
+  | { kind: "drive-iframe"; embedUrl: string }
+  | { kind: "native-video"; src: string }
+  | { kind: "audio" };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hook: garante que a YT IFrame API é carregada uma única vez
+// resolveVideoMode — lógica universal de detecção de fonte de vídeo
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Decide qual renderer usar com base na URL recebida.
+ *
+ * Regras (ordem de prioridade):
+ *  1. Contém 'youtube.com' ou 'youtu.be' ou ID de 11 chars → iframe YouTube
+ *  2. Contém 'drive.google.com'                            → iframe Google Drive
+ *  3. Contém 'api.telegram.org/file'                       → <video> nativo
+ *  4. Termina com '.mp4'                                    → <video> nativo
+ *  5. Qualquer outro caso                                   → modo áudio
+ */
+function resolveVideoMode(src: string, isVideoCategory: boolean): VideoMode {
+  if (!isVideoCategory) return { kind: "audio" };
+
+  const s = src.trim();
+
+  // ── YouTube ──────────────────────────────────────────────────────────────
+  if (
+    s.includes("youtube.com") ||
+    s.includes("youtu.be") ||
+    /^[a-zA-Z0-9_-]{11}$/.test(s)
+  ) {
+    const id = extractYouTubeId(s) ?? s;
+    return {
+      kind: "youtube-iframe",
+      embedUrl: `https://www.youtube.com/embed/${id}?autoplay=1&controls=1&rel=0&modestbranding=1&playsinline=1`,
+    };
+  }
+
+  // ── Google Drive ─────────────────────────────────────────────────────────
+  if (s.includes("drive.google.com")) {
+    const id = extractDriveId(s) ?? s;
+    return {
+      kind: "drive-iframe",
+      embedUrl: `https://drive.google.com/file/d/${id}/preview`,
+    };
+  }
+
+  // ── Telegram file API (URL direta) ───────────────────────────────────────
+  if (s.includes("api.telegram.org/file")) {
+    return { kind: "native-video", src: s };
+  }
+
+  // ── Arquivo .mp4 nativo (qualquer host) ──────────────────────────────────
+  if (/\.mp4(\?.*)?$/i.test(s)) {
+    return { kind: "native-video", src: s };
+  }
+
+  // ── Fallback: tratar como áudio / proxy existente ────────────────────────
+  return { kind: "audio" };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook: carrega a YT IFrame API uma única vez
 // ─────────────────────────────────────────────────────────────────────────────
 function useLoadYTApi(onReady: () => void) {
   const cbRef = useRef(onReady);
@@ -84,12 +149,62 @@ function useLoadYTApi(onReady: () => void) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper: resolve a URL de stream para o <audio>, seja Drive ou Telegram
+// Helper: resolve src do <audio> (Drive ou Telegram via proxy)
 // ─────────────────────────────────────────────────────────────────────────────
-function resolveAudioSrc(mediaType: "drive" | "telegram" | "youtube" | null, mediaId: string | null): string {
+function resolveAudioSrc(
+  mediaType: "drive" | "telegram" | "youtube" | null,
+  mediaId: string | null
+): string {
   if (!mediaId) return "";
   if (mediaType === "telegram") return telegramStreamUrl(mediaId);
   return driveStreamUrl(mediaId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VideoPanel — renderiza iframe ou <video> conforme o modo detectado
+// ─────────────────────────────────────────────────────────────────────────────
+interface VideoPanelProps {
+  mode: VideoMode;
+  expanded: boolean;
+}
+
+function VideoPanel({ mode, expanded }: VideoPanelProps) {
+  if (mode.kind === "audio") return null;
+
+  const containerClass = expanded
+    ? "w-full aspect-video rounded-t-xl overflow-hidden bg-black"
+    : "hidden";
+
+  if (mode.kind === "native-video") {
+    return (
+      <div className={containerClass}>
+        <video
+          key={mode.src}
+          src={mode.src}
+          controls
+          autoPlay
+          playsInline
+          className="w-full h-full object-contain"
+          aria-label="Reprodução de vídeo"
+        />
+      </div>
+    );
+  }
+
+  // iframe — YouTube ou Google Drive
+  return (
+    <div className={containerClass}>
+      <iframe
+        key={mode.embedUrl}
+        src={mode.embedUrl}
+        allow="autoplay; fullscreen; picture-in-picture"
+        allowFullScreen
+        className="w-full h-full border-0"
+        title="Reprodução de vídeo"
+        sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+      />
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,12 +229,31 @@ export function MiniPlayer() {
 
   const { queue, currentIdx, playing } = state;
 
+  // ── Video panel state ────────────────────────────────────────────────────
+  const [videoExpanded, setVideoExpanded] = useState(false);
+
   const ytContainerRef = useRef<HTMLDivElement>(null);
   const ytApiReady = useRef(false);
   const ytActiveId = useRef<string | null>(null);
   const pendingPlay = useRef(false);
 
-  // ── 1. Cria o elemento <audio> nativo (uma única vez) ───────────────────
+  // Deriva o item atual e o modo de vídeo ──────────────────────────────────
+  const item = currentIdx !== null ? queue[currentIdx] : null;
+  const isVideoCategory = item?.categoria === "musicvideo" || item?.categoria === "video";
+  const videoMode: VideoMode = item
+    ? resolveVideoMode(item.audioSrc, isVideoCategory)
+    : { kind: "audio" };
+
+  // Vídeo em iframe/native → expande automaticamente na primeira abertura
+  useEffect(() => {
+    if (videoMode.kind !== "audio") {
+      setVideoExpanded(true);
+    } else {
+      setVideoExpanded(false);
+    }
+  }, [videoMode.kind, currentIdx]);
+
+  // ── 1. Cria o <audio> nativo (uma única vez) ─────────────────────────────
   useEffect(() => {
     if (audioRef.current) return;
     const audio = new Audio();
@@ -148,7 +282,7 @@ export function MiniPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 2. Cria / recria o YT.Player ────────────────────────────────────
+  // ── 2. Cria / recria o YT.Player invisível (apenas para áudio YT) ────────
   const buildYTPlayer = useCallback(
     (videoId: string, autoStart: boolean) => {
       if (!ytContainerRef.current) return;
@@ -196,22 +330,33 @@ export function MiniPlayer() {
 
   const onYTApiReady = useCallback(() => {
     ytApiReady.current = true;
+    // O player invisível só é criado quando o vídeo YT é renderizado em modo ÁUDIO
+    // (i.e., sem iframe visível). Se há iframe visível, o player invisível não é necessário.
     if (
+      videoMode.kind === "audio" &&
       mediaType === "youtube" &&
       currentMediaId &&
       ytActiveId.current !== currentMediaId
     ) {
       buildYTPlayer(currentMediaId, pendingPlay.current);
     }
-  }, [mediaType, currentMediaId, buildYTPlayer]);
+  }, [videoMode.kind, mediaType, currentMediaId, buildYTPlayer]);
 
   useLoadYTApi(onYTApiReady);
 
-  // ── 3. Reage à troca de faixa — configura src, NÃO inicia reprodução ────
-  //    Drive e Telegram usam o mesmo <audio>.
-  //    A decisão de tocar ou não fica para o efeito 4.
+  // ── 3. Troca de faixa — configura src / player ───────────────────────────
   useEffect(() => {
     if (!currentMediaId) return;
+
+    // Para vídeos com iframe/native, não usamos o <audio> nem o YT Player invisível
+    if (videoMode.kind !== "audio") {
+      // Para o áudio anterior se houver
+      audioRef.current?.pause();
+      if (ytPlayerRef.current) {
+        try { ytPlayerRef.current.stopVideo(); } catch { /* */ }
+      }
+      return;
+    }
 
     if (mediaType === "drive" || mediaType === "telegram") {
       const audio = audioRef.current;
@@ -228,11 +373,13 @@ export function MiniPlayer() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMediaId, mediaType]);
+  }, [currentMediaId, mediaType, videoMode.kind]);
 
-  // ── 4. Auto-play quando playing é true (troca de faixa OU resume) ────────
+  // ── 4. Auto-play quando playing é true (apenas modo áudio) ───────────────
   useEffect(() => {
     if (!currentMediaId || !playing) return;
+    // Se há iframe/native video, o próprio elemento cuida do autoplay
+    if (videoMode.kind !== "audio") return;
 
     const id = setTimeout(() => {
       if (mediaType === "drive" || mediaType === "telegram") {
@@ -248,11 +395,7 @@ export function MiniPlayer() {
 
       if (mediaType === "youtube") {
         if (ytPlayerRef.current) {
-          try {
-            ytPlayerRef.current.playVideo();
-          } catch {
-            pendingPlay.current = true;
-          }
+          try { ytPlayerRef.current.playVideo(); } catch { pendingPlay.current = true; }
         } else {
           pendingPlay.current = true;
           if (ytApiReady.current && currentMediaId) {
@@ -264,9 +407,9 @@ export function MiniPlayer() {
 
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMediaId, playing]);
+  }, [currentMediaId, playing, videoMode.kind]);
 
-  // ── 5. Limpa ao desmontar ──────────────────────────────────────────
+  // ── 5. Limpa ao desmontar ─────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       audioRef.current?.pause();
@@ -274,29 +417,25 @@ export function MiniPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 6. triggerPlay — chamado com user-gesture garantido ───────────────
+  // ── 6. triggerPlay ───────────────────────────────────────────────────────
   const triggerPlay = useCallback(() => {
+    if (videoMode.kind !== "audio") return; // iframe/native cuida do próprio play
+
     if (mediaType === "drive" || mediaType === "telegram") {
       const audio = audioRef.current;
       if (!audio) return;
-      audio
-        .play()
-        .catch(() => {
-          confirmPaused();
-          toast.error(
-            "Falha ao reproduzir. O arquivo pode estar privado ou o navegador bloqueou o autoplay."
-          );
-        });
+      audio.play().catch(() => {
+        confirmPaused();
+        toast.error(
+          "Falha ao reproduzir. O arquivo pode estar privado ou o navegador bloqueou o autoplay."
+        );
+      });
       return;
     }
 
     if (mediaType === "youtube") {
       if (ytPlayerRef.current) {
-        try {
-          ytPlayerRef.current.playVideo();
-        } catch {
-          pendingPlay.current = true;
-        }
+        try { ytPlayerRef.current.playVideo(); } catch { pendingPlay.current = true; }
       } else {
         pendingPlay.current = true;
         if (ytApiReady.current && currentMediaId) {
@@ -304,22 +443,25 @@ export function MiniPlayer() {
         }
       }
     }
-  }, [mediaType, audioRef, ytPlayerRef, currentMediaId, buildYTPlayer, confirmPaused]);
+  }, [videoMode.kind, mediaType, audioRef, ytPlayerRef, currentMediaId, buildYTPlayer, confirmPaused]);
 
-  // ── 7. triggerPause ──────────────────────────────────────────────
+  // ── 7. triggerPause ──────────────────────────────────────────────────────
   const triggerPause = useCallback(() => {
     pendingPlay.current = false;
     pause();
   }, [pause]);
 
-  // ── Guard ──────────────────────────────────────────────────────────────
+  // ── Guard ─────────────────────────────────────────────────────────────────
   if (currentIdx === null || queue.length === 0) return null;
 
-  const item = queue[currentIdx];
+  if (!item) return null;
+
   const hasPrev = currentIdx > 0;
   const hasNext = currentIdx < queue.length - 1;
+  const isVideoMode = videoMode.kind !== "audio";
 
   const handlePlayPause = () => {
+    if (isVideoMode) return; // controles nativos do iframe/video
     if (playing) {
       triggerPause();
     } else {
@@ -329,12 +471,20 @@ export function MiniPlayer() {
   };
 
   return (
-    <div className="fixed bottom-16 inset-x-0 z-40 bg-card border-t border-white/10 shadow-2xl">
+    <div
+      className={[
+        "fixed inset-x-0 z-40 bg-card border-t border-white/10 shadow-2xl transition-all duration-300",
+        isVideoMode && videoExpanded ? "bottom-0" : "bottom-16",
+      ].join(" ")}
+    >
+      {/* ── Painel de vídeo (iframe ou <video> nativo) ── */}
+      <VideoPanel mode={videoMode} expanded={videoExpanded} />
+
       {/*
-       * Container do YouTube — NUNCA display:none nem size 0.
-       * Escondemos via opacity/position/z-index.
+       * Container do YouTube INVISÍVEL — usado somente em modo ÁUDIO YT.
+       * Nunca exibido quando há iframe/native visível.
        */}
-      {mediaType === "youtube" && (
+      {videoMode.kind === "audio" && mediaType === "youtube" && (
         <div
           style={{
             position: "absolute",
@@ -353,6 +503,7 @@ export function MiniPlayer() {
         </div>
       )}
 
+      {/* ── Barra de controles ── */}
       <div className="mx-auto max-w-2xl px-4 py-2 flex items-center gap-3">
         {/* Capa */}
         <div className="size-10 rounded-lg overflow-hidden bg-primary/10 flex-shrink-0">
@@ -378,11 +529,31 @@ export function MiniPlayer() {
           </p>
           <p className="text-[10px] text-muted-foreground truncate">
             {item.artista}
+            {isVideoMode && (
+              <span className="ml-1 text-primary opacity-70">
+                · {videoMode.kind === "native-video" ? "MP4" : videoMode.kind === "youtube-iframe" ? "YouTube" : "Drive"}
+              </span>
+            )}
           </p>
         </div>
 
         {/* Controles */}
         <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Botão expandir/recolher painel de vídeo */}
+          {isVideoMode && (
+            <button
+              onClick={() => setVideoExpanded((v) => !v)}
+              className="size-8 grid place-items-center text-muted-foreground hover:text-foreground transition-opacity"
+              aria-label={videoExpanded ? "Recolher vídeo" : "Expandir vídeo"}
+            >
+              {videoExpanded ? (
+                <Minimize2 className="size-4" />
+              ) : (
+                <Maximize2 className="size-4" />
+              )}
+            </button>
+          )}
+
           <button
             onClick={() => { prev(); }}
             disabled={!hasPrev}
@@ -392,22 +563,25 @@ export function MiniPlayer() {
             <ChevronLeft className="size-4" />
           </button>
 
-          <button
-            onClick={handlePlayPause}
-            className="size-9 rounded-full bg-primary text-primary-foreground grid place-items-center hover:scale-105 transition-transform"
-            aria-label={playing ? "Pausar" : "Reproduzir"}
-          >
-            {playing ? (
-              <svg className="size-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="6" y="4" width="4" height="16" />
-                <rect x="14" y="4" width="4" height="16" />
-              </svg>
-            ) : (
-              <svg className="size-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <polygon points="5,3 19,12 5,21" />
-              </svg>
-            )}
-          </button>
+          {/* Botão play/pause — visível apenas em modo áudio */}
+          {!isVideoMode && (
+            <button
+              onClick={handlePlayPause}
+              className="size-9 rounded-full bg-primary text-primary-foreground grid place-items-center hover:scale-105 transition-transform"
+              aria-label={playing ? "Pausar" : "Reproduzir"}
+            >
+              {playing ? (
+                <svg className="size-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="6" y="4" width="4" height="16" />
+                  <rect x="14" y="4" width="4" height="16" />
+                </svg>
+              ) : (
+                <svg className="size-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <polygon points="5,3 19,12 5,21" />
+                </svg>
+              )}
+            </button>
+          )}
 
           <button
             onClick={() => { next(); }}
