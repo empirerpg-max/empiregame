@@ -108,7 +108,7 @@ function resolveVideoMode(src: string, isVideoCategory: boolean): VideoMode {
     };
   }
 
-  // ── Telegram file API (URL direta) ───────────────────────────────────────
+  // ── Telegram file API (URL direta gerada pelo backend) ───────────────────
   if (s.includes("api.telegram.org/file")) {
     return { kind: "native-video", src: s };
   }
@@ -169,29 +169,65 @@ interface VideoPanelProps {
 }
 
 function VideoPanel({ mode, expanded }: VideoPanelProps) {
+  const [videoError, setVideoError] = useState(false);
+
+  // Reseta o estado de erro sempre que a source mudar
+  useEffect(() => {
+    setVideoError(false);
+  }, [mode]);
+
   if (mode.kind === "audio") return null;
 
   const containerClass = expanded
     ? "w-full aspect-video rounded-t-xl overflow-hidden bg-black"
     : "hidden";
 
+  // ── <video> nativo — Telegram (api.telegram.org/file) ou .mp4 ────────────
   if (mode.kind === "native-video") {
+    if (videoError) {
+      return (
+        <div className={containerClass + " flex items-center justify-center"}>
+          <p className="text-xs text-muted-foreground px-4 text-center">
+            Não foi possível carregar o vídeo. O arquivo pode estar indisponível.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className={containerClass}>
+        {/*
+         * key={mode.src} força o React a destruir e recriar o elemento
+         * sempre que a URL mudar, evitando loading infinito por src stale.
+         */}
         <video
           key={mode.src}
-          src={mode.src}
           controls
           autoPlay
           playsInline
-          className="w-full h-full object-contain"
+          style={{ width: "100%", height: "100%" }}
+          onError={() => {
+            console.error("[MiniPlayer] Erro ao carregar vídeo nativo:", mode.src);
+            setVideoError(true);
+            toast.error(
+              "Erro ao carregar o vídeo. Verifique se o arquivo está acessível."
+            );
+          }}
           aria-label="Reprodução de vídeo"
-        />
+        >
+          {/*
+           * Usa <source> em vez de src direto na tag <video> para garantir
+           * que o navegador dispare o evento 'error' corretamente em todos
+           * os casos, incluindo URLs que retornam 403/404.
+           */}
+          <source src={mode.src} type="video/mp4" />
+          Seu navegador não suporta a reprodução de vídeo HTML5.
+        </video>
       </div>
     );
   }
 
-  // iframe — YouTube ou Google Drive
+  // ── <iframe> — YouTube ou Google Drive ───────────────────────────────────
   return (
     <div className={containerClass}>
       <iframe
