@@ -1,18 +1,19 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
-// URL global do Web App do Google Apps Script
-const GAS_URL = 'https://script.google.com/macros/s/AKfycby7Epe3MHPMvje5OKtSlNn-tSWpowLPOJ7DVflFJqgZNOKCnN9IcGwWYL1QSeRtgJrQ7w/exec';
-
+// ──────────────────────────────────────────────────────────────────────────────
+// O frontend NÃO chama o GAS diretamente. Todas as requisições passam pelo
+// Cloudflare Worker em /api/catalogo, que faz o proxy para o GAS.
+// ──────────────────────────────────────────────────────────────────────────────
 export const Route = createFileRoute('/catalogo/')({ component: CatalogoPage });
 
 const MENUS = [
-  { label: 'Início',   action: 'top50spotify', isForum: false },
-  { label: 'Músicas',  action: 'musicas',       isForum: false },
-  { label: 'Álbuns',   action: 'albuns',         isForum: false },
-  { label: 'Clipes',   action: 'music_videos',   isForum: false },
-  { label: 'Vídeos',   action: 'videos',         isForum: false },
-  { label: 'Fórum',    action: 'forum',          isForum: true  },
+  { label: 'Início',  action: 'top50spotify', isForum: false },
+  { label: 'Músicas', action: 'musicas',       isForum: false },
+  { label: 'Álbuns',  action: 'albuns',        isForum: false },
+  { label: 'Clipes',  action: 'music_videos',  isForum: false },
+  { label: 'Vídeos',  action: 'videos',        isForum: false },
+  { label: 'Fórum',   action: 'forum',         isForum: true  },
 ];
 
 const FORUM_SUBMENUS = [
@@ -23,15 +24,15 @@ const FORUM_SUBMENUS = [
 ];
 
 export default function CatalogoPage() {
-  const [obras, setObras]           = useState<any[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [abaAtiva, setAbaAtiva]     = useState(MENUS[0]);
-  const [forumSub, setForumSub]     = useState(FORUM_SUBMENUS[0]);
+  const [obras, setObras]       = useState<any[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [abaAtiva, setAbaAtiva] = useState(MENUS[0]);
+  const [forumSub, setForumSub] = useState(FORUM_SUBMENUS[0]);
 
-  const tgUser  = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+  const tgUser   = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
   const userName = tgUser?.first_name || 'Jogador';
 
-  // Determina qual action usar no fetch
+  // Determina qual action usar: se for fórum usa o submenu, senão usa a aba principal
   const fetchAction = abaAtiva.isForum ? forumSub.action : abaAtiva.action;
 
   useEffect(() => {
@@ -39,7 +40,8 @@ export default function CatalogoPage() {
     setLoading(true);
     setObras([]);
 
-    fetch(`${GAS_URL}?action=${fetchAction}`)
+    // ✅ Chama o WORKER, não o GAS diretamente → evita CORS
+    fetch(`/api/catalogo?action=${fetchAction}`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setObras(data);
@@ -54,7 +56,7 @@ export default function CatalogoPage() {
       <h1 className="text-2xl font-bold mb-2">Empire Play</h1>
       <p className="text-sm text-gray-400 mb-6">Olá, {userName}!</p>
 
-      {/* Menu Principal */}
+      {/* ── Menu Principal ── */}
       <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
         {MENUS.map((menu) => (
           <button
@@ -71,7 +73,7 @@ export default function CatalogoPage() {
         ))}
       </div>
 
-      {/* Submenu do Fórum */}
+      {/* ── Submenu do Fórum ── */}
       {abaAtiva.isForum && (
         <div className="flex gap-2 overflow-x-auto pb-4 mt-3 scrollbar-hide">
           {FORUM_SUBMENUS.map((sub) => (
@@ -90,7 +92,7 @@ export default function CatalogoPage() {
         </div>
       )}
 
-      {/* Grid de Conteúdo */}
+      {/* ── Grid de Cards ── */}
       {loading ? (
         <div className="text-center mt-10 text-gray-400">Carregando catálogo...</div>
       ) : obras.length === 0 ? (
@@ -98,10 +100,11 @@ export default function CatalogoPage() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {obras.map((obra, i) => {
-            const id     = obra.id_do_topico || obra.telegram_topic_id || i;
-            const titulo = obra.nome_da_musica || obra.nome_do_video || obra.nome || obra.titulo || 'Sem Título';
-            const artista = obra.nome_do_criador || obra.artista || obra.nome_do_jogador || 'Desconhecido';
-            const capa   = obra.capa_da_musica || obra.capa || obra.thumb || obra.thumbnail_url;
+            // ── Mapeamento robusto com fallbacks (chaves variam por aba) ──────
+            const id      = obra.id_do_topico || obra.telegram_topic_id || String(i);
+            const titulo  = obra.nome_da_musica || obra.nome_do_video || obra.nome || obra.titulo || 'Sem Título';
+            const artista = obra.nome_do_criador || obra.artista || obra.id_do_criador || 'Desconhecido';
+            const capa    = obra.capa_da_musica || obra.capa || obra.thumb || obra.thumbnail_url;
 
             return (
               <Link
@@ -117,8 +120,8 @@ export default function CatalogoPage() {
                     loading="lazy"
                   />
                 ) : (
-                  <div className="w-full aspect-square bg-gray-800 flex items-center justify-center text-xs text-gray-500">
-                    Sem Capa
+                  <div className="w-full aspect-square bg-gray-800 flex items-center justify-center text-4xl">
+                    🎵
                   </div>
                 )}
                 <div className="p-3">
