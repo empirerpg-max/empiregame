@@ -3,18 +3,13 @@
  * ─────────────────────────────────────────────────────────────
  * Página de detalhes de uma obra do catálogo Empire RPG.
  *
- * Funcionalidades:
- *  • Hero com capa, título e artista (com fallbacks multi-campo)
- *  • Telegram Mini Player: busca URL temporária e renderiza <video> flutuante
- *  • Fórum com polling em tempo real, agrupado por data
- *  • Login silencioso via window.Telegram.WebApp.initDataUnsafe.user
- *  • Envio com Optimistic UI — atualiza o estado imediatamente, POST em background
- *  • Input com suporte a emoji nativo (sem biblioteca externa)
+ * Regras de fallback aplicadas (REGRA RÍGIDA):
+ *  • Título:  nome_da_musica || nome_do_video || nome || titulo
+ *  • Artista: nome_do_criador || artista
+ *  • Capa:    capa_da_musica || capa || thumb || thumbnail_url
  *
- * CORREÇÕES APLICADAS:
- *  1. Proteção Anti-Quebra (TypeError): Array.isArray() antes de iterar comentários
- *  2. Mapeamento do Header: fallbacks multi-campo (nome_da_musica || nome, etc.)
- *  3. MiniPlayer de Vídeo: botão Assistir aparece sempre que telegram_file_id existir
+ *  A URL de fetch busca categorias individualmente via:
+ *    GET {GAS_URL}?action=nome_da_categoria
  */
 
 import { createFileRoute, useParams } from '@tanstack/react-router';
@@ -43,10 +38,11 @@ export const Route = createFileRoute('/catalogo/$id')({
 });
 
 // ─────────────────────────────────────────────────────────────
-// Constantes
+// GAS URL — variável de ambiente com fallback para URL fixa
 // ─────────────────────────────────────────────────────────────
 
-const GAS_URL =
+const GAS_URL: string =
+  (import.meta as any).env?.VITE_GAS_URL ??
   'https://script.google.com/macros/s/AKfycby7Epe3MHPMvje5OKtSlNn-tSWpowLPOJ7DVflFJqgZNOKCnN9IcGwWYL1QSeRtgJrQ7w/exec';
 
 // ─────────────────────────────────────────────────────────────
@@ -54,30 +50,32 @@ const GAS_URL =
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Interface da Obra: aceita múltiplos formatos de campo
- * para garantir compatibilidade com diferentes versões da API.
+ * Interface da Obra — aceita propriedades dinâmicas snake_case
+ * geradas pelo backend GAS a partir dos cabeçalhos do Google Sheets.
+ * A assinatura de índice [key: string] garante compatibilidade total.
  */
-interface Obra {
+export interface Obra {
   id_do_topico: string;
-  // Título — múltiplos campos possíveis (fallback em cascata)
-  nome?: string;
+  // Título (fallback em cascata — mais específico primeiro)
   nome_da_musica?: string;
+  nome_do_video?: string;
+  nome?: string;
   titulo?: string;
-  name?: string;
-  // Artista — múltiplos campos possíveis
+  // Artista / Criador (fallback em cascata)
+  nome_do_criador?: string;
   artista?: string;
-  artista_nome?: string;
-  artist?: string;
-  // Capa — múltiplos campos possíveis
+  id_do_criador?: string;
+  // Capa (fallback em cascata — mais específico primeiro)
+  capa_da_musica?: string;
   capa?: string;
-  cover?: string;
-  imagem?: string;
-  foto?: string;
-  thumbnail?: string;
-  // Outros
+  thumb?: string;
+  thumbnail_url?: string;
+  // Outros campos comuns
   letra?: string;
   tipo?: string;
   telegram_file_id?: string;
+  // Aceita qualquer chave snake_case extra sem quebrar TypeScript
+  [key: string]: unknown;
 }
 
 interface Comentario {
@@ -96,6 +94,42 @@ interface TelegramUser {
   last_name?: string;
   username?: string;
   photo_url?: string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Helpers de fallback — REGRA RÍGIDA conforme especificação
+// ─────────────────────────────────────────────────────────────
+
+/** Título: nome_da_musica → nome_do_video → nome → titulo */
+function resolverTitulo(obra: Obra): string {
+  return (
+    (obra.nome_da_musica as string | undefined) ||
+    (obra.nome_do_video  as string | undefined) ||
+    (obra.nome           as string | undefined) ||
+    (obra.titulo         as string | undefined) ||
+    'Sem título'
+  );
+}
+
+/** Artista: nome_do_criador → artista */
+function resolverArtista(obra: Obra): string {
+  return (
+    (obra.nome_do_criador as string | undefined) ||
+    (obra.artista         as string | undefined) ||
+    (obra.id_do_criador   as string | undefined) ||
+    'Artista desconhecido'
+  );
+}
+
+/** Capa: capa_da_musica → capa → thumb → thumbnail_url */
+function resolverCapa(obra: Obra): string | undefined {
+  return (
+    (obra.capa_da_musica as string | undefined) ||
+    (obra.capa          as string | undefined) ||
+    (obra.thumb         as string | undefined) ||
+    (obra.thumbnail_url as string | undefined) ||
+    undefined
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -143,41 +177,6 @@ function stringToHsl(str: string): string {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
   return `hsl(${Math.abs(hash) % 360}, 55%, 48%)`;
-}
-
-/**
- * CORREÇÃO 2 — Extrai o título da obra com fallbacks multi-campo,
- * espelhando a mesma lógica usada no catálogo.index.tsx.
- */
-function resolverTitulo(obra: Obra): string {
-  return (
-    obra.nome_da_musica ||
-    obra.nome ||
-    obra.titulo ||
-    obra.name ||
-    'Sem título'
-  );
-}
-
-/**
- * CORREÇÃO 2 — Extrai o artista da obra com fallbacks multi-campo.
- */
-function resolverArtista(obra: Obra): string {
-  return obra.artista || obra.artista_nome || obra.artist || 'Artista desconhecido';
-}
-
-/**
- * CORREÇÃO 2 — Extrai a URL da capa com fallbacks multi-campo.
- */
-function resolverCapa(obra: Obra): string | undefined {
-  return (
-    obra.capa ||
-    obra.cover ||
-    obra.imagem ||
-    obra.foto ||
-    obra.thumbnail ||
-    undefined
-  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -249,7 +248,9 @@ function Balao({
 }) {
   return (
     <div
-      className={`flex gap-2 items-end mb-1.5 ${isMeu ? 'flex-row-reverse' : 'flex-row'}`}
+      className={`flex gap-2 items-end mb-1.5 ${
+        isMeu ? 'flex-row-reverse' : 'flex-row'
+      }`}
     >
       {!isMeu && (
         <Avatar
@@ -306,707 +307,414 @@ function Balao({
   );
 }
 
-/** Letra expansível */
-function LetraExpansivel({ letra }: { letra: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mx-4 mb-5 rounded-2xl overflow-hidden border border-white/[0.08] bg-[#0d1822]">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 text-white/70 hover:text-white active:scale-[0.99] transition-all duration-150"
-      >
-        <div className="flex items-center gap-2">
-          <Mic2 size={14} className="text-[#2AABEE]" />
-          <span className="text-sm font-medium">Letra</span>
-        </div>
-        {open ? (
-          <ChevronUp size={15} className="text-white/40" />
-        ) : (
-          <ChevronDown size={15} className="text-white/40" />
-        )}
-      </button>
-      <div
-        className="overflow-hidden transition-[max-height] duration-500 ease-in-out"
-        style={{ maxHeight: open ? '600px' : '0px' }}
-      >
-        <div className="px-4 pb-5">
-          <div className="h-px bg-white/10 mb-4" />
-          <pre className="text-sm text-white/70 whitespace-pre-wrap font-sans leading-loose">
-            {letra.trim()}
-          </pre>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * CORREÇÃO 3 — Player flutuante nativo HTML5.
- * Só é montado quando obra.telegram_file_id existe.
- * Busca a URL temporária em ?action=getVideoUrl&file_id=XYZ
- * e renderiza <video> com controls + autoPlay + playsInline.
- * Inclui retry manual em caso de falha.
- */
-function VideoPlayer({
-  telegramFileId,
-  title,
-  onClose,
-}: {
-  telegramFileId: string;
-  title: string;
-  onClose: () => void;
-}) {
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState(false);
-
-  const buscarUrl = useCallback(() => {
-    if (!telegramFileId) return;
-    setLoading(true);
-    setErro(false);
-    setVideoUrl(null);
-    fetch(
-      `${GAS_URL}?action=getVideoUrl&file_id=${encodeURIComponent(telegramFileId)}`
-    )
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((data) => {
-        // Aceita diferentes chaves de resposta da API
-        const url =
-          data?.url ??
-          data?.videoUrl ??
-          data?.mp4Url ??
-          data?.video_url ??
-          null;
-        if (!url || typeof url !== 'string') {
-          throw new Error('URL não encontrada na resposta da API');
-        }
-        setVideoUrl(url);
-      })
-      .catch(() => setErro(true))
-      .finally(() => setLoading(false));
-  }, [telegramFileId]);
-
-  useEffect(() => {
-    buscarUrl();
-  }, [buscarUrl]);
-
-  return (
-    /* Overlay escuro — clique fora fecha */
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(8px)' }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        className="relative w-full max-w-lg mx-2 mb-4 sm:mb-0 rounded-2xl overflow-hidden shadow-2xl"
-        style={{
-          background: '#0b141d',
-          border: '1px solid rgba(255,255,255,0.08)',
-        }}
-      >
-        {/* Cabeçalho */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-2 h-2 rounded-full bg-[#2AABEE] animate-pulse" />
-            <span className="text-sm font-semibold text-white/90 truncate max-w-[220px]">
-              {title}
-            </span>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150"
-            aria-label="Fechar player"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Área do vídeo — aspect-ratio 16/9 */}
-        <div className="relative bg-black" style={{ aspectRatio: '16/9' }}>
-          {/* Estado: carregando */}
-          {loading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-              <Loader2 size={32} className="text-[#2AABEE] animate-spin" />
-              <span className="text-xs text-white/40">Carregando vídeo…</span>
-            </div>
-          )}
-
-          {/* Estado: erro */}
-          {erro && !loading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-              <span className="text-3xl">⚠️</span>
-              <p className="text-sm text-white/50">
-                Não foi possível carregar o vídeo.
-                <br />
-                Tente novamente em instantes.
-              </p>
-              <button
-                onClick={buscarUrl}
-                className="mt-1 px-4 py-1.5 rounded-full bg-[#2AABEE]/20 text-[#2AABEE] text-xs font-semibold hover:bg-[#2AABEE]/30 transition"
-              >
-                Tentar novamente
-              </button>
-            </div>
-          )}
-
-          {/* Estado: vídeo pronto */}
-          {videoUrl && !loading && !erro && (
-            // eslint-disable-next-line jsx-a11y/media-has-caption
-            <video
-              src={videoUrl}
-              controls
-              autoPlay
-              playsInline
-              className="w-full h-full object-contain"
-              style={{ display: 'block' }}
-            />
-          )}
-        </div>
-
-        {/* Rodapé do player */}
-        <div className="px-4 py-2.5 flex items-center gap-2">
-          <span className="text-[10px] text-white/25 font-medium">
-            URL temporária · Empire RPG
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────
-// Página principal
+// Componente principal
 // ─────────────────────────────────────────────────────────────
 
 export default function CatalogoObraPage() {
   const { id } = useParams({ from: '/catalogo/$id' });
   const router = useRouter();
 
-  // ── Estado da obra ─────────────────────────────────────────
-  const [obra, setObra] = useState<Obra | null>(null);
-  const [loadingObra, setLoadingObra] = useState(true);
-  const [erroObra, setErroObra] = useState(false);
-  const [capaErro, setCapaErro] = useState(false);
+  // ── Estado da obra ──────────────────────────────────────────
+  const [obra,       setObra      ] = useState<Obra | null>(null);
+  const [loadingObra,setLoadingObra] = useState(true);
+  const [erroObra,   setErroObra  ] = useState<string | null>(null);
 
-  // ── Estado do player ───────────────────────────────────────
-  const [playerAberto, setPlayerAberto] = useState(false);
-
-  // ── Estado do fórum ────────────────────────────────────────
-  /**
-   * CORREÇÃO 1 — Inicialização explícita com array vazio garante
-   * que comentarios nunca seja null/undefined.
-   */
+  // ── Estado do fórum ─────────────────────────────────────────
   const [comentarios, setComentarios] = useState<Comentario[]>([]);
-  const [loadingForum, setLoadingForum] = useState(true);
-  const [texto, setTexto] = useState('');
-  const [enviando, setEnviando] = useState(false);
+  const [loadingForum,setLoadingForum] = useState(false);
+  const [texto,        setTexto      ] = useState('');
+  const [enviando,     setEnviando   ] = useState(false);
+  const [forumAberto,  setForumAberto] = useState(false);
 
-  const endRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const telegramUser = getTelegramUser();
+  // ── MiniPlayer Telegram ──────────────────────────────────────
+  const [videoUrl,     setVideoUrl    ] = useState<string | null>(null);
+  const [loadingVideo, setLoadingVideo ] = useState(false);
+  const [playerAberto, setPlayerAberto ] = useState(false);
 
-  // ── Inicialização do Telegram WebApp ───────────────────────
-  useEffect(() => {
-    try {
-      (window as any).Telegram?.WebApp?.ready();
-    } catch {
-      // fora do contexto Telegram — ignora
-    }
-  }, []);
+  const endRef    = useRef<HTMLDivElement>(null);
+  const inputRef  = useRef<HTMLTextAreaElement>(null);
+  const tgUser    = getTelegramUser();
 
-  // ── Fetch da obra ──────────────────────────────────────────
-  useEffect(() => {
-    if (!id) return;
+  // ──────────────────────────────────────────────────────────────
+  // Busca a obra pelo id_do_topico
+  // Estratégia: tenta todas as categorias até encontrar a obra
+  // ──────────────────────────────────────────────────────────────
+  const CATEGORIAS = ['musicas', 'albuns', 'music_videos', 'videos', 'top50spotify'];
+
+  const buscarObra = useCallback(async () => {
     setLoadingObra(true);
-    fetch(`${GAS_URL}?action=getObra&id_do_topico=${encodeURIComponent(id)}`)
-      .then((r) => {
-        if (!r.ok) throw new Error('not found');
-        return r.json();
-      })
-      .then((data: Obra) => setObra(data))
-      .catch(() => setErroObra(true))
-      .finally(() => setLoadingObra(false));
+    setErroObra(null);
+
+    for (const categoria of CATEGORIAS) {
+      try {
+        // Busca a categoria individualmente via ?action=nome_da_categoria
+        const res = await fetch(`${GAS_URL}?action=${categoria}`);
+        if (!res.ok) continue;
+
+        const json = await res.json();
+        const items: Obra[] = Array.isArray(json) ? json : (json?.data ?? []);
+        const encontrada = items.find((o) => o.id_do_topico === id);
+
+        if (encontrada) {
+          setObra(encontrada);
+          setLoadingObra(false);
+          return;
+        }
+      } catch {
+        // Ignora erros por categoria e tenta a próxima
+        continue;
+      }
+    }
+
+    setErroObra('Obra não encontrada.');
+    setLoadingObra(false);
   }, [id]);
 
-  // ── Fetch de comentários + polling 15s ─────────────────────
-  const carregarComentarios = useCallback(async () => {
+  useEffect(() => {
+    buscarObra();
+  }, [buscarObra]);
+
+  // ──────────────────────────────────────────────────────────────
+  // Comentários — polling a cada 15s
+  // ──────────────────────────────────────────────────────────────
+  const fetchComentarios = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await fetch(
-        `${GAS_URL}?action=getComentarios&id_do_topico=${encodeURIComponent(id)}`
+      const res = await fetch(`${GAS_URL}?action=get_comments&topico_id=${id}`);
+      if (!res.ok) return;
+      const json = await res.json();
+      const lista = Array.isArray(json)
+        ? json
+        : Array.isArray(json?.data)
+          ? json.data
+          : [];
+      setComentarios(
+        lista.filter((c: Comentario) => !c.otimista),
       );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-
-      /**
-       * CORREÇÃO 1 — Proteção Anti-Quebra (TypeError: comentarios is not iterable)
-       * A API pode retornar null, undefined, um objeto { comentarios: [...] },
-       * ou um array diretamente. Normalizamos aqui antes de setar o estado.
-       * O loop em comentariosAgrupados e o .map() do render só veem a listaComentarios.
-       */
-      const listaComentarios: Comentario[] = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.comentarios)
-          ? data.comentarios
-          : Array.isArray(data?.data)
-            ? data.data
-            : [];
-
-      setComentarios(listaComentarios);
     } catch {
-      // Falha silenciosa — mantém estado anterior (que já é array vazio ou válido)
-    } finally {
-      setLoadingForum(false);
+      // Silencia erros de polling
     }
   }, [id]);
 
   useEffect(() => {
-    carregarComentarios();
-    const intervalo = setInterval(carregarComentarios, 15_000);
-    return () => clearInterval(intervalo);
-  }, [carregarComentarios]);
+    if (!forumAberto) return;
+    fetchComentarios();
+    const interval = setInterval(fetchComentarios, 15_000);
+    return () => clearInterval(interval);
+  }, [forumAberto, fetchComentarios]);
 
-  // ── Auto-scroll para o fim do fórum ───────────────────────
+  // Scroll automático ao abrir fórum
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [comentarios.length]);
+    if (forumAberto) {
+      setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
+  }, [forumAberto, comentarios.length]);
 
-  // ── Envio com Optimistic UI ────────────────────────────────
-  async function enviarComentario() {
-    const textoLimpo = texto.trim();
-    if (!textoLimpo || enviando || !obra) return;
-
-    const nomeUsuario = telegramUser
-      ? `${telegramUser.first_name}${telegramUser.last_name ? ' ' + telegramUser.last_name : ''}`
-      : 'Anônimo';
+  // ──────────────────────────────────────────────────────────────
+  // Envio de comentário (Optimistic UI)
+  // ──────────────────────────────────────────────────────────────
+  const enviarComentario = async () => {
+    const textoCortado = texto.trim();
+    if (!textoCortado || !tgUser || enviando) return;
 
     const otimista: Comentario = {
-      id: gerarIdOtimista(),
-      usuario_id: String(telegramUser?.id ?? 'anonimo'),
-      usuario_nome: nomeUsuario,
-      usuario_foto: telegramUser?.photo_url,
-      texto: textoLimpo,
-      criado_em: new Date().toISOString(),
-      otimista: true,
+      id:           gerarIdOtimista(),
+      usuario_id:   String(tgUser.id),
+      usuario_nome: `${tgUser.first_name}${tgUser.last_name ? ` ${tgUser.last_name}` : ''}`,
+      usuario_foto: tgUser.photo_url,
+      texto:        textoCortado,
+      criado_em:    new Date().toISOString(),
+      otimista:     true,
     };
 
-    // 1) Exibe instantaneamente
     setComentarios((prev) => [...prev, otimista]);
     setTexto('');
     setEnviando(true);
 
-    // Reset altura do textarea
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
-
     try {
-      const res = await fetch(`${GAS_URL}?action=postComentario`, {
-        method: 'POST',
+      await fetch(GAS_URL, {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id_do_topico: obra.id_do_topico,
-          usuario_id: otimista.usuario_id,
-          usuario_nome: nomeUsuario,
-          usuario_foto: telegramUser?.photo_url ?? '',
-          texto: textoLimpo,
+        body:    JSON.stringify({
+          action:       'add_comment',
+          topico_id:    id,
+          usuario_id:   String(tgUser.id),
+          usuario_nome: otimista.usuario_nome,
+          usuario_foto: tgUser.photo_url ?? '',
+          texto:        textoCortado,
         }),
       });
-
-      if (!res.ok) throw new Error('falha POST');
-
-      const real: Comentario = await res.json();
-      setComentarios((prev) =>
-        prev.map((c) => (c.id === otimista.id ? { ...real, otimista: false } : c))
-      );
+      await fetchComentarios();
     } catch {
-      // Marca visualmente como falha
-      setComentarios((prev) =>
-        prev.map((c) =>
-          c.id === otimista.id
-            ? { ...c, texto: c.texto + ' ⚠️', otimista: false }
-            : c
-        )
-      );
+      // Mantém o otimista visível; próximo polling corrigirá
     } finally {
       setEnviando(false);
     }
+  };
+
+  // ──────────────────────────────────────────────────────────────
+  // MiniPlayer — busca URL temporária do Telegram
+  // ──────────────────────────────────────────────────────────────
+  const abrirPlayer = async () => {
+    if (!obra?.telegram_file_id) return;
+    setLoadingVideo(true);
+    try {
+      const res = await fetch(
+        `${GAS_URL}?action=get_video_url&file_id=${obra.telegram_file_id}`,
+      );
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      const url: string = json?.url ?? json?.data?.url ?? '';
+      if (!url) throw new Error();
+      setVideoUrl(url);
+      setPlayerAberto(true);
+    } catch {
+      alert('Não foi possível carregar o vídeo. Tente novamente.');
+    } finally {
+      setLoadingVideo(false);
+    }
+  };
+
+  // ──────────────────────────────────────────────────────────────
+  // Agrupamento de comentários por data
+  // ──────────────────────────────────────────────────────────────
+  function agruparPorData(lista: Comentario[]) {
+    const grupos = new Map<string, Comentario[]>();
+    for (const c of lista) {
+      const chave = formatData(c.criado_em);
+      if (!grupos.has(chave)) grupos.set(chave, []);
+      grupos.get(chave)!.push(c);
+    }
+    return grupos;
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      enviarComentario();
-    }
-  }
+  const gruposComentarios = agruparPorData(comentarios);
 
-  // ── Agrupamento por data ────────────────────────────────────
-  /**
-   * CORREÇÃO 1 — Usa listaComentarios (garantidamente array)
-   * ao invés de iterar diretamente sobre `comentarios`.
-   */
-  const comentariosAgrupados = (() => {
-    const listaComentarios = Array.isArray(comentarios) ? comentarios : [];
-    const lista: Array<
-      | { tipo: 'data'; data: string }
-      | { tipo: 'msg'; comentario: Comentario }
-    > = [];
-    let ultimaData = '';
-    for (const c of listaComentarios) {
-      const d = formatData(c.criado_em);
-      if (d !== ultimaData) {
-        lista.push({ tipo: 'data', data: d });
-        ultimaData = d;
-      }
-      lista.push({ tipo: 'msg', comentario: c });
-    }
-    return lista;
-  })();
-
-  const meuId = String(telegramUser?.id ?? '');
-
-  // CORREÇÃO 2 — Campos resolvidos via helpers de fallback
-  const titulo = obra ? resolverTitulo(obra) : '';
-  const artista = obra ? resolverArtista(obra) : '';
-  const capaUrl = obra ? resolverCapa(obra) : undefined;
-
-  // CORREÇÃO 3 — Flag explícita para exibir o botão Assistir
-  const temVideo =
-    obra?.telegram_file_id != null && obra.telegram_file_id.trim() !== '';
-
-  // ─────────────────────────────────────────────────────────────
-  // Estados de carregamento / erro
-  // ─────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────
+  // Render
+  // ──────────────────────────────────────────────────────────────
 
   if (loadingObra) {
     return (
-      <div className="min-h-screen bg-[#0b141d] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-2 border-[#2AABEE] border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs text-white/30">Carregando obra…</span>
-        </div>
+      <div className="min-h-screen bg-[#0f1923] flex items-center justify-center">
+        <Loader2 size={32} className="text-[#2AABEE] animate-spin" />
       </div>
     );
   }
 
   if (erroObra || !obra) {
     return (
-      <div className="min-h-screen bg-[#0b141d] flex flex-col items-center justify-center gap-5 px-6 text-center">
-        <div className="text-5xl">🎵</div>
-        <p className="text-white/50 text-sm max-w-[26ch]">
-          Esta obra não foi encontrada ou está indisponível.
-        </p>
+      <div className="min-h-screen bg-[#0f1923] flex flex-col items-center justify-center gap-4 px-8 text-center">
+        <ImageOff size={40} className="text-white/20" />
+        <p className="text-white/50 text-sm">{erroObra ?? 'Obra não encontrada.'}</p>
         <button
           onClick={() => router.history.back()}
-          className="px-5 py-2.5 rounded-full bg-[#2AABEE]/15 text-[#2AABEE] text-sm font-semibold hover:bg-[#2AABEE]/25 active:scale-95 transition-all"
+          className="px-4 py-2 rounded-full bg-white/10 text-white/70 text-sm hover:bg-white/20 transition-colors"
         >
-          ← Voltar
+          Voltar
         </button>
       </div>
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Render principal
-  // ─────────────────────────────────────────────────────────────
+  // Aplica fallbacks conforme REGRA RÍGIDA
+  const titulo  = resolverTitulo(obra);
+  const artista = resolverArtista(obra);
+  const capa    = resolverCapa(obra);
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#0b141d] text-white">
+    <div className="min-h-screen bg-[#0f1923] text-white pb-24">
 
-      {/* ───────────────── BOTÃO VOLTAR ───────────────── */}
-      <button
-        onClick={() => router.history.back()}
-        className="fixed top-3 left-3 z-40 w-9 h-9 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-md text-white/80 hover:text-white hover:bg-black/80 active:scale-90 transition-all duration-150 border border-white/[0.08]"
-        aria-label="Voltar"
-      >
-        <ArrowLeft size={16} />
-      </button>
+      {/* ── Back button ── */}
+      <div className="sticky top-0 z-10 bg-[#0f1923]/90 backdrop-blur-sm px-4 py-3 flex items-center gap-3 border-b border-white/10">
+        <button
+          onClick={() => router.history.back()}
+          className="p-1.5 rounded-full hover:bg-white/10 transition-colors"
+          aria-label="Voltar"
+        >
+          <ArrowLeft size={20} className="text-white/80" />
+        </button>
+        <span className="text-sm font-semibold text-white/80 truncate">{titulo}</span>
+      </div>
 
-      {/* ───────────────── HERO DA OBRA ───────────────── */}
-      <div className="relative overflow-hidden">
-        {/* Fundo com blur da capa */}
-        {capaUrl && !capaErro && (
+      {/* ── Hero ── */}
+      <div className="relative">
+        {/* Capa de fundo (blur) */}
+        {capa && (
           <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{
-              backgroundImage: `url(${capaUrl})`,
-              filter: 'blur(32px) brightness(0.3) saturate(1.4)',
-              transform: 'scale(1.15)',
-            }}
+            className="absolute inset-0 bg-cover bg-center blur-2xl opacity-20 scale-110"
+            style={{ backgroundImage: `url(${capa})` }}
+            aria-hidden
           />
         )}
 
-        {/* Gradiente sobre o fundo */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(to bottom, rgba(11,20,29,0.2) 0%, transparent 50%, #0b141d 100%)',
-          }}
-        />
-
-        {/* Conteúdo do hero */}
-        <div className="relative z-10 flex flex-col items-center pt-16 pb-7 px-5">
-          {/* Capa */}
-          <div
-            className="w-[156px] h-[156px] rounded-[22px] overflow-hidden flex-shrink-0 flex items-center justify-center mb-4"
-            style={{
-              background: '#1a2a3a',
-              boxShadow:
-                '0 24px 56px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)',
-            }}
-          >
-            {capaUrl && !capaErro ? (
+        <div className="relative z-[1] flex flex-col items-center pt-8 pb-6 px-4 gap-4">
+          {/* Capa principal */}
+          <div className="w-44 h-44 rounded-2xl overflow-hidden shadow-2xl bg-white/5 flex items-center justify-center flex-shrink-0">
+            {capa ? (
               <img
-                src={capaUrl}
-                alt={`Capa de ${titulo}`}
-                width={156}
-                height={156}
-                onError={() => setCapaErro(true)}
+                src={capa}
+                alt={titulo}
                 className="w-full h-full object-cover"
+                loading="eager"
               />
             ) : (
-              <ImageOff size={36} className="text-white/20" />
+              <Music2 size={48} className="text-white/20" />
             )}
           </div>
 
-          {/* Badge do tipo */}
-          {obra.tipo && (
-            <span
-              className="text-[9px] font-black uppercase tracking-[0.18em] mb-2 px-2.5 py-1 rounded-full"
-              style={{
-                background: 'rgba(42,171,238,0.15)',
-                color: '#2AABEE',
-                border: '1px solid rgba(42,171,238,0.25)',
-              }}
-            >
-              {obra.tipo}
-            </span>
-          )}
-
-          {/*
-           * CORREÇÃO 2 — Título e artista usando helpers com fallbacks.
-           * Antes: obra.nome / obra.artista (quebravam se o campo não existisse).
-           * Agora: resolverTitulo() / resolverArtista() cobrem todos os formatos.
-           */}
-          <h1 className="text-[1.45rem] font-extrabold text-center leading-tight mb-1.5 px-3 tracking-tight">
-            {titulo}
-          </h1>
-
-          <div className="flex items-center gap-1.5 text-white/50 text-sm">
-            <Music2 size={12} />
-            <span className="font-medium">{artista}</span>
+          {/* Título e artista com fallbacks */}
+          <div className="text-center">
+            <h1 className="text-xl font-bold leading-tight">{titulo}</h1>
+            <p className="text-white/55 text-sm mt-0.5">{artista}</p>
           </div>
 
-          {/*
-           * CORREÇÃO 3 — Botão Assistir aparece OBRIGATORIAMENTE quando
-           * obra.telegram_file_id existe (verificado pela flag `temVideo`).
-           * O clique abre o VideoPlayer que faz GET ?action=getVideoUrl&file_id=XYZ.
-           */}
-          {temVideo && (
+          {/* Botão Assistir — aparece quando telegram_file_id existe */}
+          {obra.telegram_file_id && (
             <button
-              onClick={() => setPlayerAberto(true)}
-              className="mt-5 flex items-center gap-2.5 px-6 py-2.5 rounded-full font-bold text-sm text-white active:scale-95 transition-all duration-150"
-              style={{
-                background: 'linear-gradient(135deg, #2AABEE 0%, #1a8dcc 100%)',
-                boxShadow: '0 8px 24px rgba(42,171,238,0.4)',
-              }}
-              aria-label={`Assistir ${titulo}`}
+              onClick={abrirPlayer}
+              disabled={loadingVideo}
+              className="flex items-center gap-2 px-5 py-2 rounded-full bg-[#2AABEE]
+                         text-white text-sm font-semibold shadow-lg shadow-[#2AABEE]/30
+                         hover:bg-[#1a9bde] active:scale-95 transition-all disabled:opacity-60"
             >
-              <Play size={14} fill="white" strokeWidth={0} />
-              Assistir Vídeo
+              {loadingVideo
+                ? <Loader2 size={16} className="animate-spin" />
+                : <Play size={16} fill="white" />}
+              {loadingVideo ? 'Carregando…' : 'Assistir'}
             </button>
           )}
         </div>
       </div>
 
-      {/* ───────────────── LETRA ──────────────────────── */}
-      {obra.letra && <LetraExpansivel letra={obra.letra} />}
-
-      {/* ───────────────── FÓRUM ──────────────────────── */}
-      <div
-        className="flex flex-col flex-1"
-        style={{
-          background: '#0b141d',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-        }}
-      >
-        {/* Header do fórum */}
-        <div
-          className="px-4 py-3 flex items-center justify-between sticky top-0 z-20"
-          style={{
-            background: 'rgba(11,20,29,0.97)',
-            backdropFilter: 'blur(12px)',
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
-          }}
-        >
-          <div className="flex items-center gap-2.5">
-            <MessageCircle size={15} className="text-[#2AABEE]" />
-            <span className="text-sm font-semibold text-white/80">Discussão</span>
-            <div
-              className="w-1.5 h-1.5 rounded-full bg-[#2AABEE] animate-pulse"
-              title="Ao vivo"
-            />
-          </div>
-          {/* CORREÇÃO 1 — comentarios é sempre array aqui */}
-          <span className="text-[11px] text-white/30 tabular-nums">
-            {comentarios.length}{' '}
-            {comentarios.length === 1 ? 'comentário' : 'comentários'}
-          </span>
+      {/* ── Letra (se houver) ── */}
+      {obra.letra && (
+        <div className="mx-4 mt-2 bg-[#1a2535] rounded-2xl p-4">
+          <h2 className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Mic2 size={12} /> Letra
+          </h2>
+          <pre className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+            {obra.letra as string}
+          </pre>
         </div>
+      )}
 
-        {/* Lista de mensagens */}
-        <div className="flex-1 overflow-y-auto px-3 py-4" style={{ minHeight: 200 }}>
-          {loadingForum ? (
-            // Skeleton
-            <div className="flex flex-col gap-3 px-1">
-              {[...Array(5)].map((_, i) => (
-                <div
-                  key={i}
-                  className={`flex gap-2 items-end ${
-                    i % 2 === 0 ? '' : 'flex-row-reverse'
-                  }`}
-                >
-                  <div
-                    className="rounded-full flex-shrink-0"
-                    style={{
-                      width: 30,
-                      height: 30,
-                      background: 'rgba(255,255,255,0.07)',
-                      animation: 'pulse 1.5s ease-in-out infinite',
-                    }}
-                  />
-                  <div
-                    className="h-10 rounded-2xl"
-                    style={{
-                      width: `${40 + (i % 3) * 18}%`,
-                      background: 'rgba(255,255,255,0.07)',
-                      animation: 'pulse 1.5s ease-in-out infinite',
-                    }}
-                  />
+      {/* ── Fórum (toggle) ── */}
+      <div className="mx-4 mt-4">
+        <button
+          onClick={() => setForumAberto((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3
+                     bg-[#1a2535] rounded-2xl text-sm font-semibold
+                     hover:bg-[#1e2c40] transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <MessageCircle size={15} className="text-[#2AABEE]" />
+            Fórum · {comentarios.length}
+          </span>
+          {forumAberto
+            ? <ChevronUp size={16} className="text-white/40" />
+            : <ChevronDown size={16} className="text-white/40" />}
+        </button>
+
+        {forumAberto && (
+          <div className="mt-2 bg-[#111c2a] rounded-2xl overflow-hidden">
+            {/* Lista de comentários */}
+            <div className="max-h-[60vh] overflow-y-auto p-3">
+              {loadingForum && comentarios.length === 0 && (
+                <div className="flex justify-center py-8">
+                  <Loader2 size={20} className="text-[#2AABEE] animate-spin" />
+                </div>
+              )}
+
+              {!loadingForum && comentarios.length === 0 && (
+                <div className="text-center py-10">
+                  <MessageCircle size={32} className="text-white/10 mx-auto mb-2" />
+                  <p className="text-white/30 text-xs">Seja o primeiro a comentar</p>
+                </div>
+              )}
+
+              {Array.from(gruposComentarios.entries()).map(([data, lista]) => (
+                <div key={data}>
+                  <DateDivider data={data} />
+                  {lista.map((c) => (
+                    <Balao
+                      key={c.id}
+                      comentario={c}
+                      isMeu={String(tgUser?.id) === c.usuario_id}
+                    />
+                  ))}
                 </div>
               ))}
+              <div ref={endRef} />
             </div>
-          ) : comentarios.length === 0 ? (
-            // Empty state
-            <div className="flex flex-col items-center justify-center py-14 gap-3 text-center">
-              <div className="text-4xl leading-none select-none">💬</div>
-              <p className="text-white/35 text-sm max-w-[24ch] leading-relaxed">
-                Seja o primeiro a comentar sobre esta obra!
-              </p>
-            </div>
-          ) : (
-            // CORREÇÃO 1 — Loop sobre comentariosAgrupados (derivado de listaComentarios)
-            comentariosAgrupados.map((item, i) =>
-              item.tipo === 'data' ? (
-                <DateDivider key={`d-${i}`} data={item.data} />
-              ) : (
-                <Balao
-                  key={item.comentario.id}
-                  comentario={item.comentario}
-                  isMeu={item.comentario.usuario_id === meuId}
+
+            {/* Input de envio */}
+            {tgUser ? (
+              <div className="flex items-end gap-2 p-3 border-t border-white/10">
+                <Avatar nome={`${tgUser.first_name}`} foto={tgUser.photo_url} size={28} />
+                <textarea
+                  ref={inputRef}
+                  value={texto}
+                  onChange={(e) => setTexto(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      enviarComentario();
+                    }
+                  }}
+                  placeholder="Escreva um comentário…"
+                  rows={1}
+                  className="flex-1 resize-none bg-[#1a2a3a] rounded-2xl px-3 py-2
+                             text-sm text-white placeholder-white/30 border border-white/[0.07]
+                             focus:outline-none focus:border-[#2AABEE]/50
+                             max-h-28 overflow-y-auto"
+                  style={{ lineHeight: '1.4' }}
                 />
-              )
-            )
-          )}
-          <div ref={endRef} />
-        </div>
-
-        {/* ── Campo de entrada ── */}
-        <div
-          className="sticky bottom-0 z-20"
-          style={{
-            background: 'rgba(11,20,29,0.98)',
-            backdropFilter: 'blur(16px)',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-          }}
-        >
-          {/* Identidade */}
-          {telegramUser && (
-            <div className="flex items-center gap-2 px-4 pt-2.5 pb-0">
-              <Avatar
-                nome={`${telegramUser.first_name}${
-                  telegramUser.last_name ? ' ' + telegramUser.last_name : ''
-                }`}
-                foto={telegramUser.photo_url}
-                size={16}
-              />
-              <span className="text-[11px] text-white/35">
-                Comentando como{' '}
-                <span className="text-white/55 font-semibold">
-                  {telegramUser.first_name}
-                </span>
-              </span>
-            </div>
-          )}
-
-          <div className="flex items-end gap-2 px-3 py-2.5">
-            <textarea
-              ref={textareaRef}
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Escreva um comentário… (Enter para enviar)"
-              rows={1}
-              inputMode="text"
-              className="flex-1 text-white/90 placeholder-white/25 text-sm resize-none outline-none rounded-[18px] px-4 py-2.5 transition-colors duration-200"
-              style={{
-                background: '#1a2a3a',
-                border: '1px solid rgba(255,255,255,0.08)',
-                lineHeight: 1.5,
-                minHeight: 40,
-                maxHeight: 120,
-                overflowY: 'auto',
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(42,171,238,0.45)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
-              }}
-              onInput={(e) => {
-                const el = e.currentTarget;
-                el.style.height = 'auto';
-                el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-              }}
-            />
-            <button
-              onClick={enviarComentario}
-              disabled={!texto.trim() || enviando}
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white active:scale-90 transition-all duration-150"
-              style={{
-                background:
-                  texto.trim() && !enviando
-                    ? 'linear-gradient(135deg, #2AABEE 0%, #1a8dcc 100%)'
-                    : 'rgba(42,171,238,0.2)',
-                cursor: texto.trim() && !enviando ? 'pointer' : 'not-allowed',
-              }}
-              aria-label="Enviar comentário"
-            >
-              {enviando ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Send size={15} />
-              )}
-            </button>
+                <button
+                  onClick={enviarComentario}
+                  disabled={!texto.trim() || enviando}
+                  className="p-2 rounded-full bg-[#2AABEE] text-white
+                             hover:bg-[#1a9bde] active:scale-95 transition-all
+                             disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Enviar comentário"
+                >
+                  {enviando
+                    ? <Loader2 size={16} className="animate-spin" />
+                    : <Send size={16} />}
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-4 border-t border-white/10">
+                <p className="text-white/30 text-xs">Abra pelo Telegram para comentar</p>
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* ───────────────── VIDEO PLAYER FLUTUANTE ─────── */}
-      {/*
-       * CORREÇÃO 3 — Só monta o player quando `temVideo` é true
-       * E o playerAberto foi ativado pelo clique no botão Assistir.
-       */}
-      {playerAberto && temVideo && (
-        <VideoPlayer
-          telegramFileId={obra.telegram_file_id!}
-          title={titulo}
-          onClose={() => setPlayerAberto(false)}
-        />
+      {/* ── MiniPlayer de Vídeo ── */}
+      {playerAberto && videoUrl && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+          <div className="relative w-full max-w-sm">
+            <button
+              onClick={() => { setPlayerAberto(false); setVideoUrl(null); }}
+              className="absolute -top-3 -right-3 z-10 p-1.5 rounded-full bg-[#1e2736]
+                         border border-white/20 hover:bg-white/20 transition-colors"
+              aria-label="Fechar player"
+            >
+              <X size={16} />
+            </button>
+            <video
+              src={videoUrl}
+              controls
+              autoPlay
+              playsInline
+              className="w-full rounded-2xl shadow-2xl"
+            />
+            <p className="text-center text-white/60 text-xs mt-3 truncate px-2">{titulo}</p>
+          </div>
+        </div>
       )}
     </div>
   );

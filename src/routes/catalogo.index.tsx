@@ -9,45 +9,47 @@ import { Music, Disc3, Clapperboard, Video, Home } from 'lucide-react';
 export const Route = createFileRoute('/catalogo/')({ component: CatalogoPage });
 
 // ---------------------------------------------------------------------------
-// GAS URL fixo — backend Google Apps Script
+// GAS URL — variável de ambiente com fallback para URL fixa
 // ---------------------------------------------------------------------------
-const GAS_URL =
+const GAS_URL: string =
+  (import.meta as any).env?.VITE_GAS_URL ??
   'https://script.google.com/macros/s/AKfycby7Epe3MHPMvje5OKtSlNn-tSWpowLPOJ7DVflFJqgZNOKCnN9IcGwWYL1QSeRtgJrQ7w/exec';
 
 // ---------------------------------------------------------------------------
-// Interface — propriedades exatas que o backend converte da planilha
-// Inclui todos os cabeçalhos compostos possíveis para fallback
+// Interface — aceita chaves snake_case dinâmicas geradas pelo backend GAS
 // ---------------------------------------------------------------------------
 export interface Obra {
   id_do_topico: string;
-  // Título
-  nome?: string;
-  titulo?: string;
+  // Título (fallback em cascata — mais específico primeiro)
   nome_da_musica?: string;
   nome_do_video?: string;
-  // Artista / Criador
+  nome?: string;
+  titulo?: string;
+  // Artista / Criador (fallback em cascata)
   nome_do_criador?: string;
   artista?: string;
   id_do_criador?: string;
-  // Imagem
+  // Imagem (fallback em cascata — mais específico primeiro)
+  capa_da_musica?: string;
   capa?: string;
   thumb?: string;
   thumbnail_url?: string;
-  capa_da_musica?: string;
   // Outros campos do backend
   telegram_file_id?: string;
-  [key: string]: unknown; // permite campos extras sem quebrar o TS
+  tipo?: string;
+  // Permite qualquer chave snake_case extra sem quebrar TypeScript
+  [key: string]: unknown;
 }
 
 // ---------------------------------------------------------------------------
-// Abas — inclui "Início" que chama top50spotify
+// Abas — cada uma mapeia para um ?action= do GAS
 // ---------------------------------------------------------------------------
 type Tab = 'inicio' | 'musicas' | 'albuns' | 'music_videos' | 'videos';
 
 interface TabConfig {
   id: Tab;
   label: string;
-  action: string; // parâmetro passado para ?action=
+  action: string; // valor enviado como ?action=<action>
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }
 
@@ -67,6 +69,7 @@ const memoryCache = new Map<Tab, Obra[]>();
 async function fetchObras(tab: TabConfig): Promise<Obra[]> {
   if (memoryCache.has(tab.id)) return memoryCache.get(tab.id)!;
 
+  // Consome a variável da URL do GAS com ?action=nome_da_categoria
   const res = await fetch(`${GAS_URL}?action=${tab.action}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -77,33 +80,38 @@ async function fetchObras(tab: TabConfig): Promise<Obra[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers de fallback — lógica absoluta conforme especificação
+// Helpers de fallback — REGRA RÍGIDA conforme especificação
 // ---------------------------------------------------------------------------
-function getTitulo(obra: Obra): string {
+
+/** Título: nome_da_musica → nome_do_video → nome → titulo */
+export function getTitulo(obra: Obra): string {
   return (
-    obra.nome ||
-    obra.titulo ||
-    obra.nome_da_musica ||
-    obra.nome_do_video ||
+    (obra.nome_da_musica as string | undefined) ||
+    (obra.nome_do_video  as string | undefined) ||
+    (obra.nome           as string | undefined) ||
+    (obra.titulo         as string | undefined) ||
     'Sem Título'
   );
 }
 
-function getArtista(obra: Obra): string {
+/** Artista: nome_do_criador → artista */
+export function getArtista(obra: Obra): string {
   return (
-    obra.nome_do_criador ||
-    obra.artista ||
-    obra.id_do_criador ||
+    (obra.nome_do_criador as string | undefined) ||
+    (obra.artista         as string | undefined) ||
+    (obra.id_do_criador   as string | undefined) ||
     'Artista Desconhecido'
   );
 }
 
-function getImagem(obra: Obra): string | undefined {
+/** Capa: capa_da_musica → capa → thumb → thumbnail_url */
+export function getImagem(obra: Obra): string | undefined {
   return (
-    obra.capa ||
-    obra.thumb ||
-    obra.thumbnail_url ||
-    obra.capa_da_musica
+    (obra.capa_da_musica as string | undefined) ||
+    (obra.capa          as string | undefined) ||
+    (obra.thumb         as string | undefined) ||
+    (obra.thumbnail_url as string | undefined) ||
+    undefined
   );
 }
 
@@ -221,9 +229,7 @@ export default function CatalogoPage() {
   return (
     <div className="min-h-screen bg-[#0f1923] text-white pb-24">
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Header sticky com menu de abas                                       */}
-      {/* ------------------------------------------------------------------ */}
+      {/* Header sticky com menu de abas */}
       <div className="sticky top-0 z-10 bg-[#0f1923]/95 backdrop-blur-sm border-b border-white/10">
         <div className="px-4 pt-4 pb-2">
           <h1 className="text-lg font-bold leading-tight">Catálogo</h1>
@@ -260,10 +266,6 @@ export default function CatalogoPage() {
         </div>
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Conteúdo                                                             */}
-      {/* ------------------------------------------------------------------ */}
-
       {/* Loading */}
       {loading && (
         <div className="grid grid-cols-2 gap-3 px-4 pt-4">
@@ -279,16 +281,12 @@ export default function CatalogoPage() {
           <p className="text-white/40 text-sm mb-4">{error}</p>
           <button
             onClick={() => loadObras(activeTab, true)}
-            className="text-[#2AABEE] text-sm underline underline-offset-2"
+            className="px-4 py-2 rounded-full bg-white/10 text-white/70 text-sm
+                       hover:bg-white/20 transition-colors"
           >
             Tentar novamente
           </button>
         </div>
-      )}
-
-      {/* Vazio */}
-      {!loading && !error && obras.length === 0 && (
-        <EmptyState label={activeTab.label} />
       )}
 
       {/* Grid de obras */}
@@ -298,6 +296,11 @@ export default function CatalogoPage() {
             <ObraCard key={obra.id_do_topico} obra={obra} />
           ))}
         </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && !error && obras.length === 0 && (
+        <EmptyState label={activeTab.label} />
       )}
     </div>
   );
