@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -52,6 +50,11 @@ export type Database = {
           "Link do audio": string | null
           telegram_file_id: string | null
           telegram_topic_id: number | null
+          data_lancamento: string | null
+          genero: string | null
+          tipo_single: string | null
+          tipo_musica: string | null
+          ordem: number | null
         }
         Insert: {
           id?: number
@@ -63,6 +66,11 @@ export type Database = {
           "Link do audio"?: string | null
           telegram_file_id?: string | null
           telegram_topic_id?: number | null
+          data_lancamento?: string | null
+          genero?: string | null
+          tipo_single?: string | null
+          tipo_musica?: string | null
+          ordem?: number | null
         }
         Update: {
           id?: number
@@ -74,6 +82,11 @@ export type Database = {
           "Link do audio"?: string | null
           telegram_file_id?: string | null
           telegram_topic_id?: number | null
+          data_lancamento?: string | null
+          genero?: string | null
+          tipo_single?: string | null
+          tipo_musica?: string | null
+          ordem?: number | null
         }
         Relationships: []
       }
@@ -86,6 +99,7 @@ export type Database = {
           "Capa do Album": string | null
           "Link do audio": string | null
           telegram_topic_id: number | null
+          data_lancamento: string | null
         }
         Insert: {
           id?: number
@@ -95,6 +109,7 @@ export type Database = {
           "Capa do Album"?: string | null
           "Link do audio"?: string | null
           telegram_topic_id?: number | null
+          data_lancamento?: string | null
         }
         Update: {
           id?: number
@@ -104,6 +119,7 @@ export type Database = {
           "Capa do Album"?: string | null
           "Link do audio"?: string | null
           telegram_topic_id?: number | null
+          data_lancamento?: string | null
         }
         Relationships: []
       }
@@ -146,6 +162,8 @@ export type Database = {
           Capa: string | null
           telegram_file_id: string | null
           telegram_topic_id: number | null
+          tipo: string | null
+          data_lancamento: string | null
         }
         Insert: {
           id?: number
@@ -155,6 +173,8 @@ export type Database = {
           Capa?: string | null
           telegram_file_id?: string | null
           telegram_topic_id?: number | null
+          tipo?: string | null
+          data_lancamento?: string | null
         }
         Update: {
           id?: number
@@ -164,6 +184,224 @@ export type Database = {
           Capa?: string | null
           telegram_file_id?: string | null
           telegram_topic_id?: number | null
+          tipo?: string | null
+          data_lancamento?: string | null
+        }
+        Relationships: []
+      }
+      Top_50_Spotify: {
+        Row: {
+          id: number
+          created_at: string
+          posicao: number | null
+          nome_musica: string | null
+          capa_musica: string | null
+          link_audio: string | null
+          telegram_topic_id: number | null
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          posicao?: number | null
+          nome_musica?: string | null
+          capa_musica?: string | null
+          link_audio?: string | null
+          telegram_topic_id?: number | null
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          posicao?: number | null
+          nome_musica?: string | null
+          capa_musica?: string | null
+          link_audio?: string | null
+          telegram_topic_id?: number | null
+        }
+        Relationships: []
+      }
+      Top_Songs_Apple_Music: {
+        Row: {
+          id: number
+          created_at: string
+          posicao: number | null
+          nome_musica: string | null
+          capa_musica: string | null
+          link_audio: string | null
+          telegram_topic_id: number | null
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          posicao?: number | null
+          nome_musica?: string | null
+          capa_musica?: string | null
+          link_audio?: string | null
+          telegram_topic_id?: number | null
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          posicao?: number | null
+          nome_musica?: string | null
+          capa_musica?: string | null
+          link_audio?: string | null
+          telegram_topic_id?: number | null
+        }
+        Relationships: []
+      }
+      Top_Videos_YT: {
+        Row: {
+          id: number
+          created_at: string
+          posicao: number | null
+          nome_video: string | null
+          thumb: string | null
+          link_audio: string | null
+          telegram_topic_id: number | null
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          posicao?: number | null
+          nome_video?: string | null
+          thumb?: string | null
+          link_audio?: string | null
+          telegram_topic_id?: number | null
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          posicao?: number | null
+          nome_video?: string | null
+          thumb?: string | null
+          link_audio?: string | null
+          telegram_topic_id?: number | null
+        }
+        Relationships: []
+      }
+      Comentarios_Musicas: {
+        Row: {
+          id: number
+          created_at: string
+          telegram_topic_id: number | null
+          id_jogador: string | null
+          nome_jogador: string | null
+          comentario: string | null
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          telegram_topic_id?: number | null
+          id_jogador?: string | null
+          nome_jogador?: string | null
+          comentario?: string | null
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          telegram_topic_id?: number | null
+          id_jogador?: string | null
+          nome_jogador?: string | null
+          comentario?: string | null
+        }
+        Relationships: []
+      }
+      Comentarios_MV: {
+        Row: {
+          id: number
+          created_at: string
+          telegram_topic_id: number | null
+          id_jogador: string | null
+          nome_jogador: string | null
+          comentario: string | null
+          data: string | null
+          telegram_message_id: number | null
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          telegram_topic_id?: number | null
+          id_jogador?: string | null
+          nome_jogador?: string | null
+          comentario?: string | null
+          data?: string | null
+          telegram_message_id?: number | null
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          telegram_topic_id?: number | null
+          id_jogador?: string | null
+          nome_jogador?: string | null
+          comentario?: string | null
+          data?: string | null
+          telegram_message_id?: number | null
+        }
+        Relationships: []
+      }
+      Comentarios_Videos: {
+        Row: {
+          id: number
+          created_at: string
+          telegram_topic_id: number | null
+          texto: string | null
+          autor: string | null
+          id_usuario: string | null
+          data: string | null
+          reacoes: string | null
+          telegram_message_id: number | null
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          telegram_topic_id?: number | null
+          texto?: string | null
+          autor?: string | null
+          id_usuario?: string | null
+          data?: string | null
+          reacoes?: string | null
+          telegram_message_id?: number | null
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          telegram_topic_id?: number | null
+          texto?: string | null
+          autor?: string | null
+          id_usuario?: string | null
+          data?: string | null
+          reacoes?: string | null
+          telegram_message_id?: number | null
+        }
+        Relationships: []
+      }
+      Comentarios_Albuns: {
+        Row: {
+          id: number
+          created_at: string
+          telegram_topic_id: number | null
+          id_jogador: string | null
+          nome_jogador: string | null
+          comentario: string | null
+          data: string | null
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          telegram_topic_id?: number | null
+          id_jogador?: string | null
+          nome_jogador?: string | null
+          comentario?: string | null
+          data?: string | null
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          telegram_topic_id?: number | null
+          id_jogador?: string | null
+          nome_jogador?: string | null
+          comentario?: string | null
+          data?: string | null
         }
         Relationships: []
       }
