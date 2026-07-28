@@ -1,7 +1,7 @@
 // src/routes/catalogo.index.tsx
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
-import { Music, Disc3, Clapperboard, Video } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Music, Disc3, Clapperboard, Video, Home } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Route
@@ -16,52 +16,95 @@ const GAS_URL =
 
 // ---------------------------------------------------------------------------
 // Interface — propriedades exatas que o backend converte da planilha
+// Inclui todos os cabeçalhos compostos possíveis para fallback
 // ---------------------------------------------------------------------------
 export interface Obra {
   id_do_topico: string;
+  // Título
   nome?: string;
   titulo?: string;
+  nome_da_musica?: string;
+  nome_do_video?: string;
+  // Artista / Criador
   nome_do_criador?: string;
   artista?: string;
+  id_do_criador?: string;
+  // Imagem
   capa?: string;
   thumb?: string;
   thumbnail_url?: string;
+  capa_da_musica?: string;
+  // Outros campos do backend
   telegram_file_id?: string;
+  [key: string]: unknown; // permite campos extras sem quebrar o TS
 }
 
 // ---------------------------------------------------------------------------
-// Abas correspondentes às planilhas do backend
+// Abas — inclui "Início" que chama top50spotify
 // ---------------------------------------------------------------------------
-type Tab = 'musicas' | 'albuns' | 'music_videos' | 'videos';
+type Tab = 'inicio' | 'musicas' | 'albuns' | 'music_videos' | 'videos';
 
 interface TabConfig {
   id: Tab;
   label: string;
+  action: string; // parâmetro passado para ?action=
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }
 
 const TABS: TabConfig[] = [
-  { id: 'musicas',      label: 'Músicas',      icon: Music        },
-  { id: 'albuns',       label: 'Álbuns',       icon: Disc3        },
-  { id: 'music_videos', label: 'Music Videos', icon: Clapperboard },
-  { id: 'videos',       label: 'Vídeos',       icon: Video        },
+  { id: 'inicio',       label: 'Início',       action: 'top50spotify', icon: Home        },
+  { id: 'musicas',      label: 'Músicas',      action: 'musicas',      icon: Music        },
+  { id: 'albuns',       label: 'Álbuns',       action: 'albuns',       icon: Disc3        },
+  { id: 'music_videos', label: 'Music Videos', action: 'music_videos', icon: Clapperboard },
+  { id: 'videos',       label: 'Vídeos',       action: 'videos',       icon: Video        },
 ];
 
 // ---------------------------------------------------------------------------
-// Cache em memória por aba
+// Cache em memória por aba (chaveado pelo id da tab)
 // ---------------------------------------------------------------------------
 const memoryCache = new Map<Tab, Obra[]>();
 
-async function fetchObras(aba: Tab): Promise<Obra[]> {
-  if (memoryCache.has(aba)) return memoryCache.get(aba)!;
+async function fetchObras(tab: TabConfig): Promise<Obra[]> {
+  if (memoryCache.has(tab.id)) return memoryCache.get(tab.id)!;
 
-  const res = await fetch(GAS_URL + '?action=' + aba);
+  const res = await fetch(`${GAS_URL}?action=${tab.action}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
   const json = await res.json();
   const items: Obra[] = Array.isArray(json) ? json : (json?.data ?? []);
-  memoryCache.set(aba, items);
+  memoryCache.set(tab.id, items);
   return items;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers de fallback — lógica absoluta conforme especificação
+// ---------------------------------------------------------------------------
+function getTitulo(obra: Obra): string {
+  return (
+    obra.nome ||
+    obra.titulo ||
+    obra.nome_da_musica ||
+    obra.nome_do_video ||
+    'Sem Título'
+  );
+}
+
+function getArtista(obra: Obra): string {
+  return (
+    obra.nome_do_criador ||
+    obra.artista ||
+    obra.id_do_criador ||
+    'Artista Desconhecido'
+  );
+}
+
+function getImagem(obra: Obra): string | undefined {
+  return (
+    obra.capa ||
+    obra.thumb ||
+    obra.thumbnail_url ||
+    obra.capa_da_musica
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -80,12 +123,12 @@ function SkeletonCard() {
 }
 
 // ---------------------------------------------------------------------------
-// Obra Card — com fallbacks para título, artista e imagem
+// Obra Card — fallbacks completos + redirect via id_do_topico
 // ---------------------------------------------------------------------------
 function ObraCard({ obra }: { obra: Obra }) {
-  const titulo  = obra.nome || obra.titulo;
-  const artista = obra.nome_do_criador || obra.artista;
-  const imagem  = obra.capa || obra.thumb || obra.thumbnail_url;
+  const titulo  = getTitulo(obra);
+  const artista = getArtista(obra);
+  const imagem  = getImagem(obra);
 
   return (
     <Link
@@ -99,7 +142,7 @@ function ObraCard({ obra }: { obra: Obra }) {
         {imagem ? (
           <img
             src={imagem}
-            alt={titulo ?? 'Capa'}
+            alt={titulo}
             loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             onError={(e) => {
@@ -114,10 +157,10 @@ function ObraCard({ obra }: { obra: Obra }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
       </div>
 
-      {/* Info — só renderiza se houver valor */}
+      {/* Info */}
       <div className="p-2">
-        {titulo  && <p className="text-white text-xs font-semibold truncate">{titulo}</p>}
-        {artista && <p className="text-white/50 text-[11px] truncate">{artista}</p>}
+        <p className="text-white text-xs font-semibold truncate">{titulo}</p>
+        <p className="text-white/50 text-[11px] truncate">{artista}</p>
       </div>
     </Link>
   );
@@ -142,28 +185,38 @@ function EmptyState({ label }: { label: string }) {
 // Componente principal
 // ---------------------------------------------------------------------------
 export default function CatalogoPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('musicas');
-  const [obras, setObras]         = useState<Obra[]>([]);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState<string | null>(null);
+  const [activeTabId, setActiveTabId] = useState<Tab>('inicio');
+  const [obras, setObras]             = useState<Obra[]>([]);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+
+  const activeTab = TABS.find((t) => t.id === activeTabId)!;
+
+  const loadObras = useCallback(
+    (tab: TabConfig, bustCache = false) => {
+      if (bustCache) memoryCache.delete(tab.id);
+
+      setLoading(true);
+      setError(null);
+
+      fetchObras(tab)
+        .then((data) => {
+          setObras(data);
+        })
+        .catch(() => {
+          setError('Erro ao carregar. Tente novamente.');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    },
+    [],
+  );
 
   // Dispara fetch ao trocar de aba
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-
-    fetchObras(activeTab)
-      .then((data) => {
-        setObras(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError('Erro ao carregar. Tente novamente.');
-        setLoading(false);
-      });
-  }, [activeTab]);
-
-  const activeTabConfig = TABS.find((t) => t.id === activeTab)!;
+    loadObras(activeTab);
+  }, [activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-[#0f1923] text-white pb-24">
@@ -183,13 +236,13 @@ export default function CatalogoPage() {
         >
           {TABS.map((tab) => {
             const Icon     = tab.icon;
-            const isActive = activeTab === tab.id;
+            const isActive = activeTabId === tab.id;
             return (
               <button
                 key={tab.id}
                 role="tab"
                 aria-selected={isActive}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => setActiveTabId(tab.id)}
                 className={`
                   flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full
                   text-xs font-medium transition-all duration-200
@@ -225,16 +278,7 @@ export default function CatalogoPage() {
         <div className="text-center py-16 px-8">
           <p className="text-white/40 text-sm mb-4">{error}</p>
           <button
-            onClick={() => {
-              memoryCache.delete(activeTab);
-              setActiveTab((prev) => prev); // re-trigger useEffect
-              setError(null);
-              setLoading(true);
-              fetchObras(activeTab)
-                .then(setObras)
-                .catch(() => setError('Erro ao carregar. Tente novamente.'))
-                .finally(() => setLoading(false));
-            }}
+            onClick={() => loadObras(activeTab, true)}
             className="text-[#2AABEE] text-sm underline underline-offset-2"
           >
             Tentar novamente
@@ -244,7 +288,7 @@ export default function CatalogoPage() {
 
       {/* Vazio */}
       {!loading && !error && obras.length === 0 && (
-        <EmptyState label={activeTabConfig.label} />
+        <EmptyState label={activeTab.label} />
       )}
 
       {/* Grid de obras */}
