@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, Link, useRouterState } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import AudioPlayer, { type NowPlaying } from '@/components/AudioPlayer';
 
 export const Route = createFileRoute('/play')({ component: PlayLayout });
 
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
 
 export default function PlayLayout() {
   const [userName, setUserName] = useState<string>('Jogador');
+  const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
   const { location } = useRouterState();
   const currentPath = location.pathname;
 
@@ -76,8 +78,28 @@ export default function PlayLayout() {
 
       {/* ── Conteúdo da sub-rota ── */}
       <main className="flex-1">
-        <Outlet />
+        <PlayContext.Provider value={{ setNowPlaying }}>
+          <Outlet />
+        </PlayContext.Provider>
       </main>
+
+      {/* ── Player fixo de rodapé ── */}
+      <AudioPlayer track={nowPlaying} onClose={() => setNowPlaying(null)} />
     </div>
   );
+}
+
+// Context para sub-rotas dispararem o player
+import { createContext, useContext } from 'react';
+
+interface PlayContextValue {
+  setNowPlaying: (track: NowPlaying | null) => void;
+}
+
+export const PlayContext = createContext<PlayContextValue>({
+  setNowPlaying: () => {},
+});
+
+export function usePlay() {
+  return useContext(PlayContext);
 }
