@@ -9,149 +9,59 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TvRouteImport } from './routes/tv'
-import { Route as TutorialRouteImport } from './routes/tutorial'
-import { Route as SocialRouteImport } from './routes/social'
-import { Route as RescisaoRouteImport } from './routes/rescisao'
-import { Route as RankingRouteImport } from './routes/ranking'
-import { Route as RadarRouteImport } from './routes/radar'
-import { Route as PayolaRouteImport } from './routes/payola'
-import { Route as MarketRouteImport } from './routes/market'
-import { Route as LeiloesRouteImport } from './routes/leiloes'
-import { Route as IncubadoraRouteImport } from './routes/incubadora'
-import { Route as HallRouteImport } from './routes/hall'
-import { Route as GravadorasRouteImport } from './routes/gravadoras'
-import { Route as ForumRouteImport } from './routes/forum'
-import { Route as FilantropiaRouteImport } from './routes/filantropia'
-import { Route as DueloRouteImport } from './routes/duelo'
-import { Route as ChartsRouteImport } from './routes/charts'
-import { Route as BolsaRouteImport } from './routes/bolsa'
-import { Route as BetRouteImport } from './routes/bet'
-import { Route as AlbunsRouteImport } from './routes/albuns'
-import { Route as AcessoRapidoRouteImport } from './routes/acesso-rapido'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ToursIndexRouteImport } from './routes/tours.index'
-import { Route as PontoIndexRouteImport } from './routes/ponto.index'
-import { Route as PlaylistsIndexRouteImport } from './routes/playlists.index'
-import { Route as PlayIndexRouteImport } from './routes/play.index'
-import { Route as GamesIndexRouteImport } from './routes/games.index'
-import { Route as CatalogoIndexRouteImport } from './routes/catalogo.index'
-import { Route as ArtistasIndexRouteImport } from './routes/artistas.index'
-import { Route as ToursNomeRouteImport } from './routes/tours.$nome'
-import { Route as PontoPlaylistsRouteImport } from './routes/ponto.playlists'
-import { Route as PontoDistribuirRouteImport } from './routes/ponto.distribuir'
-import { Route as PlaylistsNovaRouteImport } from './routes/playlists.nova'
-import { Route as PlaylistsIdRouteImport } from './routes/playlists.$id'
-import { Route as GamesQueridometroRouteImport } from './routes/games.queridometro'
-import { Route as GamesPaparazziEscapeRouteImport } from './routes/games.paparazzi-escape'
-import { Route as GamesMemoriaFamaRouteImport } from './routes/games.memoria-fama'
-import { Route as GamesHitsProducerRouteImport } from './routes/games.hits-producer'
-import { Route as CatalogoIdRouteImport } from './routes/catalogo.$id'
-import { Route as AlbumIdRouteImport } from './routes/album.$id'
-import { Route as AcoesTourRouteImport } from './routes/acoes.tour'
-import { Route as AcoesCinemaRouteImport } from './routes/acoes.cinema'
+import { Route as AcessoRapidoRouteImport } from './routes/acesso-rapido'
+import { Route as AlbunsRouteImport } from './routes/albuns'
+import { Route as BetRouteImport } from './routes/bet'
+import { Route as BolsaRouteImport } from './routes/bolsa'
+import { Route as ChartsRouteImport } from './routes/charts'
+import { Route as DueloRouteImport } from './routes/duelo'
+import { Route as FilantropiaRouteImport } from './routes/filantropia'
+import { Route as ForumRouteImport } from './routes/forum'
+import { Route as GravadorasRouteImport } from './routes/gravadoras'
+import { Route as HallRouteImport } from './routes/hall'
+import { Route as IncubadoraRouteImport } from './routes/incubadora'
+import { Route as LeiloesRouteImport } from './routes/leiloes'
+import { Route as MarketRouteImport } from './routes/market'
+import { Route as PayolaRouteImport } from './routes/payola'
+import { Route as RadarRouteImport } from './routes/radar'
+import { Route as RankingRouteImport } from './routes/ranking'
+import { Route as RescisaoRouteImport } from './routes/rescisao'
+import { Route as SocialRouteImport } from './routes/social'
+import { Route as TutorialRouteImport } from './routes/tutorial'
+import { Route as TvRouteImport } from './routes/tv'
 import { Route as AcoesAlbumRouteImport } from './routes/acoes.album'
-import { Route as ArtistasNomeIndexRouteImport } from './routes/artistas.$nome.index'
-import { Route as PontoPlaylistsPlanilhaRouteImport } from './routes/ponto.playlists.planilha'
-import { Route as PontoDistribuirPlanilhaRouteImport } from './routes/ponto.distribuir.planilha'
-import { Route as PlaylistsIdEditarRouteImport } from './routes/playlists.$id.editar'
-import { Route as ArtistasNomeProjetosRouteImport } from './routes/artistas.$nome.projetos'
-import { Route as ArtistasNomeBensRouteImport } from './routes/artistas.$nome.bens'
+import { Route as AcoesCinemaRouteImport } from './routes/acoes.cinema'
+import { Route as AcoesTourRouteImport } from './routes/acoes.tour'
+import { Route as AlbumIdRouteImport } from './routes/album.$id'
+import { Route as ArtistasIndexRouteImport } from './routes/artistas.index'
+import { Route as CatalogoIndexRouteImport } from './routes/catalogo.index'
+import { Route as CatalogoIdRouteImport } from './routes/catalogo.$id'
+import { Route as GamesIndexRouteImport } from './routes/games.index'
+import { Route as GamesHitsProducerRouteImport } from './routes/games.hits-producer'
+import { Route as GamesMemoriaFamaRouteImport } from './routes/games.memoria-fama'
+import { Route as GamesPaparazziEscapeRouteImport } from './routes/games.paparazzi-escape'
+import { Route as GamesQueridometroRouteImport } from './routes/games.queridometro'
+import { Route as PlayIndexRouteImport } from './routes/play.index'
+import { Route as PlaylistsIndexRouteImport } from './routes/playlists.index'
+import { Route as PlaylistsIdRouteImport } from './routes/playlists.$id'
+import { Route as PlaylistsNovaRouteImport } from './routes/playlists.nova'
+import { Route as PontoIndexRouteImport } from './routes/ponto.index'
+import { Route as PontoDistribuirRouteImport } from './routes/ponto.distribuir'
+import { Route as PontoPlaylistsRouteImport } from './routes/ponto.playlists'
+import { Route as ToursIndexRouteImport } from './routes/tours.index'
+import { Route as ToursNomeRouteImport } from './routes/tours.$nome'
 import { Route as AlbumIdEditarRouteImport } from './routes/album.$id.editar'
+import { Route as ArtistasNomeIndexRouteImport } from './routes/artistas.$nome.index'
+import { Route as ArtistasNomeBensRouteImport } from './routes/artistas.$nome.bens'
+import { Route as ArtistasNomeProjetosRouteImport } from './routes/artistas.$nome.projetos'
+import { Route as PlaylistsIdEditarRouteImport } from './routes/playlists.$id.editar'
+import { Route as PontoDistribuirPlanilhaRouteImport } from './routes/ponto.distribuir.planilha'
+import { Route as PontoPlaylistsPlanilhaRouteImport } from './routes/ponto.playlists.planilha'
 
-const TvRoute = TvRouteImport.update({
-  id: '/tv',
-  path: '/tv',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TutorialRoute = TutorialRouteImport.update({
-  id: '/tutorial',
-  path: '/tutorial',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SocialRoute = SocialRouteImport.update({
-  id: '/social',
-  path: '/social',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RescisaoRoute = RescisaoRouteImport.update({
-  id: '/rescisao',
-  path: '/rescisao',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RankingRoute = RankingRouteImport.update({
-  id: '/ranking',
-  path: '/ranking',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RadarRoute = RadarRouteImport.update({
-  id: '/radar',
-  path: '/radar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PayolaRoute = PayolaRouteImport.update({
-  id: '/payola',
-  path: '/payola',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MarketRoute = MarketRouteImport.update({
-  id: '/market',
-  path: '/market',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LeiloesRoute = LeiloesRouteImport.update({
-  id: '/leiloes',
-  path: '/leiloes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IncubadoraRoute = IncubadoraRouteImport.update({
-  id: '/incubadora',
-  path: '/incubadora',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HallRoute = HallRouteImport.update({
-  id: '/hall',
-  path: '/hall',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GravadorasRoute = GravadorasRouteImport.update({
-  id: '/gravadoras',
-  path: '/gravadoras',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForumRoute = ForumRouteImport.update({
-  id: '/forum',
-  path: '/forum',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FilantropiaRoute = FilantropiaRouteImport.update({
-  id: '/filantropia',
-  path: '/filantropia',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DueloRoute = DueloRouteImport.update({
-  id: '/duelo',
-  path: '/duelo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ChartsRoute = ChartsRouteImport.update({
-  id: '/charts',
-  path: '/charts',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BolsaRoute = BolsaRouteImport.update({
-  id: '/bolsa',
-  path: '/bolsa',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BetRoute = BetRouteImport.update({
-  id: '/bet',
-  path: '/bet',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AlbunsRoute = AlbunsRouteImport.update({
-  id: '/albuns',
-  path: '/albuns',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AcessoRapidoRoute = AcessoRapidoRouteImport.update({
@@ -159,109 +69,99 @@ const AcessoRapidoRoute = AcessoRapidoRouteImport.update({
   path: '/acesso-rapido',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AlbunsRoute = AlbunsRouteImport.update({
+  id: '/albuns',
+  path: '/albuns',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ToursIndexRoute = ToursIndexRouteImport.update({
-  id: '/tours/',
-  path: '/tours/',
+const BetRoute = BetRouteImport.update({
+  id: '/bet',
+  path: '/bet',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PontoIndexRoute = PontoIndexRouteImport.update({
-  id: '/ponto/',
-  path: '/ponto/',
+const BolsaRoute = BolsaRouteImport.update({
+  id: '/bolsa',
+  path: '/bolsa',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlaylistsIndexRoute = PlaylistsIndexRouteImport.update({
-  id: '/playlists/',
-  path: '/playlists/',
+const ChartsRoute = ChartsRouteImport.update({
+  id: '/charts',
+  path: '/charts',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlayIndexRoute = PlayIndexRouteImport.update({
-  id: '/play/',
-  path: '/play/',
+const DueloRoute = DueloRouteImport.update({
+  id: '/duelo',
+  path: '/duelo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GamesIndexRoute = GamesIndexRouteImport.update({
-  id: '/games/',
-  path: '/games/',
+const FilantropiaRoute = FilantropiaRouteImport.update({
+  id: '/filantropia',
+  path: '/filantropia',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CatalogoIndexRoute = CatalogoIndexRouteImport.update({
-  id: '/catalogo/',
-  path: '/catalogo/',
+const ForumRoute = ForumRouteImport.update({
+  id: '/forum',
+  path: '/forum',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ArtistasIndexRoute = ArtistasIndexRouteImport.update({
-  id: '/artistas/',
-  path: '/artistas/',
+const GravadorasRoute = GravadorasRouteImport.update({
+  id: '/gravadoras',
+  path: '/gravadoras',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ToursNomeRoute = ToursNomeRouteImport.update({
-  id: '/tours/$nome',
-  path: '/tours/$nome',
+const HallRoute = HallRouteImport.update({
+  id: '/hall',
+  path: '/hall',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PontoPlaylistsRoute = PontoPlaylistsRouteImport.update({
-  id: '/ponto/playlists',
-  path: '/ponto/playlists',
+const IncubadoraRoute = IncubadoraRouteImport.update({
+  id: '/incubadora',
+  path: '/incubadora',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PontoDistribuirRoute = PontoDistribuirRouteImport.update({
-  id: '/ponto/distribuir',
-  path: '/ponto/distribuir',
+const LeiloesRoute = LeiloesRouteImport.update({
+  id: '/leiloes',
+  path: '/leiloes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlaylistsNovaRoute = PlaylistsNovaRouteImport.update({
-  id: '/playlists/nova',
-  path: '/playlists/nova',
+const MarketRoute = MarketRouteImport.update({
+  id: '/market',
+  path: '/market',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlaylistsIdRoute = PlaylistsIdRouteImport.update({
-  id: '/playlists/$id',
-  path: '/playlists/$id',
+const PayolaRoute = PayolaRouteImport.update({
+  id: '/payola',
+  path: '/payola',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GamesQueridometroRoute = GamesQueridometroRouteImport.update({
-  id: '/games/queridometro',
-  path: '/games/queridometro',
+const RadarRoute = RadarRouteImport.update({
+  id: '/radar',
+  path: '/radar',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GamesPaparazziEscapeRoute = GamesPaparazziEscapeRouteImport.update({
-  id: '/games/paparazzi-escape',
-  path: '/games/paparazzi-escape',
+const RankingRoute = RankingRouteImport.update({
+  id: '/ranking',
+  path: '/ranking',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GamesMemoriaFamaRoute = GamesMemoriaFamaRouteImport.update({
-  id: '/games/memoria-fama',
-  path: '/games/memoria-fama',
+const RescisaoRoute = RescisaoRouteImport.update({
+  id: '/rescisao',
+  path: '/rescisao',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GamesHitsProducerRoute = GamesHitsProducerRouteImport.update({
-  id: '/games/hits-producer',
-  path: '/games/hits-producer',
+const SocialRoute = SocialRouteImport.update({
+  id: '/social',
+  path: '/social',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CatalogoIdRoute = CatalogoIdRouteImport.update({
-  id: '/catalogo/$id',
-  path: '/catalogo/$id',
+const TutorialRoute = TutorialRouteImport.update({
+  id: '/tutorial',
+  path: '/tutorial',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AlbumIdRoute = AlbumIdRouteImport.update({
-  id: '/album/$id',
-  path: '/album/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AcoesTourRoute = AcoesTourRouteImport.update({
-  id: '/acoes/tour',
-  path: '/acoes/tour',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AcoesCinemaRoute = AcoesCinemaRouteImport.update({
-  id: '/acoes/cinema',
-  path: '/acoes/cinema',
+const TvRoute = TvRouteImport.update({
+  id: '/tv',
+  path: '/tv',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AcoesAlbumRoute = AcoesAlbumRouteImport.update({
@@ -269,29 +169,114 @@ const AcoesAlbumRoute = AcoesAlbumRouteImport.update({
   path: '/acoes/album',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AcoesCinemaRoute = AcoesCinemaRouteImport.update({
+  id: '/acoes/cinema',
+  path: '/acoes/cinema',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcoesTourRoute = AcoesTourRouteImport.update({
+  id: '/acoes/tour',
+  path: '/acoes/tour',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AlbumIdRoute = AlbumIdRouteImport.update({
+  id: '/album/$id',
+  path: '/album/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ArtistasIndexRoute = ArtistasIndexRouteImport.update({
+  id: '/artistas/',
+  path: '/artistas/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CatalogoIndexRoute = CatalogoIndexRouteImport.update({
+  id: '/catalogo/',
+  path: '/catalogo/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CatalogoIdRoute = CatalogoIdRouteImport.update({
+  id: '/catalogo/$id',
+  path: '/catalogo/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GamesIndexRoute = GamesIndexRouteImport.update({
+  id: '/games/',
+  path: '/games/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GamesHitsProducerRoute = GamesHitsProducerRouteImport.update({
+  id: '/games/hits-producer',
+  path: '/games/hits-producer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GamesMemoriaFamaRoute = GamesMemoriaFamaRouteImport.update({
+  id: '/games/memoria-fama',
+  path: '/games/memoria-fama',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GamesPaparazziEscapeRoute = GamesPaparazziEscapeRouteImport.update({
+  id: '/games/paparazzi-escape',
+  path: '/games/paparazzi-escape',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GamesQueridometroRoute = GamesQueridometroRouteImport.update({
+  id: '/games/queridometro',
+  path: '/games/queridometro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlayIndexRoute = PlayIndexRouteImport.update({
+  id: '/play/',
+  path: '/play/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlaylistsIndexRoute = PlaylistsIndexRouteImport.update({
+  id: '/playlists/',
+  path: '/playlists/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlaylistsIdRoute = PlaylistsIdRouteImport.update({
+  id: '/playlists/$id',
+  path: '/playlists/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlaylistsNovaRoute = PlaylistsNovaRouteImport.update({
+  id: '/playlists/nova',
+  path: '/playlists/nova',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PontoIndexRoute = PontoIndexRouteImport.update({
+  id: '/ponto/',
+  path: '/ponto/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PontoDistribuirRoute = PontoDistribuirRouteImport.update({
+  id: '/ponto/distribuir',
+  path: '/ponto/distribuir',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PontoPlaylistsRoute = PontoPlaylistsRouteImport.update({
+  id: '/ponto/playlists',
+  path: '/ponto/playlists',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ToursIndexRoute = ToursIndexRouteImport.update({
+  id: '/tours/',
+  path: '/tours/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ToursNomeRoute = ToursNomeRouteImport.update({
+  id: '/tours/$nome',
+  path: '/tours/$nome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AlbumIdEditarRoute = AlbumIdEditarRouteImport.update({
+  id: '/editar',
+  path: '/editar',
+  getParentRoute: () => AlbumIdRoute,
+} as any)
 const ArtistasNomeIndexRoute = ArtistasNomeIndexRouteImport.update({
   id: '/artistas/$nome/',
   path: '/artistas/$nome/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PontoPlaylistsPlanilhaRoute = PontoPlaylistsPlanilhaRouteImport.update({
-  id: '/planilha',
-  path: '/planilha',
-  getParentRoute: () => PontoPlaylistsRoute,
-} as any)
-const PontoDistribuirPlanilhaRoute = PontoDistribuirPlanilhaRouteImport.update({
-  id: '/planilha',
-  path: '/planilha',
-  getParentRoute: () => PontoDistribuirRoute,
-} as any)
-const PlaylistsIdEditarRoute = PlaylistsIdEditarRouteImport.update({
-  id: '/editar',
-  path: '/editar',
-  getParentRoute: () => PlaylistsIdRoute,
-} as any)
-const ArtistasNomeProjetosRoute = ArtistasNomeProjetosRouteImport.update({
-  id: '/artistas/$nome/projetos',
-  path: '/artistas/$nome/projetos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ArtistasNomeBensRoute = ArtistasNomeBensRouteImport.update({
@@ -299,10 +284,25 @@ const ArtistasNomeBensRoute = ArtistasNomeBensRouteImport.update({
   path: '/artistas/$nome/bens',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AlbumIdEditarRoute = AlbumIdEditarRouteImport.update({
+const ArtistasNomeProjetosRoute = ArtistasNomeProjetosRouteImport.update({
+  id: '/artistas/$nome/projetos',
+  path: '/artistas/$nome/projetos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlaylistsIdEditarRoute = PlaylistsIdEditarRouteImport.update({
   id: '/editar',
   path: '/editar',
-  getParentRoute: () => AlbumIdRoute,
+  getParentRoute: () => PlaylistsIdRoute,
+} as any)
+const PontoDistribuirPlanilhaRoute = PontoDistribuirPlanilhaRouteImport.update({
+  id: '/planilha',
+  path: '/planilha',
+  getParentRoute: () => PontoDistribuirRoute,
+} as any)
+const PontoPlaylistsPlanilhaRoute = PontoPlaylistsPlanilhaRouteImport.update({
+  id: '/planilha',
+  path: '/planilha',
+  getParentRoute: () => PontoPlaylistsRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -665,137 +665,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/tv': {
-      id: '/tv'
-      path: '/tv'
-      fullPath: '/tv'
-      preLoaderRoute: typeof TvRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/tutorial': {
-      id: '/tutorial'
-      path: '/tutorial'
-      fullPath: '/tutorial'
-      preLoaderRoute: typeof TutorialRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/social': {
-      id: '/social'
-      path: '/social'
-      fullPath: '/social'
-      preLoaderRoute: typeof SocialRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rescisao': {
-      id: '/rescisao'
-      path: '/rescisao'
-      fullPath: '/rescisao'
-      preLoaderRoute: typeof RescisaoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ranking': {
-      id: '/ranking'
-      path: '/ranking'
-      fullPath: '/ranking'
-      preLoaderRoute: typeof RankingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/radar': {
-      id: '/radar'
-      path: '/radar'
-      fullPath: '/radar'
-      preLoaderRoute: typeof RadarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/payola': {
-      id: '/payola'
-      path: '/payola'
-      fullPath: '/payola'
-      preLoaderRoute: typeof PayolaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/market': {
-      id: '/market'
-      path: '/market'
-      fullPath: '/market'
-      preLoaderRoute: typeof MarketRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/leiloes': {
-      id: '/leiloes'
-      path: '/leiloes'
-      fullPath: '/leiloes'
-      preLoaderRoute: typeof LeiloesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/incubadora': {
-      id: '/incubadora'
-      path: '/incubadora'
-      fullPath: '/incubadora'
-      preLoaderRoute: typeof IncubadoraRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/hall': {
-      id: '/hall'
-      path: '/hall'
-      fullPath: '/hall'
-      preLoaderRoute: typeof HallRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gravadoras': {
-      id: '/gravadoras'
-      path: '/gravadoras'
-      fullPath: '/gravadoras'
-      preLoaderRoute: typeof GravadorasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/forum': {
-      id: '/forum'
-      path: '/forum'
-      fullPath: '/forum'
-      preLoaderRoute: typeof ForumRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/filantropia': {
-      id: '/filantropia'
-      path: '/filantropia'
-      fullPath: '/filantropia'
-      preLoaderRoute: typeof FilantropiaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/duelo': {
-      id: '/duelo'
-      path: '/duelo'
-      fullPath: '/duelo'
-      preLoaderRoute: typeof DueloRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/charts': {
-      id: '/charts'
-      path: '/charts'
-      fullPath: '/charts'
-      preLoaderRoute: typeof ChartsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/bolsa': {
-      id: '/bolsa'
-      path: '/bolsa'
-      fullPath: '/bolsa'
-      preLoaderRoute: typeof BolsaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/bet': {
-      id: '/bet'
-      path: '/bet'
-      fullPath: '/bet'
-      preLoaderRoute: typeof BetRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/albuns': {
-      id: '/albuns'
-      path: '/albuns'
-      fullPath: '/albuns'
-      preLoaderRoute: typeof AlbunsRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/acesso-rapido': {
@@ -805,151 +679,137 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcessoRapidoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/albuns': {
+      id: '/albuns'
+      path: '/albuns'
+      fullPath: '/albuns'
+      preLoaderRoute: typeof AlbunsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/tours/': {
-      id: '/tours/'
-      path: '/tours'
-      fullPath: '/tours/'
-      preLoaderRoute: typeof ToursIndexRouteImport
+    '/bet': {
+      id: '/bet'
+      path: '/bet'
+      fullPath: '/bet'
+      preLoaderRoute: typeof BetRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/ponto/': {
-      id: '/ponto/'
-      path: '/ponto'
-      fullPath: '/ponto/'
-      preLoaderRoute: typeof PontoIndexRouteImport
+    '/bolsa': {
+      id: '/bolsa'
+      path: '/bolsa'
+      fullPath: '/bolsa'
+      preLoaderRoute: typeof BolsaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/playlists/': {
-      id: '/playlists/'
-      path: '/playlists'
-      fullPath: '/playlists/'
-      preLoaderRoute: typeof PlaylistsIndexRouteImport
+    '/charts': {
+      id: '/charts'
+      path: '/charts'
+      fullPath: '/charts'
+      preLoaderRoute: typeof ChartsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/play/': {
-      id: '/play/'
-      path: '/play'
-      fullPath: '/play/'
-      preLoaderRoute: typeof PlayIndexRouteImport
+    '/duelo': {
+      id: '/duelo'
+      path: '/duelo'
+      fullPath: '/duelo'
+      preLoaderRoute: typeof DueloRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/games/': {
-      id: '/games/'
-      path: '/games'
-      fullPath: '/games/'
-      preLoaderRoute: typeof GamesIndexRouteImport
+    '/filantropia': {
+      id: '/filantropia'
+      path: '/filantropia'
+      fullPath: '/filantropia'
+      preLoaderRoute: typeof FilantropiaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/catalogo/': {
-      id: '/catalogo/'
-      path: '/catalogo'
-      fullPath: '/catalogo/'
-      preLoaderRoute: typeof CatalogoIndexRouteImport
+    '/forum': {
+      id: '/forum'
+      path: '/forum'
+      fullPath: '/forum'
+      preLoaderRoute: typeof ForumRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/artistas/': {
-      id: '/artistas/'
-      path: '/artistas'
-      fullPath: '/artistas/'
-      preLoaderRoute: typeof ArtistasIndexRouteImport
+    '/gravadoras': {
+      id: '/gravadoras'
+      path: '/gravadoras'
+      fullPath: '/gravadoras'
+      preLoaderRoute: typeof GravadorasRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/tours/$nome': {
-      id: '/tours/$nome'
-      path: '/tours/$nome'
-      fullPath: '/tours/$nome'
-      preLoaderRoute: typeof ToursNomeRouteImport
+    '/hall': {
+      id: '/hall'
+      path: '/hall'
+      fullPath: '/hall'
+      preLoaderRoute: typeof HallRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/ponto/playlists': {
-      id: '/ponto/playlists'
-      path: '/ponto/playlists'
-      fullPath: '/ponto/playlists'
-      preLoaderRoute: typeof PontoPlaylistsRouteImport
+    '/incubadora': {
+      id: '/incubadora'
+      path: '/incubadora'
+      fullPath: '/incubadora'
+      preLoaderRoute: typeof IncubadoraRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/ponto/distribuir': {
-      id: '/ponto/distribuir'
-      path: '/ponto/distribuir'
-      fullPath: '/ponto/distribuir'
-      preLoaderRoute: typeof PontoDistribuirRouteImport
+    '/leiloes': {
+      id: '/leiloes'
+      path: '/leiloes'
+      fullPath: '/leiloes'
+      preLoaderRoute: typeof LeiloesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/playlists/nova': {
-      id: '/playlists/nova'
-      path: '/playlists/nova'
-      fullPath: '/playlists/nova'
-      preLoaderRoute: typeof PlaylistsNovaRouteImport
+    '/market': {
+      id: '/market'
+      path: '/market'
+      fullPath: '/market'
+      preLoaderRoute: typeof MarketRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/playlists/$id': {
-      id: '/playlists/$id'
-      path: '/playlists/$id'
-      fullPath: '/playlists/$id'
-      preLoaderRoute: typeof PlaylistsIdRouteImport
+    '/payola': {
+      id: '/payola'
+      path: '/payola'
+      fullPath: '/payola'
+      preLoaderRoute: typeof PayolaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/games/queridometro': {
-      id: '/games/queridometro'
-      path: '/games/queridometro'
-      fullPath: '/games/queridometro'
-      preLoaderRoute: typeof GamesQueridometroRouteImport
+    '/radar': {
+      id: '/radar'
+      path: '/radar'
+      fullPath: '/radar'
+      preLoaderRoute: typeof RadarRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/games/paparazzi-escape': {
-      id: '/games/paparazzi-escape'
-      path: '/games/paparazzi-escape'
-      fullPath: '/games/paparazzi-escape'
-      preLoaderRoute: typeof GamesPaparazziEscapeRouteImport
+    '/ranking': {
+      id: '/ranking'
+      path: '/ranking'
+      fullPath: '/ranking'
+      preLoaderRoute: typeof RankingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/games/memoria-fama': {
-      id: '/games/memoria-fama'
-      path: '/games/memoria-fama'
-      fullPath: '/games/memoria-fama'
-      preLoaderRoute: typeof GamesMemoriaFamaRouteImport
+    '/rescisao': {
+      id: '/rescisao'
+      path: '/rescisao'
+      fullPath: '/rescisao'
+      preLoaderRoute: typeof RescisaoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/games/hits-producer': {
-      id: '/games/hits-producer'
-      path: '/games/hits-producer'
-      fullPath: '/games/hits-producer'
-      preLoaderRoute: typeof GamesHitsProducerRouteImport
+    '/social': {
+      id: '/social'
+      path: '/social'
+      fullPath: '/social'
+      preLoaderRoute: typeof SocialRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/catalogo/$id': {
-      id: '/catalogo/$id'
-      path: '/catalogo/$id'
-      fullPath: '/catalogo/$id'
-      preLoaderRoute: typeof CatalogoIdRouteImport
+    '/tutorial': {
+      id: '/tutorial'
+      path: '/tutorial'
+      fullPath: '/tutorial'
+      preLoaderRoute: typeof TutorialRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/album/$id': {
-      id: '/album/$id'
-      path: '/album/$id'
-      fullPath: '/album/$id'
-      preLoaderRoute: typeof AlbumIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/acoes/tour': {
-      id: '/acoes/tour'
-      path: '/acoes/tour'
-      fullPath: '/acoes/tour'
-      preLoaderRoute: typeof AcoesTourRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/acoes/cinema': {
-      id: '/acoes/cinema'
-      path: '/acoes/cinema'
-      fullPath: '/acoes/cinema'
-      preLoaderRoute: typeof AcoesCinemaRouteImport
+    '/tv': {
+      id: '/tv'
+      path: '/tv'
+      fullPath: '/tv'
+      preLoaderRoute: typeof TvRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/acoes/album': {
@@ -959,39 +819,158 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcoesAlbumRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/acoes/cinema': {
+      id: '/acoes/cinema'
+      path: '/acoes/cinema'
+      fullPath: '/acoes/cinema'
+      preLoaderRoute: typeof AcoesCinemaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/acoes/tour': {
+      id: '/acoes/tour'
+      path: '/acoes/tour'
+      fullPath: '/acoes/tour'
+      preLoaderRoute: typeof AcoesTourRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/album/$id': {
+      id: '/album/$id'
+      path: '/album/$id'
+      fullPath: '/album/$id'
+      preLoaderRoute: typeof AlbumIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/artistas/': {
+      id: '/artistas/'
+      path: '/artistas'
+      fullPath: '/artistas/'
+      preLoaderRoute: typeof ArtistasIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/catalogo/': {
+      id: '/catalogo/'
+      path: '/catalogo'
+      fullPath: '/catalogo/'
+      preLoaderRoute: typeof CatalogoIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/catalogo/$id': {
+      id: '/catalogo/$id'
+      path: '/catalogo/$id'
+      fullPath: '/catalogo/$id'
+      preLoaderRoute: typeof CatalogoIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/games/': {
+      id: '/games/'
+      path: '/games'
+      fullPath: '/games/'
+      preLoaderRoute: typeof GamesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/games/hits-producer': {
+      id: '/games/hits-producer'
+      path: '/games/hits-producer'
+      fullPath: '/games/hits-producer'
+      preLoaderRoute: typeof GamesHitsProducerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/games/memoria-fama': {
+      id: '/games/memoria-fama'
+      path: '/games/memoria-fama'
+      fullPath: '/games/memoria-fama'
+      preLoaderRoute: typeof GamesMemoriaFamaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/games/paparazzi-escape': {
+      id: '/games/paparazzi-escape'
+      path: '/games/paparazzi-escape'
+      fullPath: '/games/paparazzi-escape'
+      preLoaderRoute: typeof GamesPaparazziEscapeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/games/queridometro': {
+      id: '/games/queridometro'
+      path: '/games/queridometro'
+      fullPath: '/games/queridometro'
+      preLoaderRoute: typeof GamesQueridometroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/play/': {
+      id: '/play/'
+      path: '/play'
+      fullPath: '/play/'
+      preLoaderRoute: typeof PlayIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/playlists/': {
+      id: '/playlists/'
+      path: '/playlists'
+      fullPath: '/playlists/'
+      preLoaderRoute: typeof PlaylistsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/playlists/$id': {
+      id: '/playlists/$id'
+      path: '/playlists/$id'
+      fullPath: '/playlists/$id'
+      preLoaderRoute: typeof PlaylistsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/playlists/nova': {
+      id: '/playlists/nova'
+      path: '/playlists/nova'
+      fullPath: '/playlists/nova'
+      preLoaderRoute: typeof PlaylistsNovaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ponto/': {
+      id: '/ponto/'
+      path: '/ponto'
+      fullPath: '/ponto/'
+      preLoaderRoute: typeof PontoIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ponto/distribuir': {
+      id: '/ponto/distribuir'
+      path: '/ponto/distribuir'
+      fullPath: '/ponto/distribuir'
+      preLoaderRoute: typeof PontoDistribuirRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ponto/playlists': {
+      id: '/ponto/playlists'
+      path: '/ponto/playlists'
+      fullPath: '/ponto/playlists'
+      preLoaderRoute: typeof PontoPlaylistsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tours/': {
+      id: '/tours/'
+      path: '/tours'
+      fullPath: '/tours/'
+      preLoaderRoute: typeof ToursIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tours/$nome': {
+      id: '/tours/$nome'
+      path: '/tours/$nome'
+      fullPath: '/tours/$nome'
+      preLoaderRoute: typeof ToursNomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/album/$id/editar': {
+      id: '/album/$id/editar'
+      path: '/editar'
+      fullPath: '/album/$id/editar'
+      preLoaderRoute: typeof AlbumIdEditarRouteImport
+      parentRoute: typeof AlbumIdRoute
+    }
     '/artistas/$nome/': {
       id: '/artistas/$nome/'
       path: '/artistas/$nome'
       fullPath: '/artistas/$nome/'
       preLoaderRoute: typeof ArtistasNomeIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ponto/playlists/planilha': {
-      id: '/ponto/playlists/planilha'
-      path: '/planilha'
-      fullPath: '/ponto/playlists/planilha'
-      preLoaderRoute: typeof PontoPlaylistsPlanilhaRouteImport
-      parentRoute: typeof PontoPlaylistsRoute
-    }
-    '/ponto/distribuir/planilha': {
-      id: '/ponto/distribuir/planilha'
-      path: '/planilha'
-      fullPath: '/ponto/distribuir/planilha'
-      preLoaderRoute: typeof PontoDistribuirPlanilhaRouteImport
-      parentRoute: typeof PontoDistribuirRoute
-    }
-    '/playlists/$id/editar': {
-      id: '/playlists/$id/editar'
-      path: '/editar'
-      fullPath: '/playlists/$id/editar'
-      preLoaderRoute: typeof PlaylistsIdEditarRouteImport
-      parentRoute: typeof PlaylistsIdRoute
-    }
-    '/artistas/$nome/projetos': {
-      id: '/artistas/$nome/projetos'
-      path: '/artistas/$nome/projetos'
-      fullPath: '/artistas/$nome/projetos'
-      preLoaderRoute: typeof ArtistasNomeProjetosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/artistas/$nome/bens': {
@@ -1001,12 +980,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ArtistasNomeBensRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/album/$id/editar': {
-      id: '/album/$id/editar'
+    '/artistas/$nome/projetos': {
+      id: '/artistas/$nome/projetos'
+      path: '/artistas/$nome/projetos'
+      fullPath: '/artistas/$nome/projetos'
+      preLoaderRoute: typeof ArtistasNomeProjetosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/playlists/$id/editar': {
+      id: '/playlists/$id/editar'
       path: '/editar'
-      fullPath: '/album/$id/editar'
-      preLoaderRoute: typeof AlbumIdEditarRouteImport
-      parentRoute: typeof AlbumIdRoute
+      fullPath: '/playlists/$id/editar'
+      preLoaderRoute: typeof PlaylistsIdEditarRouteImport
+      parentRoute: typeof PlaylistsIdRoute
+    }
+    '/ponto/distribuir/planilha': {
+      id: '/ponto/distribuir/planilha'
+      path: '/planilha'
+      fullPath: '/ponto/distribuir/planilha'
+      preLoaderRoute: typeof PontoDistribuirPlanilhaRouteImport
+      parentRoute: typeof PontoDistribuirRoute
+    }
+    '/ponto/playlists/planilha': {
+      id: '/ponto/playlists/planilha'
+      path: '/planilha'
+      fullPath: '/ponto/playlists/planilha'
+      preLoaderRoute: typeof PontoPlaylistsPlanilhaRouteImport
+      parentRoute: typeof PontoPlaylistsRoute
     }
   }
 }
