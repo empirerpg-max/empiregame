@@ -5,7 +5,9 @@ import { useRouter } from '@tanstack/react-router';
 import ForumObra from '../pages/ForumObra';
 import type { Obra } from '../pages/ForumObra';
 
-export const Route = createFileRoute('/catalogo/$id')({ component: CatalogoObraPage });
+export const Route = createFileRoute('/catalogo/$id')({
+  component: CatalogoObraPage,
+});
 
 export default function CatalogoObraPage() {
   const { id } = useParams({ from: '/catalogo/$id' });
@@ -36,8 +38,8 @@ export default function CatalogoObraPage() {
 
   if (error || !obra) {
     return (
-      <div className="min-h-screen bg-[#0f1923] flex flex-col items-center justify-center gap-4 text-white">
-        <p className="text-white/50">Obra não encontrada.</p>
+      <div className="min-h-screen bg-[#0f1923] flex flex-col items-center justify-center gap-4">
+        <p className="text-white/50 text-sm">Obra não encontrada.</p>
         <button
           onClick={() => router.history.back()}
           className="text-[#2AABEE] text-sm underline"
@@ -50,10 +52,10 @@ export default function CatalogoObraPage() {
 
   return (
     <div className="relative min-h-screen bg-[#0f1923]">
-      {/* Back button */}
       <button
         onClick={() => router.history.back()}
-        className="absolute top-3 left-3 z-20 bg-black/50 backdrop-blur-sm rounded-full p-2 text-white hover:bg-black/70 transition"
+        className="absolute top-3 left-3 z-30 bg-black/50 backdrop-blur-sm rounded-full p-2 text-white hover:bg-black/70 transition"
+        aria-label="Voltar"
       >
         <ArrowLeft size={18} />
       </button>
