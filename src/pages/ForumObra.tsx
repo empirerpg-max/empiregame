@@ -3,25 +3,12 @@ import useSWR, { mutate } from 'swr';
 import { ChevronDown, ChevronUp, Play, Send, Music, Film } from 'lucide-react';
 
 // --- Telegram WebApp Auth (silent, native) ---
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp: {
-        initDataUnsafe: {
-          user?: { id: number; first_name: string; username?: string; photo_url?: string };
-        };
-        ready: () => void;
-      };
-    };
-  }
-}
-
 function useTelegramUser() {
-  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
   return {
     id: tgUser?.id ?? 0,
     name: tgUser?.first_name ?? 'Anônimo',
-    photo: tgUser?.photo_url,
+    photo: tgUser?.photo_url as string | undefined,
   };
 }
 
