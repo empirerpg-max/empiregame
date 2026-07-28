@@ -21,6 +21,7 @@ import { Route as LeiloesRouteImport } from './routes/leiloes'
 import { Route as IncubadoraRouteImport } from './routes/incubadora'
 import { Route as HallRouteImport } from './routes/hall'
 import { Route as GravadorasRouteImport } from './routes/gravadoras'
+import { Route as ForumRouteImport } from './routes/forum'
 import { Route as FilantropiaRouteImport } from './routes/filantropia'
 import { Route as DueloRouteImport } from './routes/duelo'
 import { Route as ChartsRouteImport } from './routes/charts'
@@ -114,6 +115,11 @@ const HallRoute = HallRouteImport.update({
 const GravadorasRoute = GravadorasRouteImport.update({
   id: '/gravadoras',
   path: '/gravadoras',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForumRoute = ForumRouteImport.update({
+  id: '/forum',
+  path: '/forum',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FilantropiaRoute = FilantropiaRouteImport.update({
@@ -296,6 +302,7 @@ export interface FileRoutesByFullPath {
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
   '/filantropia': typeof FilantropiaRoute
+  '/forum': typeof ForumRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
   '/incubadora': typeof IncubadoraRoute
@@ -344,6 +351,7 @@ export interface FileRoutesByTo {
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
   '/filantropia': typeof FilantropiaRoute
+  '/forum': typeof ForumRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
   '/incubadora': typeof IncubadoraRoute
@@ -393,6 +401,7 @@ export interface FileRoutesById {
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
   '/filantropia': typeof FilantropiaRoute
+  '/forum': typeof ForumRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
   '/incubadora': typeof IncubadoraRoute
@@ -443,6 +452,7 @@ export interface FileRouteTypes {
     | '/charts'
     | '/duelo'
     | '/filantropia'
+    | '/forum'
     | '/gravadoras'
     | '/hall'
     | '/incubadora'
@@ -491,6 +501,7 @@ export interface FileRouteTypes {
     | '/charts'
     | '/duelo'
     | '/filantropia'
+    | '/forum'
     | '/gravadoras'
     | '/hall'
     | '/incubadora'
@@ -539,6 +550,7 @@ export interface FileRouteTypes {
     | '/charts'
     | '/duelo'
     | '/filantropia'
+    | '/forum'
     | '/gravadoras'
     | '/hall'
     | '/incubadora'
@@ -588,6 +600,7 @@ export interface RootRouteChildren {
   ChartsRoute: typeof ChartsRoute
   DueloRoute: typeof DueloRoute
   FilantropiaRoute: typeof FilantropiaRoute
+  ForumRoute: typeof ForumRoute
   GravadorasRoute: typeof GravadorasRoute
   HallRoute: typeof HallRoute
   IncubadoraRoute: typeof IncubadoraRoute
@@ -708,6 +721,13 @@ declare module '@tanstack/react-router' {
       path: '/gravadoras'
       fullPath: '/gravadoras'
       preLoaderRoute: typeof GravadorasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forum': {
+      id: '/forum'
+      path: '/forum'
+      fullPath: '/forum'
+      preLoaderRoute: typeof ForumRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/filantropia': {
@@ -1007,6 +1027,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChartsRoute: ChartsRoute,
   DueloRoute: DueloRoute,
   FilantropiaRoute: FilantropiaRoute,
+  ForumRoute: ForumRoute,
   GravadorasRoute: GravadorasRoute,
   HallRoute: HallRoute,
   IncubadoraRoute: IncubadoraRoute,

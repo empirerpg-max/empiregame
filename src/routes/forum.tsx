@@ -10,7 +10,23 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useLocalStorage } from "../hooks/useLocalStorage";
+
+function useLocalStorage<T>(key: string, initial: T): [T, (v: T) => void] {
+  const [val, setVal] = useState<T>(() => {
+    if (typeof window === "undefined") return initial;
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as T) : initial;
+    } catch {
+      return initial;
+    }
+  });
+  const set = (v: T) => {
+    setVal(v);
+    try { window.localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ }
+  };
+  return [val, set];
+}
 import {
   listarTopicosForum,
   listarMensagensForum,
