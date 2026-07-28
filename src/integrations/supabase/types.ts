@@ -41,6 +41,132 @@ export type Database = {
         }
         Relationships: []
       }
+      Musicas: {
+        Row: {
+          id: number
+          created_at: string
+          Nome: string | null
+          Artista: string | null
+          Album: string | null
+          "Capa da Musica": string | null
+          "Link do audio": string | null
+          telegram_file_id: string | null
+          telegram_topic_id: number | null
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          Nome?: string | null
+          Artista?: string | null
+          Album?: string | null
+          "Capa da Musica"?: string | null
+          "Link do audio"?: string | null
+          telegram_file_id?: string | null
+          telegram_topic_id?: number | null
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          Nome?: string | null
+          Artista?: string | null
+          Album?: string | null
+          "Capa da Musica"?: string | null
+          "Link do audio"?: string | null
+          telegram_file_id?: string | null
+          telegram_topic_id?: number | null
+        }
+        Relationships: []
+      }
+      Albuns: {
+        Row: {
+          id: number
+          created_at: string
+          "Nome do Album": string | null
+          "Nome do Artista": string | null
+          "Capa do Album": string | null
+          "Link do audio": string | null
+          telegram_topic_id: number | null
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          "Nome do Album"?: string | null
+          "Nome do Artista"?: string | null
+          "Capa do Album"?: string | null
+          "Link do audio"?: string | null
+          telegram_topic_id?: number | null
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          "Nome do Album"?: string | null
+          "Nome do Artista"?: string | null
+          "Capa do Album"?: string | null
+          "Link do audio"?: string | null
+          telegram_topic_id?: number | null
+        }
+        Relationships: []
+      }
+      Videos: {
+        Row: {
+          id: number
+          created_at: string
+          Titulo: string | null
+          Artista: string | null
+          Capa: string | null
+          telegram_file_id: string | null
+          telegram_topic_id: number | null
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          Titulo?: string | null
+          Artista?: string | null
+          Capa?: string | null
+          telegram_file_id?: string | null
+          telegram_topic_id?: number | null
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          Titulo?: string | null
+          Artista?: string | null
+          Capa?: string | null
+          telegram_file_id?: string | null
+          telegram_topic_id?: number | null
+        }
+        Relationships: []
+      }
+      "Music Videos": {
+        Row: {
+          id: number
+          created_at: string
+          Titulo: string | null
+          Artista: string | null
+          Capa: string | null
+          telegram_file_id: string | null
+          telegram_topic_id: number | null
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          Titulo?: string | null
+          Artista?: string | null
+          Capa?: string | null
+          telegram_file_id?: string | null
+          telegram_topic_id?: number | null
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          Titulo?: string | null
+          Artista?: string | null
+          Capa?: string | null
+          telegram_file_id?: string | null
+          telegram_topic_id?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
