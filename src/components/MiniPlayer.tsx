@@ -14,22 +14,18 @@
  *  ├─ URL contém 'drive.google.com'
  *  │   → <iframe> com Google Drive preview
  *  │
+ *  ├─ isTelegramFileId(src)   ← ID nativo (BAACAg…)
+ *  │   → exibe loading → fetch Apps Script → <video autoPlay>
+ *  │
  *  ├─ URL contém 'api.telegram.org/file'
  *  │   → <video controls autoPlay> nativo HTML5
  *  │
  *  └─ URL termina com .mp4 (qualquer host)
  *      → <video controls autoPlay> nativo HTML5
  *
- * Para categorias que NÃO são 'musicvideo', o player de áudio original
- * (Drive/Telegram via proxy + YT invisible player) continua funcionando
- * exatamente como antes.
- *
- * ══════════════════════════════════════════════════════════════════
- * Fluxo de áudio (mantido do original):
- * ──────────────────────────────────────────────────────────────────
- * autoPlay=true  → play() → playing:true → useEffect → triggerPlay()
- * next/prev      → troca currentIdx, mantém playing:true → triggerPlay()
- * resume         → resume() → playing:true → triggerPlay() no onClick
+ * Para categorias que NÃO são 'musicvideo'/'video', o player de áudio
+ * original (Drive/Telegram via proxy + YT invisible player) continua
+ * funcionando exatamente como antes.
  */
 
 import { useEffect, useRef, useCallback, useState } from "react";
@@ -41,9 +37,14 @@ import {
   detectMediaType,
   extractYouTubeId,
   extractDriveId,
+  isTelegramFileId,
 } from "@/lib/playContext";
-import { ChevronLeft, ChevronRight, X, Music, Minimize2, Maximize2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Music, Minimize2, Maximize2, Loader2 } from "lucide-react";
 import { driveImg } from "@/lib/api";
+
+// ─── Apps Script URL (mesma usada em play.index.tsx) ──────────────────────
+const APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycby1S1mIBXdj4hLqc9RYv1ZJjL7d5ct6to18FNPmpJn1KOnZrYCKJKPNe2LP0dPW-G8HOg/exec";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // YT API type shim
@@ -66,21 +67,12 @@ type VideoMode =
   | { kind: "youtube-iframe"; embedUrl: string }
   | { kind: "drive-iframe"; embedUrl: string }
   | { kind: "native-video"; src: string }
+  | { kind: "telegram-fetch"; fileId: string }   // ← NOVO: file_id nativo aguardando fetch
   | { kind: "audio" };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // resolveVideoMode — lógica universal de detecção de fonte de vídeo
 // ─────────────────────────────────────────────────────────────────────────────
-/**
- * Decide qual renderer usar com base na URL recebida.
- *
- * Regras (ordem de prioridade):
- *  1. Contém 'youtube.com' ou 'youtu.be' ou ID de 11 chars → iframe YouTube
- *  2. Contém 'drive.google.com'                            → iframe Google Drive
- *  3. Contém 'api.telegram.org/file'                       → <video> nativo
- *  4. Termina com '.mp4'                                    → <video> nativo
- *  5. Qualquer outro caso                                   → modo áudio
- */
 function resolveVideoMode(src: string, isVideoCategory: boolean): VideoMode {
   if (!isVideoCategory) return { kind: "audio" };
 
@@ -106,6 +98,11 @@ function resolveVideoMode(src: string, isVideoCategory: boolean): VideoMode {
       kind: "drive-iframe",
       embedUrl: `https://drive.google.com/file/d/${id}/preview`,
     };
+  }
+
+  // ── Telegram file_id nativo (BAACAg…) → precisa de fetch ao Apps Script ─
+  if (isTelegramFileId(s)) {
+    return { kind: "telegram-fetch", fileId: s };
   }
 
   // ── Telegram file API (URL direta gerada pelo backend) ───────────────────
@@ -161,7 +158,53 @@ function resolveAudioSrc(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VideoPanel — renderiza iframe ou <video> conforme o modo detectado
+// Hook: dado um telegram_file_id, faz fetch ao Apps Script e retorna a URL mp4
+// ─────────────────────────────────────────────────────────────────────────────
+function useTelegramVideoUrl(fileId: string | null): {
+  url: string | null;
+  loading: boolean;
+  error: string | null;
+} {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!fileId) return;
+    let cancelled = false;
+    setUrl(null);
+    setError(null);
+    setLoading(true);
+
+    fetch(`${APPS_SCRIPT_URL}?action=getVideoUrl&file_id=${encodeURIComponent(fileId)}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((j: { url?: string; error?: string }) => {
+        if (cancelled) return;
+        if (j.url) {
+          setUrl(j.url);
+        } else {
+          setError(j.error ?? "URL não retornada pelo servidor.");
+        }
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setError(String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [fileId]);
+
+  return { url, loading, error };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VideoPanel — renderiza iframe, <video> ou loading conforme o modo
 // ─────────────────────────────────────────────────────────────────────────────
 interface VideoPanelProps {
   mode: VideoMode;
@@ -182,6 +225,11 @@ function VideoPanel({ mode, expanded }: VideoPanelProps) {
     ? "w-full aspect-video rounded-t-xl overflow-hidden bg-black"
     : "hidden";
 
+  // ── Telegram file_id nativo — precisa de fetch ao Apps Script ─────────────
+  if (mode.kind === "telegram-fetch") {
+    return <TelegramFetchPanel fileId={mode.fileId} expanded={expanded} />;
+  }
+
   // ── <video> nativo — Telegram (api.telegram.org/file) ou .mp4 ────────────
   if (mode.kind === "native-video") {
     if (videoError) {
@@ -196,10 +244,6 @@ function VideoPanel({ mode, expanded }: VideoPanelProps) {
 
     return (
       <div className={containerClass}>
-        {/*
-         * key={mode.src} força o React a destruir e recriar o elemento
-         * sempre que a URL mudar, evitando loading infinito por src stale.
-         */}
         <video
           key={mode.src}
           controls
@@ -209,17 +253,10 @@ function VideoPanel({ mode, expanded }: VideoPanelProps) {
           onError={() => {
             console.error("[MiniPlayer] Erro ao carregar vídeo nativo:", mode.src);
             setVideoError(true);
-            toast.error(
-              "Erro ao carregar o vídeo. Verifique se o arquivo está acessível."
-            );
+            toast.error("Erro ao carregar o vídeo. Verifique se o arquivo está acessível.");
           }}
           aria-label="Reprodução de vídeo"
         >
-          {/*
-           * Usa <source> em vez de src direto na tag <video> para garantir
-           * que o navegador dispare o evento 'error' corretamente em todos
-           * os casos, incluindo URLs que retornam 403/404.
-           */}
           <source src={mode.src} type="video/mp4" />
           Seu navegador não suporta a reprodução de vídeo HTML5.
         </video>
@@ -239,6 +276,70 @@ function VideoPanel({ mode, expanded }: VideoPanelProps) {
         title="Reprodução de vídeo"
         sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
       />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TelegramFetchPanel — loading → fetch → <video>
+// ─────────────────────────────────────────────────────────────────────────────
+function TelegramFetchPanel({ fileId, expanded }: { fileId: string; expanded: boolean }) {
+  const { url, loading, error } = useTelegramVideoUrl(fileId);
+  const [videoError, setVideoError] = useState(false);
+
+  const containerClass = expanded
+    ? "w-full aspect-video rounded-t-xl overflow-hidden bg-black flex items-center justify-center"
+    : "hidden";
+
+  if (loading) {
+    return (
+      <div className={containerClass}>
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="size-6 text-primary animate-spin" />
+          <p className="text-[10px] text-muted-foreground">Carregando vídeo…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || (!loading && !url)) {
+    return (
+      <div className={containerClass}>
+        <p className="text-xs text-muted-foreground px-4 text-center">
+          {error ?? "Não foi possível obter a URL do vídeo."}
+        </p>
+      </div>
+    );
+  }
+
+  if (videoError) {
+    return (
+      <div className={containerClass}>
+        <p className="text-xs text-muted-foreground px-4 text-center">
+          Não foi possível reproduzir o vídeo.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={expanded ? "w-full aspect-video rounded-t-xl overflow-hidden bg-black" : "hidden"}>
+      <video
+        key={url!}
+        controls
+        autoPlay
+        playsInline
+        style={{ width: "100%", height: "100%" }}
+        onError={() => {
+          console.error("[MiniPlayer] Erro ao reproduzir vídeo Telegram:", url);
+          setVideoError(true);
+          toast.error("Erro ao reproduzir o vídeo do Telegram.");
+        }}
+        aria-label="Reprodução de vídeo Telegram"
+      >
+        <source src={url!} type="video/mp4" />
+        Seu navegador não suporta vídeo HTML5.
+      </video>
     </div>
   );
 }
@@ -366,8 +467,6 @@ export function MiniPlayer() {
 
   const onYTApiReady = useCallback(() => {
     ytApiReady.current = true;
-    // O player invisível só é criado quando o vídeo YT é renderizado em modo ÁUDIO
-    // (i.e., sem iframe visível). Se há iframe visível, o player invisível não é necessário.
     if (
       videoMode.kind === "audio" &&
       mediaType === "youtube" &&
@@ -384,9 +483,7 @@ export function MiniPlayer() {
   useEffect(() => {
     if (!currentMediaId) return;
 
-    // Para vídeos com iframe/native, não usamos o <audio> nem o YT Player invisível
     if (videoMode.kind !== "audio") {
-      // Para o áudio anterior se houver
       audioRef.current?.pause();
       if (ytPlayerRef.current) {
         try { ytPlayerRef.current.stopVideo(); } catch { /* */ }
@@ -414,7 +511,6 @@ export function MiniPlayer() {
   // ── 4. Auto-play quando playing é true (apenas modo áudio) ───────────────
   useEffect(() => {
     if (!currentMediaId || !playing) return;
-    // Se há iframe/native video, o próprio elemento cuida do autoplay
     if (videoMode.kind !== "audio") return;
 
     const id = setTimeout(() => {
@@ -455,7 +551,7 @@ export function MiniPlayer() {
 
   // ── 6. triggerPlay ───────────────────────────────────────────────────────
   const triggerPlay = useCallback(() => {
-    if (videoMode.kind !== "audio") return; // iframe/native cuida do próprio play
+    if (videoMode.kind !== "audio") return;
 
     if (mediaType === "drive" || mediaType === "telegram") {
       const audio = audioRef.current;
@@ -489,7 +585,6 @@ export function MiniPlayer() {
 
   // ── Guard ─────────────────────────────────────────────────────────────────
   if (currentIdx === null || queue.length === 0) return null;
-
   if (!item) return null;
 
   const hasPrev = currentIdx > 0;
@@ -497,7 +592,7 @@ export function MiniPlayer() {
   const isVideoMode = videoMode.kind !== "audio";
 
   const handlePlayPause = () => {
-    if (isVideoMode) return; // controles nativos do iframe/video
+    if (isVideoMode) return;
     if (playing) {
       triggerPause();
     } else {
@@ -513,13 +608,10 @@ export function MiniPlayer() {
         isVideoMode && videoExpanded ? "bottom-0" : "bottom-16",
       ].join(" ")}
     >
-      {/* ── Painel de vídeo (iframe ou <video> nativo) ── */}
+      {/* ── Painel de vídeo (iframe, <video> nativo ou Telegram fetch) ── */}
       <VideoPanel mode={videoMode} expanded={videoExpanded} />
 
-      {/*
-       * Container do YouTube INVISÍVEL — usado somente em modo ÁUDIO YT.
-       * Nunca exibido quando há iframe/native visível.
-       */}
+      {/* Container do YouTube INVISÍVEL */}
       {videoMode.kind === "audio" && mediaType === "youtube" && (
         <div
           style={{
@@ -567,7 +659,14 @@ export function MiniPlayer() {
             {item.artista}
             {isVideoMode && (
               <span className="ml-1 text-primary opacity-70">
-                · {videoMode.kind === "native-video" ? "MP4" : videoMode.kind === "youtube-iframe" ? "YouTube" : "Drive"}
+                ·{" "}
+                {videoMode.kind === "telegram-fetch"
+                  ? "Telegram"
+                  : videoMode.kind === "native-video"
+                  ? "MP4"
+                  : videoMode.kind === "youtube-iframe"
+                  ? "YouTube"
+                  : "Drive"}
               </span>
             )}
           </p>
@@ -575,7 +674,6 @@ export function MiniPlayer() {
 
         {/* Controles */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Botão expandir/recolher painel de vídeo */}
           {isVideoMode && (
             <button
               onClick={() => setVideoExpanded((v) => !v)}
@@ -599,7 +697,6 @@ export function MiniPlayer() {
             <ChevronLeft className="size-4" />
           </button>
 
-          {/* Botão play/pause — visível apenas em modo áudio */}
           {!isVideoMode && (
             <button
               onClick={handlePlayPause}
