@@ -7,7 +7,15 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Send, ChevronDown, ChevronUp, Mic2, Music2, ImageOff } from 'lucide-react';
+import { Send, ChevronDown, ChevronUp, Mic2, Music2, ImageOff, Play } from 'lucide-react';
+import MiniPlayer from '../components/MiniPlayer';
+
+// ────────────────────────────────────────────────────────────
+// Constantes
+// ────────────────────────────────────────────────────────────
+
+const API_BASE_URL =
+  'https://script.google.com/macros/s/AKfycby7Epe3MHPMvje5OKtSlNn-tSWpowLPOJ7DVflFJqgZNOKCnN9IcGwWYL1QSeRtgJrQ7w/exec';
 
 // ────────────────────────────────────────────────────────────
 // Tipos
@@ -20,6 +28,7 @@ export interface Obra {
   capa?: string;
   letra?: string;
   tipo?: string; // ex: 'musica' | 'album' | 'ep'
+  telegram_file_id?: string; // código longo do arquivo de vídeo no Telegram
 }
 
 export interface Comentario {
@@ -269,6 +278,7 @@ export default function ForumObra({ obra }: { obra: Obra }) {
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [capaErro, setCapaErro] = useState(false);
+  const [playerAberto, setPlayerAberto] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -439,6 +449,24 @@ export default function ForumObra({ obra }: { obra: Obra }) {
             <Music2 size={13} />
             <span>{obra.artista}</span>
           </div>
+
+          {/* ── Botão Assistir (apenas se houver telegram_file_id) ── */}
+          {obra.telegram_file_id && (
+            <button
+              onClick={() => setPlayerAberto(true)}
+              className="
+                mt-4 flex items-center gap-2 px-5 py-2.5
+                bg-[#2AABEE] hover:bg-[#1d97d4] active:scale-95
+                text-white font-semibold text-sm rounded-full
+                shadow-lg shadow-[#2AABEE]/30
+                transition-all duration-150
+              "
+              aria-label={`Assistir ${obra.nome}`}
+            >
+              <Play size={15} fill="white" />
+              Assistir
+            </button>
+          )}
         </div>
       </div>
 
@@ -565,6 +593,16 @@ export default function ForumObra({ obra }: { obra: Obra }) {
           </div>
         </div>
       </div>
+
+      {/* ─────────────────── MINI PLAYER FLUTUANTE ──────────── */}
+      {playerAberto && obra.telegram_file_id && (
+        <MiniPlayer
+          telegramFileId={obra.telegram_file_id}
+          title={obra.nome}
+          apiBaseUrl={API_BASE_URL}
+          onClose={() => setPlayerAberto(false)}
+        />
+      )}
     </div>
   );
 }
