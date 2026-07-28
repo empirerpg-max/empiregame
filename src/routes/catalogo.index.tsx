@@ -1,7 +1,7 @@
 // src/routes/catalogo.index.tsx
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
-import { Home, Music, Disc3, Clapperboard, Video, MessagesSquare } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Music, Disc3, Clapperboard, Video } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Route
@@ -9,99 +9,63 @@ import { Home, Music, Disc3, Clapperboard, Video, MessagesSquare } from 'lucide-
 export const Route = createFileRoute('/catalogo/')({ component: CatalogoPage });
 
 // ---------------------------------------------------------------------------
-// Telegram silent auth
+// GAS URL fixo — backend Google Apps Script
 // ---------------------------------------------------------------------------
-function useTelegramUser() {
-  const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
-  return { id: tgUser?.id ?? 0, name: tgUser?.first_name ?? 'Anônimo' };
-}
+const GAS_URL =
+  'https://script.google.com/macros/s/AKfycby7Epe3MHPMvje5OKtSlNn-tSWpowLPOJ7DVflFJqgZNOKCnN9IcGwWYL1QSeRtgJrQ7w/exec';
 
 // ---------------------------------------------------------------------------
-// Interface — reflete as chaves snake_case da API do Google Apps Script
+// Interface — propriedades exatas que o backend converte da planilha
 // ---------------------------------------------------------------------------
-export interface ObraAPI {
-  // Chave primária — OBRIGATÓRIA para o clique
+export interface Obra {
   id_do_topico: string;
-
-  // Título (fallbacks lógicos)
   nome?: string;
   titulo?: string;
-
-  // Artista / Criador (fallbacks lógicos)
   nome_do_criador?: string;
   artista?: string;
-
-  // Capa (fallbacks lógicos)
   capa?: string;
   thumb?: string;
   thumbnail_url?: string;
-
-  // Campos extras (não obrigatórios no catálogo)
-  streams?: number;
-  tipo?: string;
-  [key: string]: unknown; // tolera campos extras sem quebrar a tipagem
+  telegram_file_id?: string;
 }
 
 // ---------------------------------------------------------------------------
-// Helpers para extrair os campos com fallback lógico
+// Abas correspondentes às planilhas do backend
 // ---------------------------------------------------------------------------
-const getTitle  = (item: ObraAPI) => item.nome || item.titulo || 'Sem Título';
-const getArtist = (item: ObraAPI) => item.nome_do_criador || item.artista || 'Desconhecido';
-const getCover  = (item: ObraAPI) =>
-  item.capa || item.thumb || item.thumbnail_url || '';
-
-// ---------------------------------------------------------------------------
-// Abas do menu superior
-// ---------------------------------------------------------------------------
-type Tab = 'inicio' | 'musicas' | 'albuns' | 'clipes' | 'videos' | 'forum';
+type Tab = 'musicas' | 'albuns' | 'music_videos' | 'videos';
 
 interface TabConfig {
   id: Tab;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
-  action: string; // parâmetro enviado à API: ?action=<action>
 }
 
 const TABS: TabConfig[] = [
-  { id: 'inicio',  label: 'Início',  icon: Home,           action: 'inicio'  },
-  { id: 'musicas', label: 'Músicas', icon: Music,          action: 'musicas' },
-  { id: 'albuns',  label: 'Álbuns',  icon: Disc3,          action: 'albuns'  },
-  { id: 'clipes',  label: 'Clipes',  icon: Clapperboard,   action: 'clipes'  },
-  { id: 'videos',  label: 'Vídeos',  icon: Video,          action: 'videos'  },
-  { id: 'forum',   label: 'Fórum',   icon: MessagesSquare, action: 'forum'   },
+  { id: 'musicas',      label: 'Músicas',      icon: Music        },
+  { id: 'albuns',       label: 'Álbuns',       icon: Disc3        },
+  { id: 'music_videos', label: 'Music Videos', icon: Clapperboard },
+  { id: 'videos',       label: 'Vídeos',       icon: Video        },
 ];
 
 // ---------------------------------------------------------------------------
-// URL base da API do Google Apps Script
-// Defina VITE_GAS_API_URL no seu .env com a URL do Web App publicado.
+// Cache em memória por aba
 // ---------------------------------------------------------------------------
-const GAS_BASE_URL =
-  (import.meta.env.VITE_GAS_API_URL as string | undefined) ??
-  'https://script.google.com/macros/s/SEU_DEPLOYMENT_ID/exec';
+const memoryCache = new Map<Tab, Obra[]>();
 
-// ---------------------------------------------------------------------------
-// Cache em memória (Map<action, ObraAPI[]>)
-// Evita re-fetch enquanto a página estiver montada.
-// Se SWR já estiver instalado, substitua pelo hook:
-//   const { data, isLoading } = useSWR(`${GAS_BASE_URL}?action=${activeTab}`, fetcher);
-// ---------------------------------------------------------------------------
-const memoryCache = new Map<string, ObraAPI[]>();
+async function fetchObras(aba: Tab): Promise<Obra[]> {
+  if (memoryCache.has(aba)) return memoryCache.get(aba)!;
 
-async function fetchByAction(action: string): Promise<ObraAPI[]> {
-  if (memoryCache.has(action)) return memoryCache.get(action)!;
-
-  const res = await fetch(`${GAS_BASE_URL}?action=${action}`);
+  const res = await fetch(GAS_URL + '?action=' + aba);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
   const json = await res.json();
-  // A API pode retornar { data: [...] } ou diretamente um array
-  const items: ObraAPI[] = Array.isArray(json) ? json : (json?.data ?? []);
-  memoryCache.set(action, items);
+  const items: Obra[] = Array.isArray(json) ? json : (json?.data ?? []);
+  memoryCache.set(aba, items);
   return items;
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton Card (estado de carregamento)
+// Skeleton Card
 // ---------------------------------------------------------------------------
 function SkeletonCard() {
   return (
@@ -116,12 +80,12 @@ function SkeletonCard() {
 }
 
 // ---------------------------------------------------------------------------
-// Obra Card
+// Obra Card — com fallbacks para título, artista e imagem
 // ---------------------------------------------------------------------------
-function ObraCard({ obra }: { obra: ObraAPI }) {
-  const title  = getTitle(obra);
-  const artist = getArtist(obra);
-  const cover  = getCover(obra);
+function ObraCard({ obra }: { obra: Obra }) {
+  const titulo  = obra.nome || obra.titulo;
+  const artista = obra.nome_do_criador || obra.artista;
+  const imagem  = obra.capa || obra.thumb || obra.thumbnail_url;
 
   return (
     <Link
@@ -132,10 +96,10 @@ function ObraCard({ obra }: { obra: ObraAPI }) {
     >
       {/* Capa */}
       <div className="aspect-square relative overflow-hidden bg-white/5">
-        {cover ? (
+        {imagem ? (
           <img
-            src={cover}
-            alt={title}
+            src={imagem}
+            alt={titulo ?? 'Capa'}
             loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             onError={(e) => {
@@ -150,10 +114,10 @@ function ObraCard({ obra }: { obra: ObraAPI }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
       </div>
 
-      {/* Info */}
+      {/* Info — só renderiza se houver valor */}
       <div className="p-2">
-        <p className="text-white text-xs font-semibold truncate">{title}</p>
-        <p className="text-white/50 text-[11px] truncate">{artist}</p>
+        {titulo  && <p className="text-white text-xs font-semibold truncate">{titulo}</p>}
+        {artista && <p className="text-white/50 text-[11px] truncate">{artista}</p>}
       </div>
     </Link>
   );
@@ -162,13 +126,13 @@ function ObraCard({ obra }: { obra: ObraAPI }) {
 // ---------------------------------------------------------------------------
 // Empty state
 // ---------------------------------------------------------------------------
-function EmptyState({ tab }: { tab: string }) {
+function EmptyState({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 px-8 text-center gap-3">
       <Disc3 size={40} className="text-white/20" />
       <p className="text-white/40 text-sm">
         Nenhum conteúdo encontrado em{' '}
-        <span className="text-white/60 font-medium">{tab}</span>.
+        <span className="text-white/60 font-medium">{label}</span>.
       </p>
     </div>
   );
@@ -178,45 +142,22 @@ function EmptyState({ tab }: { tab: string }) {
 // Componente principal
 // ---------------------------------------------------------------------------
 export default function CatalogoPage() {
-  const user = useTelegramUser();
-  const [activeTab, setActiveTab] = useState<Tab>('inicio');
-  const [obras, setObras] = useState<ObraAPI[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Referência para abortar fetch anterior se o usuário trocar de aba rápido
-  const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    (window as any).Telegram?.WebApp?.ready();
-  }, []);
+  const [activeTab, setActiveTab] = useState<Tab>('musicas');
+  const [obras, setObras]         = useState<Obra[]>([]);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState<string | null>(null);
 
   // Dispara fetch ao trocar de aba
   useEffect(() => {
-    const tabConfig = TABS.find((t) => t.id === activeTab)!;
-
-    // Fórum não exige listagem de obras — renderiza tela diferente
-    if (activeTab === 'forum') {
-      setObras([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    // Cancela fetch anterior se ainda estiver em voo
-    abortRef.current?.abort();
-    abortRef.current = new AbortController();
-
     setLoading(true);
     setError(null);
 
-    fetchByAction(tabConfig.action)
+    fetchObras(activeTab)
       .then((data) => {
         setObras(data);
         setLoading(false);
       })
-      .catch((err) => {
-        if (err?.name === 'AbortError') return;
+      .catch(() => {
         setError('Erro ao carregar. Tente novamente.');
         setLoading(false);
       });
@@ -231,23 +172,17 @@ export default function CatalogoPage() {
       {/* Header sticky com menu de abas                                       */}
       {/* ------------------------------------------------------------------ */}
       <div className="sticky top-0 z-10 bg-[#0f1923]/95 backdrop-blur-sm border-b border-white/10">
-
-        {/* Linha do usuário */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <div>
-            <h1 className="text-lg font-bold leading-tight">Catálogo</h1>
-            <p className="text-white/40 text-[11px]">Olá, {user.name} 👋</p>
-          </div>
+        <div className="px-4 pt-4 pb-2">
+          <h1 className="text-lg font-bold leading-tight">Catálogo</h1>
         </div>
 
-        {/* Menu de abas */}
         <div
           className="flex overflow-x-auto scrollbar-none gap-1 px-3 pb-3"
           role="tablist"
           aria-label="Categorias do catálogo"
         >
           {TABS.map((tab) => {
-            const Icon = tab.icon;
+            const Icon     = tab.icon;
             const isActive = activeTab === tab.id;
             return (
               <button
@@ -273,75 +208,52 @@ export default function CatalogoPage() {
       </div>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Conteúdo da aba                                                      */}
+      {/* Conteúdo                                                             */}
       {/* ------------------------------------------------------------------ */}
 
-      {/* Aba Fórum — renderização especial */}
-      {activeTab === 'forum' && (
-        <div className="flex flex-col items-center justify-center py-20 px-8 text-center gap-4">
-          <MessagesSquare size={48} className="text-[#2AABEE]/60" />
-          <div>
-            <p className="text-white font-semibold text-base">Fórum da Comunidade</p>
-            <p className="text-white/40 text-sm mt-1">
-              Selecione uma obra no catálogo para acessar o fórum dela.
-            </p>
-          </div>
+      {/* Loading */}
+      {loading && (
+        <div className="grid grid-cols-2 gap-3 px-4 pt-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
       )}
 
-      {/* Demais abas */}
-      {activeTab !== 'forum' && (
-        <>
-          {/* Loading: skeletons */}
-          {loading && (
-            <div className="grid grid-cols-2 gap-3 px-4 pt-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <SkeletonCard key={i} />
-              ))}
-            </div>
-          )}
+      {/* Erro */}
+      {!loading && error && (
+        <div className="text-center py-16 px-8">
+          <p className="text-white/40 text-sm mb-4">{error}</p>
+          <button
+            onClick={() => {
+              memoryCache.delete(activeTab);
+              setActiveTab((prev) => prev); // re-trigger useEffect
+              setError(null);
+              setLoading(true);
+              fetchObras(activeTab)
+                .then(setObras)
+                .catch(() => setError('Erro ao carregar. Tente novamente.'))
+                .finally(() => setLoading(false));
+            }}
+            className="text-[#2AABEE] text-sm underline underline-offset-2"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
-          {/* Erro */}
-          {!loading && error && (
-            <div className="text-center py-16 px-8">
-              <p className="text-white/40 text-sm mb-4">{error}</p>
-              <button
-                onClick={() => {
-                  // Limpa o cache da aba atual para forçar novo fetch
-                  const tabConfig = TABS.find((t) => t.id === activeTab)!;
-                  memoryCache.delete(tabConfig.action);
-                  setActiveTab((prev) => {
-                    // Força re-trigger do useEffect mantendo a aba atual
-                    setError(null);
-                    setLoading(true);
-                    fetchByAction(tabConfig.action)
-                      .then(setObras)
-                      .catch(() => setError('Erro ao carregar. Tente novamente.'))
-                      .finally(() => setLoading(false));
-                    return prev;
-                  });
-                }}
-                className="text-[#2AABEE] text-sm underline underline-offset-2"
-              >
-                Tentar novamente
-              </button>
-            </div>
-          )}
+      {/* Vazio */}
+      {!loading && !error && obras.length === 0 && (
+        <EmptyState label={activeTabConfig.label} />
+      )}
 
-          {/* Vazio */}
-          {!loading && !error && obras.length === 0 && (
-            <EmptyState tab={activeTabConfig.label} />
-          )}
-
-          {/* Grid de obras */}
-          {!loading && !error && obras.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 px-4 pt-4">
-              {obras.map((obra) => (
-                <ObraCard key={obra.id_do_topico} obra={obra} />
-              ))}
-            </div>
-          )}
-        </>
+      {/* Grid de obras */}
+      {!loading && !error && obras.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 px-4 pt-4">
+          {obras.map((obra) => (
+            <ObraCard key={obra.id_do_topico} obra={obra} />
+          ))}
+        </div>
       )}
     </div>
   );
