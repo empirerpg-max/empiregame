@@ -9,67 +9,57 @@ import { Music, Disc3, Clapperboard, Video, Home } from 'lucide-react';
 export const Route = createFileRoute('/catalogo/')({ component: CatalogoPage });
 
 // ---------------------------------------------------------------------------
-// GAS URL — variável de ambiente com fallback para URL fixa
+// GAS URL — substitua pelo endereço real do seu Web App do Google Apps Script
 // ---------------------------------------------------------------------------
-const GAS_URL: string =
-  (import.meta as any).env?.VITE_GAS_URL ??
-  'https://script.google.com/macros/s/AKfycby7Epe3MHPMvje5OKtSlNn-tSWpowLPOJ7DVflFJqgZNOKCnN9IcGwWYL1QSeRtgJrQ7w/exec';
+const GAS_URL = 'COLE_SUA_URL_DO_GAS_AQUI';
 
 // ---------------------------------------------------------------------------
-// Interface — aceita chaves snake_case dinâmicas geradas pelo backend GAS
+// Interface — reflete a planilha normalizada do backend GAS
 // ---------------------------------------------------------------------------
 export interface Obra {
   id_do_topico: string;
-  // Título (fallback em cascata — mais específico primeiro)
+  nome?: string;
   nome_da_musica?: string;
   nome_do_video?: string;
-  nome?: string;
   titulo?: string;
-  // Artista / Criador (fallback em cascata)
   nome_do_criador?: string;
   artista?: string;
-  id_do_criador?: string;
-  // Imagem (fallback em cascata — mais específico primeiro)
-  capa_da_musica?: string;
   capa?: string;
+  capa_da_musica?: string;
   thumb?: string;
   thumbnail_url?: string;
-  // Outros campos do backend
-  telegram_file_id?: string;
-  tipo?: string;
-  // Permite qualquer chave snake_case extra sem quebrar TypeScript
+  // Campos extras sem quebrar TypeScript
   [key: string]: unknown;
 }
 
 // ---------------------------------------------------------------------------
 // Abas — cada uma mapeia para um ?action= do GAS
 // ---------------------------------------------------------------------------
-type Tab = 'inicio' | 'musicas' | 'albuns' | 'music_videos' | 'videos';
+type Tab = 'inicio' | 'musicas' | 'albuns' | 'clipes' | 'videos';
 
 interface TabConfig {
   id: Tab;
   label: string;
-  action: string; // valor enviado como ?action=<action>
+  action: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }
 
 const TABS: TabConfig[] = [
-  { id: 'inicio',       label: 'Início',       action: 'top50spotify', icon: Home        },
-  { id: 'musicas',      label: 'Músicas',      action: 'musicas',      icon: Music        },
-  { id: 'albuns',       label: 'Álbuns',       action: 'albuns',       icon: Disc3        },
-  { id: 'music_videos', label: 'Music Videos', action: 'music_videos', icon: Clapperboard },
-  { id: 'videos',       label: 'Vídeos',       action: 'videos',       icon: Video        },
+  { id: 'inicio',  label: 'Início',  action: 'top50spotify', icon: Home        },
+  { id: 'musicas', label: 'Músicas', action: 'musicas',      icon: Music       },
+  { id: 'albuns',  label: 'Álbuns',  action: 'albuns',       icon: Disc3       },
+  { id: 'clipes',  label: 'Clipes',  action: 'clipes',       icon: Clapperboard },
+  { id: 'videos',  label: 'Vídeos',  action: 'videos',       icon: Video       },
 ];
 
 // ---------------------------------------------------------------------------
-// Cache em memória por aba (chaveado pelo id da tab)
+// Cache em memória por aba
 // ---------------------------------------------------------------------------
 const memoryCache = new Map<Tab, Obra[]>();
 
 async function fetchObras(tab: TabConfig): Promise<Obra[]> {
   if (memoryCache.has(tab.id)) return memoryCache.get(tab.id)!;
 
-  // Consome a variável da URL do GAS com ?action=nome_da_categoria
   const res = await fetch(`${GAS_URL}?action=${tab.action}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -80,37 +70,36 @@ async function fetchObras(tab: TabConfig): Promise<Obra[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers de fallback — REGRA RÍGIDA conforme especificação
+// Helpers de fallback — lógica rigorosa conforme especificação
 // ---------------------------------------------------------------------------
 
-/** Título: nome_da_musica → nome_do_video → nome → titulo */
+/** Título: nome_da_musica → nome_do_video → nome → titulo → 'Sem Título' */
 export function getTitulo(obra: Obra): string {
   return (
-    (obra.nome_da_musica as string | undefined) ||
-    (obra.nome_do_video  as string | undefined) ||
-    (obra.nome           as string | undefined) ||
-    (obra.titulo         as string | undefined) ||
+    obra.nome_da_musica ||
+    obra.nome_do_video  ||
+    obra.nome           ||
+    obra.titulo         ||
     'Sem Título'
   );
 }
 
-/** Artista: nome_do_criador → artista */
+/** Artista: nome_do_criador → artista → 'Artista Desconhecido' */
 export function getArtista(obra: Obra): string {
   return (
-    (obra.nome_do_criador as string | undefined) ||
-    (obra.artista         as string | undefined) ||
-    (obra.id_do_criador   as string | undefined) ||
+    obra.nome_do_criador ||
+    obra.artista         ||
     'Artista Desconhecido'
   );
 }
 
-/** Capa: capa_da_musica → capa → thumb → thumbnail_url */
+/** Imagem: capa_da_musica → capa → thumb → thumbnail_url → undefined */
 export function getImagem(obra: Obra): string | undefined {
   return (
-    (obra.capa_da_musica as string | undefined) ||
-    (obra.capa          as string | undefined) ||
-    (obra.thumb         as string | undefined) ||
-    (obra.thumbnail_url as string | undefined) ||
+    obra.capa_da_musica ||
+    obra.capa           ||
+    obra.thumb          ||
+    obra.thumbnail_url  ||
     undefined
   );
 }
@@ -131,7 +120,7 @@ function SkeletonCard() {
 }
 
 // ---------------------------------------------------------------------------
-// Obra Card — fallbacks completos + redirect via id_do_topico
+// Obra Card — fallbacks completos + redirect via /catalogo/:id_do_topico
 // ---------------------------------------------------------------------------
 function ObraCard({ obra }: { obra: Obra }) {
   const titulo  = getTitulo(obra);
@@ -221,7 +210,7 @@ export default function CatalogoPage() {
     [],
   );
 
-  // Dispara fetch ao trocar de aba
+  // Fetch ao trocar de aba — usa o action mapeado em TABS
   useEffect(() => {
     loadObras(activeTab);
   }, [activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
