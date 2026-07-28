@@ -662,7 +662,7 @@ function RootInner() {
       <RouteTransitionOverlay />
       <Outlet />
       {/* MiniPlayer flutuante — renderiza acima da BottomNav (z-40 + bottom-16) */}
-      <MiniPlayer />
+      <GlobalMiniPlayer />
       <BottomNav />
       <Toaster position="top-center" richColors closeButton offset={80} />
     </div>
