@@ -256,13 +256,7 @@ function BolsaPage() {
       ) : filtered.length === 0 ? (
         <div className="rounded-3xl bg-white/[0.03] border border-dashed border-white/10 p-12 text-center">
           <Building2 className="size-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground mb-4">Nenhum ativo listado ainda.</p>
-          <Link
-            to="/incubadora"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-primary-foreground text-xs font-black uppercase tracking-widest"
-          >
-            <Building2 className="size-4" /> Fundar empresa
-          </Link>
+          <p className="text-sm text-muted-foreground">Nenhum ativo listado ainda.</p>
         </div>
       ) : (
         <div className="space-y-2">
