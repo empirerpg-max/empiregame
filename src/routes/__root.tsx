@@ -43,23 +43,6 @@ import { Toaster, toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { useTelegramUser, haptic, useTelegramBackButton } from "@/lib/telegram";
 import { api, driveImg, type Artist } from "@/lib/api";
-import { PlayProvider } from "@/lib/playContext";
-import MiniPlayer from "@/components/MiniPlayer";
-import { usePlay } from "@/lib/playContext";
-
-function GlobalMiniPlayer() {
-  const { state, currentMediaId, mediaType, close } = usePlay();
-  const current = state.currentIdx !== null ? state.queue[state.currentIdx] : null;
-  if (!current || mediaType !== "telegram" || !currentMediaId) return null;
-  return (
-    <MiniPlayer
-      telegramFileId={currentMediaId}
-      title={current.titulo}
-      apiBaseUrl="https://empire-tg-stream.onrender.com/tg"
-      onClose={close}
-    />
-  );
-}
 
 function GlobalLinkModal({ onClose }: { onClose: () => void }) {
   const { user } = useTelegramUser();
@@ -411,9 +394,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <PlayProvider>
-        <RootInner />
-      </PlayProvider>
+      <RootInner />
     </QueryClientProvider>
   );
 }
@@ -528,7 +509,7 @@ function RootInner() {
                   icon={Library}
                   items={[
                     { to: "/artistas", search: { filter: "all" }, label: "Empire Artists", icon: Library },
-                    { to: "/incubadora", label: "Corporativo", icon: Building2 },
+                    
                     { to: "/albuns", label: "Discografia", icon: Disc3 },
                     { to: "/playlists", label: "Playlists", icon: ListMusic },
                   ]} 
@@ -560,7 +541,7 @@ function RootInner() {
                   title="Empire Extras" 
                   icon={Radio}
                   items={[
-                    { to: "/play", label: "Empire Play", icon: Music2 },
+                    
                     { to: "/bolsa", label: "Bolsa de Valores", icon: TrendingUp },
                     { to: "/radar", label: "Radar Feed", icon: Radio },
                     { to: "/filantropia", label: "Filantropia", icon: HandHeart },
@@ -650,7 +631,7 @@ function RootInner() {
 
       <RouteTransitionOverlay />
       <Outlet />
-      <GlobalMiniPlayer />
+      
       <BottomNav />
       <Toaster position="top-center" richColors closeButton offset={80} />
     </div>

@@ -17,10 +17,8 @@ import { Route as BolsaRouteImport } from './routes/bolsa'
 import { Route as ChartsRouteImport } from './routes/charts'
 import { Route as DueloRouteImport } from './routes/duelo'
 import { Route as FilantropiaRouteImport } from './routes/filantropia'
-import { Route as ForumRouteImport } from './routes/forum'
 import { Route as GravadorasRouteImport } from './routes/gravadoras'
 import { Route as HallRouteImport } from './routes/hall'
-import { Route as IncubadoraRouteImport } from './routes/incubadora'
 import { Route as LeiloesRouteImport } from './routes/leiloes'
 import { Route as MarketRouteImport } from './routes/market'
 import { Route as PayolaRouteImport } from './routes/payola'
@@ -42,7 +40,6 @@ import { Route as GamesHitsProducerRouteImport } from './routes/games.hits-produ
 import { Route as GamesMemoriaFamaRouteImport } from './routes/games.memoria-fama'
 import { Route as GamesPaparazziEscapeRouteImport } from './routes/games.paparazzi-escape'
 import { Route as GamesQueridometroRouteImport } from './routes/games.queridometro'
-import { Route as PlayIndexRouteImport } from './routes/play.index'
 import { Route as PlaylistsIndexRouteImport } from './routes/playlists.index'
 import { Route as PlaylistsIdRouteImport } from './routes/playlists.$id'
 import { Route as PlaylistsNovaRouteImport } from './routes/playlists.nova'
@@ -99,11 +96,6 @@ const FilantropiaRoute = FilantropiaRouteImport.update({
   path: '/filantropia',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ForumRoute = ForumRouteImport.update({
-  id: '/forum',
-  path: '/forum',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const GravadorasRoute = GravadorasRouteImport.update({
   id: '/gravadoras',
   path: '/gravadoras',
@@ -112,11 +104,6 @@ const GravadorasRoute = GravadorasRouteImport.update({
 const HallRoute = HallRouteImport.update({
   id: '/hall',
   path: '/hall',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IncubadoraRoute = IncubadoraRouteImport.update({
-  id: '/incubadora',
-  path: '/incubadora',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LeiloesRoute = LeiloesRouteImport.update({
@@ -224,11 +211,6 @@ const GamesQueridometroRoute = GamesQueridometroRouteImport.update({
   path: '/games/queridometro',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlayIndexRoute = PlayIndexRouteImport.update({
-  id: '/play/',
-  path: '/play/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PlaylistsIndexRoute = PlaylistsIndexRouteImport.update({
   id: '/playlists/',
   path: '/playlists/',
@@ -314,10 +296,8 @@ export interface FileRoutesByFullPath {
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
   '/filantropia': typeof FilantropiaRoute
-  '/forum': typeof ForumRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
-  '/incubadora': typeof IncubadoraRoute
   '/leiloes': typeof LeiloesRoute
   '/market': typeof MarketRoute
   '/payola': typeof PayolaRoute
@@ -344,7 +324,6 @@ export interface FileRoutesByFullPath {
   '/artistas/': typeof ArtistasIndexRoute
   '/catalogo/': typeof CatalogoIndexRoute
   '/games/': typeof GamesIndexRoute
-  '/play/': typeof PlayIndexRoute
   '/playlists/': typeof PlaylistsIndexRoute
   '/ponto/': typeof PontoIndexRoute
   '/tours/': typeof ToursIndexRoute
@@ -365,10 +344,8 @@ export interface FileRoutesByTo {
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
   '/filantropia': typeof FilantropiaRoute
-  '/forum': typeof ForumRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
-  '/incubadora': typeof IncubadoraRoute
   '/leiloes': typeof LeiloesRoute
   '/market': typeof MarketRoute
   '/payola': typeof PayolaRoute
@@ -395,7 +372,6 @@ export interface FileRoutesByTo {
   '/artistas': typeof ArtistasIndexRoute
   '/catalogo': typeof CatalogoIndexRoute
   '/games': typeof GamesIndexRoute
-  '/play': typeof PlayIndexRoute
   '/playlists': typeof PlaylistsIndexRoute
   '/ponto': typeof PontoIndexRoute
   '/tours': typeof ToursIndexRoute
@@ -417,10 +393,8 @@ export interface FileRoutesById {
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
   '/filantropia': typeof FilantropiaRoute
-  '/forum': typeof ForumRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
-  '/incubadora': typeof IncubadoraRoute
   '/leiloes': typeof LeiloesRoute
   '/market': typeof MarketRoute
   '/payola': typeof PayolaRoute
@@ -447,7 +421,6 @@ export interface FileRoutesById {
   '/artistas/': typeof ArtistasIndexRoute
   '/catalogo/': typeof CatalogoIndexRoute
   '/games/': typeof GamesIndexRoute
-  '/play/': typeof PlayIndexRoute
   '/playlists/': typeof PlaylistsIndexRoute
   '/ponto/': typeof PontoIndexRoute
   '/tours/': typeof ToursIndexRoute
@@ -470,10 +443,8 @@ export interface FileRouteTypes {
     | '/charts'
     | '/duelo'
     | '/filantropia'
-    | '/forum'
     | '/gravadoras'
     | '/hall'
-    | '/incubadora'
     | '/leiloes'
     | '/market'
     | '/payola'
@@ -500,7 +471,6 @@ export interface FileRouteTypes {
     | '/artistas/'
     | '/catalogo/'
     | '/games/'
-    | '/play/'
     | '/playlists/'
     | '/ponto/'
     | '/tours/'
@@ -521,10 +491,8 @@ export interface FileRouteTypes {
     | '/charts'
     | '/duelo'
     | '/filantropia'
-    | '/forum'
     | '/gravadoras'
     | '/hall'
-    | '/incubadora'
     | '/leiloes'
     | '/market'
     | '/payola'
@@ -551,7 +519,6 @@ export interface FileRouteTypes {
     | '/artistas'
     | '/catalogo'
     | '/games'
-    | '/play'
     | '/playlists'
     | '/ponto'
     | '/tours'
@@ -572,10 +539,8 @@ export interface FileRouteTypes {
     | '/charts'
     | '/duelo'
     | '/filantropia'
-    | '/forum'
     | '/gravadoras'
     | '/hall'
-    | '/incubadora'
     | '/leiloes'
     | '/market'
     | '/payola'
@@ -602,7 +567,6 @@ export interface FileRouteTypes {
     | '/artistas/'
     | '/catalogo/'
     | '/games/'
-    | '/play/'
     | '/playlists/'
     | '/ponto/'
     | '/tours/'
@@ -624,10 +588,8 @@ export interface RootRouteChildren {
   ChartsRoute: typeof ChartsRoute
   DueloRoute: typeof DueloRoute
   FilantropiaRoute: typeof FilantropiaRoute
-  ForumRoute: typeof ForumRoute
   GravadorasRoute: typeof GravadorasRoute
   HallRoute: typeof HallRoute
-  IncubadoraRoute: typeof IncubadoraRoute
   LeiloesRoute: typeof LeiloesRoute
   MarketRoute: typeof MarketRoute
   PayolaRoute: typeof PayolaRoute
@@ -654,7 +616,6 @@ export interface RootRouteChildren {
   ArtistasIndexRoute: typeof ArtistasIndexRoute
   CatalogoIndexRoute: typeof CatalogoIndexRoute
   GamesIndexRoute: typeof GamesIndexRoute
-  PlayIndexRoute: typeof PlayIndexRoute
   PlaylistsIndexRoute: typeof PlaylistsIndexRoute
   PontoIndexRoute: typeof PontoIndexRoute
   ToursIndexRoute: typeof ToursIndexRoute
@@ -721,13 +682,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FilantropiaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/forum': {
-      id: '/forum'
-      path: '/forum'
-      fullPath: '/forum'
-      preLoaderRoute: typeof ForumRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/gravadoras': {
       id: '/gravadoras'
       path: '/gravadoras'
@@ -740,13 +694,6 @@ declare module '@tanstack/react-router' {
       path: '/hall'
       fullPath: '/hall'
       preLoaderRoute: typeof HallRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/incubadora': {
-      id: '/incubadora'
-      path: '/incubadora'
-      fullPath: '/incubadora'
-      preLoaderRoute: typeof IncubadoraRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/leiloes': {
@@ -894,13 +841,6 @@ declare module '@tanstack/react-router' {
       path: '/games/queridometro'
       fullPath: '/games/queridometro'
       preLoaderRoute: typeof GamesQueridometroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/play/': {
-      id: '/play/'
-      path: '/play'
-      fullPath: '/play/'
-      preLoaderRoute: typeof PlayIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/playlists/': {
@@ -1067,10 +1007,8 @@ const rootRouteChildren: RootRouteChildren = {
   ChartsRoute: ChartsRoute,
   DueloRoute: DueloRoute,
   FilantropiaRoute: FilantropiaRoute,
-  ForumRoute: ForumRoute,
   GravadorasRoute: GravadorasRoute,
   HallRoute: HallRoute,
-  IncubadoraRoute: IncubadoraRoute,
   LeiloesRoute: LeiloesRoute,
   MarketRoute: MarketRoute,
   PayolaRoute: PayolaRoute,
@@ -1097,7 +1035,6 @@ const rootRouteChildren: RootRouteChildren = {
   ArtistasIndexRoute: ArtistasIndexRoute,
   CatalogoIndexRoute: CatalogoIndexRoute,
   GamesIndexRoute: GamesIndexRoute,
-  PlayIndexRoute: PlayIndexRoute,
   PlaylistsIndexRoute: PlaylistsIndexRoute,
   PontoIndexRoute: PontoIndexRoute,
   ToursIndexRoute: ToursIndexRoute,
