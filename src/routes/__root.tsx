@@ -394,9 +394,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <PlayProvider>
-        <RootInner />
-      </PlayProvider>
+      <RootInner />
     </QueryClientProvider>
   );
 }
