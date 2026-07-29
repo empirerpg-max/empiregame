@@ -541,7 +541,7 @@ function RootInner() {
                   title="Empire Extras" 
                   icon={Radio}
                   items={[
-                    { to: "/play", label: "Empire Play", icon: Music2 },
+                    
                     { to: "/bolsa", label: "Bolsa de Valores", icon: TrendingUp },
                     { to: "/radar", label: "Radar Feed", icon: Radio },
                     { to: "/filantropia", label: "Filantropia", icon: HandHeart },
