@@ -631,7 +631,7 @@ function RootInner() {
 
       <RouteTransitionOverlay />
       <Outlet />
-      <GlobalMiniPlayer />
+      
       <BottomNav />
       <Toaster position="top-center" richColors closeButton offset={80} />
     </div>
