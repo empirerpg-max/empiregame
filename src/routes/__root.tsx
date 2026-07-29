@@ -43,23 +43,6 @@ import { Toaster, toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { useTelegramUser, haptic, useTelegramBackButton } from "@/lib/telegram";
 import { api, driveImg, type Artist } from "@/lib/api";
-import { PlayProvider } from "@/lib/playContext";
-import MiniPlayer from "@/components/MiniPlayer";
-import { usePlay } from "@/lib/playContext";
-
-function GlobalMiniPlayer() {
-  const { state, currentMediaId, mediaType, close } = usePlay();
-  const current = state.currentIdx !== null ? state.queue[state.currentIdx] : null;
-  if (!current || mediaType !== "telegram" || !currentMediaId) return null;
-  return (
-    <MiniPlayer
-      telegramFileId={currentMediaId}
-      title={current.titulo}
-      apiBaseUrl="https://empire-tg-stream.onrender.com/tg"
-      onClose={close}
-    />
-  );
-}
 
 function GlobalLinkModal({ onClose }: { onClose: () => void }) {
   const { user } = useTelegramUser();

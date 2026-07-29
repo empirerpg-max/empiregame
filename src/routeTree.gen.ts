@@ -20,11 +20,9 @@ import { Route as FilantropiaRouteImport } from './routes/filantropia'
 import { Route as ForumRouteImport } from './routes/forum'
 import { Route as GravadorasRouteImport } from './routes/gravadoras'
 import { Route as HallRouteImport } from './routes/hall'
-import { Route as IncubadoraRouteImport } from './routes/incubadora'
 import { Route as LeiloesRouteImport } from './routes/leiloes'
 import { Route as MarketRouteImport } from './routes/market'
 import { Route as PayolaRouteImport } from './routes/payola'
-import { Route as PlayRouteImport } from './routes/play'
 import { Route as RadarRouteImport } from './routes/radar'
 import { Route as RankingRouteImport } from './routes/ranking'
 import { Route as RescisaoRouteImport } from './routes/rescisao'
@@ -43,12 +41,6 @@ import { Route as GamesHitsProducerRouteImport } from './routes/games.hits-produ
 import { Route as GamesMemoriaFamaRouteImport } from './routes/games.memoria-fama'
 import { Route as GamesPaparazziEscapeRouteImport } from './routes/games.paparazzi-escape'
 import { Route as GamesQueridometroRouteImport } from './routes/games.queridometro'
-import { Route as PlayIndexRouteImport } from './routes/play.index'
-import { Route as PlayAlbunsRouteImport } from './routes/play.albuns'
-import { Route as PlayForumRouteImport } from './routes/play.forum'
-import { Route as PlayMusicasRouteImport } from './routes/play.musicas'
-import { Route as PlayMvsRouteImport } from './routes/play.mvs'
-import { Route as PlayVideosRouteImport } from './routes/play.videos'
 import { Route as PlaylistsIndexRouteImport } from './routes/playlists.index'
 import { Route as PlaylistsIdRouteImport } from './routes/playlists.$id'
 import { Route as PlaylistsNovaRouteImport } from './routes/playlists.nova'
@@ -120,11 +112,6 @@ const HallRoute = HallRouteImport.update({
   path: '/hall',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IncubadoraRoute = IncubadoraRouteImport.update({
-  id: '/incubadora',
-  path: '/incubadora',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const LeiloesRoute = LeiloesRouteImport.update({
   id: '/leiloes',
   path: '/leiloes',
@@ -138,11 +125,6 @@ const MarketRoute = MarketRouteImport.update({
 const PayolaRoute = PayolaRouteImport.update({
   id: '/payola',
   path: '/payola',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PlayRoute = PlayRouteImport.update({
-  id: '/play',
-  path: '/play',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RadarRoute = RadarRouteImport.update({
@@ -235,36 +217,6 @@ const GamesQueridometroRoute = GamesQueridometroRouteImport.update({
   path: '/games/queridometro',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlayIndexRoute = PlayIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => PlayRoute,
-} as any)
-const PlayAlbunsRoute = PlayAlbunsRouteImport.update({
-  id: '/albuns',
-  path: '/albuns',
-  getParentRoute: () => PlayRoute,
-} as any)
-const PlayForumRoute = PlayForumRouteImport.update({
-  id: '/forum',
-  path: '/forum',
-  getParentRoute: () => PlayRoute,
-} as any)
-const PlayMusicasRoute = PlayMusicasRouteImport.update({
-  id: '/musicas',
-  path: '/musicas',
-  getParentRoute: () => PlayRoute,
-} as any)
-const PlayMvsRoute = PlayMvsRouteImport.update({
-  id: '/mvs',
-  path: '/mvs',
-  getParentRoute: () => PlayRoute,
-} as any)
-const PlayVideosRoute = PlayVideosRouteImport.update({
-  id: '/videos',
-  path: '/videos',
-  getParentRoute: () => PlayRoute,
-} as any)
 const PlaylistsIndexRoute = PlaylistsIndexRouteImport.update({
   id: '/playlists/',
   path: '/playlists/',
@@ -353,11 +305,9 @@ export interface FileRoutesByFullPath {
   '/forum': typeof ForumRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
-  '/incubadora': typeof IncubadoraRoute
   '/leiloes': typeof LeiloesRoute
   '/market': typeof MarketRoute
   '/payola': typeof PayolaRoute
-  '/play': typeof PlayRouteWithChildren
   '/radar': typeof RadarRoute
   '/ranking': typeof RankingRoute
   '/rescisao': typeof RescisaoRoute
@@ -373,11 +323,6 @@ export interface FileRoutesByFullPath {
   '/games/memoria-fama': typeof GamesMemoriaFamaRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
   '/games/queridometro': typeof GamesQueridometroRoute
-  '/play/albuns': typeof PlayAlbunsRoute
-  '/play/forum': typeof PlayForumRoute
-  '/play/musicas': typeof PlayMusicasRoute
-  '/play/mvs': typeof PlayMvsRoute
-  '/play/videos': typeof PlayVideosRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/ponto/distribuir': typeof PontoDistribuirRouteWithChildren
@@ -386,7 +331,6 @@ export interface FileRoutesByFullPath {
   '/artistas/': typeof ArtistasIndexRoute
   '/catalogo/': typeof CatalogoIndexRoute
   '/games/': typeof GamesIndexRoute
-  '/play/': typeof PlayIndexRoute
   '/playlists/': typeof PlaylistsIndexRoute
   '/ponto/': typeof PontoIndexRoute
   '/tours/': typeof ToursIndexRoute
@@ -410,7 +354,6 @@ export interface FileRoutesByTo {
   '/forum': typeof ForumRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
-  '/incubadora': typeof IncubadoraRoute
   '/leiloes': typeof LeiloesRoute
   '/market': typeof MarketRoute
   '/payola': typeof PayolaRoute
@@ -429,11 +372,6 @@ export interface FileRoutesByTo {
   '/games/memoria-fama': typeof GamesMemoriaFamaRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
   '/games/queridometro': typeof GamesQueridometroRoute
-  '/play/albuns': typeof PlayAlbunsRoute
-  '/play/forum': typeof PlayForumRoute
-  '/play/musicas': typeof PlayMusicasRoute
-  '/play/mvs': typeof PlayMvsRoute
-  '/play/videos': typeof PlayVideosRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/ponto/distribuir': typeof PontoDistribuirRouteWithChildren
@@ -442,7 +380,6 @@ export interface FileRoutesByTo {
   '/artistas': typeof ArtistasIndexRoute
   '/catalogo': typeof CatalogoIndexRoute
   '/games': typeof GamesIndexRoute
-  '/play': typeof PlayIndexRoute
   '/playlists': typeof PlaylistsIndexRoute
   '/ponto': typeof PontoIndexRoute
   '/tours': typeof ToursIndexRoute
@@ -467,11 +404,9 @@ export interface FileRoutesById {
   '/forum': typeof ForumRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
-  '/incubadora': typeof IncubadoraRoute
   '/leiloes': typeof LeiloesRoute
   '/market': typeof MarketRoute
   '/payola': typeof PayolaRoute
-  '/play': typeof PlayRouteWithChildren
   '/radar': typeof RadarRoute
   '/ranking': typeof RankingRoute
   '/rescisao': typeof RescisaoRoute
@@ -487,11 +422,6 @@ export interface FileRoutesById {
   '/games/memoria-fama': typeof GamesMemoriaFamaRoute
   '/games/paparazzi-escape': typeof GamesPaparazziEscapeRoute
   '/games/queridometro': typeof GamesQueridometroRoute
-  '/play/albuns': typeof PlayAlbunsRoute
-  '/play/forum': typeof PlayForumRoute
-  '/play/musicas': typeof PlayMusicasRoute
-  '/play/mvs': typeof PlayMvsRoute
-  '/play/videos': typeof PlayVideosRoute
   '/playlists/$id': typeof PlaylistsIdRouteWithChildren
   '/playlists/nova': typeof PlaylistsNovaRoute
   '/ponto/distribuir': typeof PontoDistribuirRouteWithChildren
@@ -500,7 +430,6 @@ export interface FileRoutesById {
   '/artistas/': typeof ArtistasIndexRoute
   '/catalogo/': typeof CatalogoIndexRoute
   '/games/': typeof GamesIndexRoute
-  '/play/': typeof PlayIndexRoute
   '/playlists/': typeof PlaylistsIndexRoute
   '/ponto/': typeof PontoIndexRoute
   '/tours/': typeof ToursIndexRoute
@@ -526,11 +455,9 @@ export interface FileRouteTypes {
     | '/forum'
     | '/gravadoras'
     | '/hall'
-    | '/incubadora'
     | '/leiloes'
     | '/market'
     | '/payola'
-    | '/play'
     | '/radar'
     | '/ranking'
     | '/rescisao'
@@ -546,11 +473,6 @@ export interface FileRouteTypes {
     | '/games/memoria-fama'
     | '/games/paparazzi-escape'
     | '/games/queridometro'
-    | '/play/albuns'
-    | '/play/forum'
-    | '/play/musicas'
-    | '/play/mvs'
-    | '/play/videos'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/ponto/distribuir'
@@ -559,7 +481,6 @@ export interface FileRouteTypes {
     | '/artistas/'
     | '/catalogo/'
     | '/games/'
-    | '/play/'
     | '/playlists/'
     | '/ponto/'
     | '/tours/'
@@ -583,7 +504,6 @@ export interface FileRouteTypes {
     | '/forum'
     | '/gravadoras'
     | '/hall'
-    | '/incubadora'
     | '/leiloes'
     | '/market'
     | '/payola'
@@ -602,11 +522,6 @@ export interface FileRouteTypes {
     | '/games/memoria-fama'
     | '/games/paparazzi-escape'
     | '/games/queridometro'
-    | '/play/albuns'
-    | '/play/forum'
-    | '/play/musicas'
-    | '/play/mvs'
-    | '/play/videos'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/ponto/distribuir'
@@ -615,7 +530,6 @@ export interface FileRouteTypes {
     | '/artistas'
     | '/catalogo'
     | '/games'
-    | '/play'
     | '/playlists'
     | '/ponto'
     | '/tours'
@@ -639,11 +553,9 @@ export interface FileRouteTypes {
     | '/forum'
     | '/gravadoras'
     | '/hall'
-    | '/incubadora'
     | '/leiloes'
     | '/market'
     | '/payola'
-    | '/play'
     | '/radar'
     | '/ranking'
     | '/rescisao'
@@ -659,11 +571,6 @@ export interface FileRouteTypes {
     | '/games/memoria-fama'
     | '/games/paparazzi-escape'
     | '/games/queridometro'
-    | '/play/albuns'
-    | '/play/forum'
-    | '/play/musicas'
-    | '/play/mvs'
-    | '/play/videos'
     | '/playlists/$id'
     | '/playlists/nova'
     | '/ponto/distribuir'
@@ -672,7 +579,6 @@ export interface FileRouteTypes {
     | '/artistas/'
     | '/catalogo/'
     | '/games/'
-    | '/play/'
     | '/playlists/'
     | '/ponto/'
     | '/tours/'
@@ -697,11 +603,9 @@ export interface RootRouteChildren {
   ForumRoute: typeof ForumRoute
   GravadorasRoute: typeof GravadorasRoute
   HallRoute: typeof HallRoute
-  IncubadoraRoute: typeof IncubadoraRoute
   LeiloesRoute: typeof LeiloesRoute
   MarketRoute: typeof MarketRoute
   PayolaRoute: typeof PayolaRoute
-  PlayRoute: typeof PlayRouteWithChildren
   RadarRoute: typeof RadarRoute
   RankingRoute: typeof RankingRoute
   RescisaoRoute: typeof RescisaoRoute
@@ -812,13 +716,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HallRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/incubadora': {
-      id: '/incubadora'
-      path: '/incubadora'
-      fullPath: '/incubadora'
-      preLoaderRoute: typeof IncubadoraRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/leiloes': {
       id: '/leiloes'
       path: '/leiloes'
@@ -838,13 +735,6 @@ declare module '@tanstack/react-router' {
       path: '/payola'
       fullPath: '/payola'
       preLoaderRoute: typeof PayolaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/play': {
-      id: '/play'
-      path: '/play'
-      fullPath: '/play'
-      preLoaderRoute: typeof PlayRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/radar': {
@@ -973,48 +863,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GamesQueridometroRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/play/': {
-      id: '/play/'
-      path: '/'
-      fullPath: '/play/'
-      preLoaderRoute: typeof PlayIndexRouteImport
-      parentRoute: typeof PlayRoute
-    }
-    '/play/albuns': {
-      id: '/play/albuns'
-      path: '/albuns'
-      fullPath: '/play/albuns'
-      preLoaderRoute: typeof PlayAlbunsRouteImport
-      parentRoute: typeof PlayRoute
-    }
-    '/play/forum': {
-      id: '/play/forum'
-      path: '/forum'
-      fullPath: '/play/forum'
-      preLoaderRoute: typeof PlayForumRouteImport
-      parentRoute: typeof PlayRoute
-    }
-    '/play/musicas': {
-      id: '/play/musicas'
-      path: '/musicas'
-      fullPath: '/play/musicas'
-      preLoaderRoute: typeof PlayMusicasRouteImport
-      parentRoute: typeof PlayRoute
-    }
-    '/play/mvs': {
-      id: '/play/mvs'
-      path: '/mvs'
-      fullPath: '/play/mvs'
-      preLoaderRoute: typeof PlayMvsRouteImport
-      parentRoute: typeof PlayRoute
-    }
-    '/play/videos': {
-      id: '/play/videos'
-      path: '/videos'
-      fullPath: '/play/videos'
-      preLoaderRoute: typeof PlayVideosRouteImport
-      parentRoute: typeof PlayRoute
-    }
     '/playlists/': {
       id: '/playlists/'
       path: '/playlists'
@@ -1123,26 +971,6 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface PlayRouteChildren {
-  PlayAlbunsRoute: typeof PlayAlbunsRoute
-  PlayForumRoute: typeof PlayForumRoute
-  PlayMusicasRoute: typeof PlayMusicasRoute
-  PlayMvsRoute: typeof PlayMvsRoute
-  PlayVideosRoute: typeof PlayVideosRoute
-  PlayIndexRoute: typeof PlayIndexRoute
-}
-
-const PlayRouteChildren: PlayRouteChildren = {
-  PlayAlbunsRoute: PlayAlbunsRoute,
-  PlayForumRoute: PlayForumRoute,
-  PlayMusicasRoute: PlayMusicasRoute,
-  PlayMvsRoute: PlayMvsRoute,
-  PlayVideosRoute: PlayVideosRoute,
-  PlayIndexRoute: PlayIndexRoute,
-}
-
-const PlayRouteWithChildren = PlayRoute._addFileChildren(PlayRouteChildren)
-
 interface AlbumIdRouteChildren {
   AlbumIdEditarRoute: typeof AlbumIdEditarRoute
 }
@@ -1202,11 +1030,9 @@ const rootRouteChildren: RootRouteChildren = {
   ForumRoute: ForumRoute,
   GravadorasRoute: GravadorasRoute,
   HallRoute: HallRoute,
-  IncubadoraRoute: IncubadoraRoute,
   LeiloesRoute: LeiloesRoute,
   MarketRoute: MarketRoute,
   PayolaRoute: PayolaRoute,
-  PlayRoute: PlayRouteWithChildren,
   RadarRoute: RadarRoute,
   RankingRoute: RankingRoute,
   RescisaoRoute: RescisaoRoute,
