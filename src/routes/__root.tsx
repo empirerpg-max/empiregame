@@ -509,7 +509,7 @@ function RootInner() {
                   icon={Library}
                   items={[
                     { to: "/artistas", search: { filter: "all" }, label: "Empire Artists", icon: Library },
-                    { to: "/incubadora", label: "Corporativo", icon: Building2 },
+                    
                     { to: "/albuns", label: "Discografia", icon: Disc3 },
                     { to: "/playlists", label: "Playlists", icon: ListMusic },
                   ]} 
