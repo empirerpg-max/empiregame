@@ -106,12 +106,12 @@ export function ArtistLoginOverlay({ onSelect, gameName }: ArtistLoginOverlayPro
           )}
 
           <div className="mt-12 flex flex-col gap-4">
-             <Link 
-              to="/studio" 
+             <a
+              href="/studio"
               className="text-white/20 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors"
              >
                 Ir para o Studio
-             </Link>
+             </a>
              <Link 
               to="/games" 
               className="text-white/20 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors"

@@ -1,5 +1,6 @@
 import "./lib/error-capture";
 
+import { handleEmpirePlayApi } from "../backend/src";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
@@ -18,6 +19,17 @@ const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
+
+const RUNTIME_ENV_KEYS = [
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "GOOGLE_SERVICE_ACCOUNT_JSON",
+  "GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL",
+  "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+  "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_ID",
+  "GOOGLE_SERVICE_ACCOUNT_PROJECT_ID",
+  "GOOGLE_SERVICE_ACCOUNT_TOKEN_URI",
+] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Handler de /api/catalogo — consulta Supabase REST diretamente
@@ -154,15 +166,30 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
+function injectRuntimeEnv(env: unknown): void {
+  if (!env || typeof env !== "object") {
+    return;
+  }
+
+  const runtimeEnv = env as Record<string, unknown>;
+
+  for (const key of RUNTIME_ENV_KEYS) {
+    const value = runtimeEnv[key];
+    if (typeof value === "string" && value) {
+      (globalThis as Record<string, unknown>)[`__${key}__`] = value;
+    }
+  }
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const url = new URL(request.url);
 
-    // Injeta vars do env do Cloudflare Workers no globalThis para o handler acima
-    if (env && typeof env === 'object') {
-      const e = env as Record<string, string>;
-      if (e.SUPABASE_URL)              (globalThis as any).__SUPABASE_URL__ = e.SUPABASE_URL;
-      if (e.SUPABASE_SERVICE_ROLE_KEY) (globalThis as any).__SUPABASE_SERVICE_ROLE_KEY__ = e.SUPABASE_SERVICE_ROLE_KEY;
+    injectRuntimeEnv(env);
+
+    const empirePlayResponse = await handleEmpirePlayApi(request);
+    if (empirePlayResponse) {
+      return empirePlayResponse;
     }
 
     // Intercepta /api/catalogo antes do SSR

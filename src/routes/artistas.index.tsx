@@ -101,7 +101,7 @@ function ArtistasList() {
                   <li key={a.nome}>
                     {/* Card clicável → perfil do artista */}
                     <Link
-                      to="/artistas/$nome/"
+                      to="/artistas/$nome"
                       params={{ nome: a.nome }}
                       className="block p-4 rounded-[28px] bg-card/50 border border-white/5 shadow-2xl relative overflow-hidden group backdrop-blur-sm hover:border-primary/20 transition-all active:scale-[0.98]"
                     >

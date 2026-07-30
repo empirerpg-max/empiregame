@@ -38,7 +38,7 @@ function BensPage() {
   return (
     <main className="flex-1 mx-auto w-full max-w-2xl px-4 pt-4">
       <Link
-        to="/artistas/$nome/"
+        to="/artistas/$nome"
         params={{ nome }}
         className="inline-flex items-center gap-1 text-muted-foreground mb-4"
       >
