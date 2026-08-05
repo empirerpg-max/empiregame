@@ -230,6 +230,10 @@ function buildCleanItem(
     "imagem",
     "cover_url",
   ]);
+  // "id_do_topico" NÃO deve entrar aqui: é um índice de referência interno,
+  // nunca um link reproduzível. Usá-lo como fallback fazia linhas sem áudio/
+  // vídeo preenchido (ex: aba Top_Videos_YT) tocarem o número do tópico como
+  // se fosse uma URL — causa raiz de vídeos "quebrados" tipo "/28", "/30".
   const audioUrl = getValue(record, [
     "id_do_arquivo",
     "link_do_audio",
@@ -239,7 +243,6 @@ function buildCleanItem(
     "drive_url",
     "youtube_url",
     "telegram_file_url",
-    "id_do_topico",
   ]);
   const { videoUrl, videoSource } = resolveVideoUrlAndSource(record);
   const releaseDate = getValue(record, [
