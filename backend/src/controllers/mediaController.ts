@@ -76,7 +76,12 @@ function getLegacyTelegramEnv() {
   const proxyUrl = (
     readEnv("LEGACY_TELEGRAM_PROXY_URL") || deriveLegacyProxyUrlFromBotApi(botApiBaseUrl)
   ).replace(/\/+$/, "");
-  const channelId = readEnv("LEGACY_TELEGRAM_CHANNEL_ID") || "empireuploads";
+  // "emprevideos" é o @username público criado para o canal original
+  // (-1002092995685), onde os ref_telegram_id/telegram_topic_id da planilha
+  // realmente correspondem — os vídeos foram encaminhados depois para
+  // @empireuploads só para gerar file_id, o que gera IDs de mensagem novos
+  // e não bate com os números salvos na planilha.
+  const channelId = readEnv("LEGACY_TELEGRAM_CHANNEL_ID") || "emprevideos";
   const botToken = readEnv("BOT_TOKEN") || readEnv("VITE_TELEGRAM_BOT_TOKEN");
 
   return { proxyUrl, channelId, botToken };
