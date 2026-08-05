@@ -396,8 +396,13 @@ export async function uploadVideoController(request: Request): Promise<Response>
 
 /**
  * GET /api/stream/:id
- * Consulta o vídeo na planilha ("Music Videos" ou "Videos") e realiza o streaming HTTP Range (206)
- * para Telegram ou redireciona/retorna URL tratada para Drive/YouTube.
+ *
+ * O `:id` já chega RESOLVIDO pelo cliente (o card do Empire Play é montado a
+ * partir das abas "Music Videos"/"Videos" e já carrega `telegram_file_id` /
+ * `ref_telegram_id` + `arquivo_fonte`). Por isso NÃO lemos o Google Sheets
+ * aqui no caminho principal — essa leitura bloqueava o primeiro byte do vídeo
+ * em todo clique de play. O Sheets só é consultado como fallback, quando o id
+ * recebido não é reconhecível (ex: link antigo salvo em localStorage).
  */
 export async function streamVideoController(
   request: Request,
@@ -422,43 +427,65 @@ export async function streamVideoController(
 
   try {
     let telegramFileId = id;
-    let source = "telegram";
+    // "fonte" pode vir do cliente (já resolvida da planilha na listagem)
+    let source = normalizeComparison(url.searchParams.get("fonte") || "");
     let externalLink = "";
 
-    // Consulta planilhas "Music Videos" e "Videos" para encontrar o registro correspondente
-    const [musicVideos, videos] = await Promise.all([
-      googleSheetsService.principal.readSheetObjects("Music Videos").catch(() => []),
-      googleSheetsService.principal.readSheetObjects("Videos").catch(() => []),
-    ]);
+    const isNumericLegacyId = /^\d+$/.test(id);
+    const isExternalUrl = /^https?:\/\//i.test(id);
+    const looksLikeBotFileId = !isNumericLegacyId && !isExternalUrl && id.length >= 20;
 
-    const allVideos = [...musicVideos, ...videos];
-    const found = allVideos.find((rec) => {
-      const recId =
-        rec.id || rec.telegram_topic_id || rec.id_do_topico || rec.titulo || rec.nome_do_video;
-      const fileId =
-        rec.telegram_file_id || rec.file_id || rec.link || rec.link_do_video || rec.video_url;
-      return (
-        normalizeComparison(recId) === normalizeComparison(id) ||
-        normalizeComparison(fileId) === normalizeComparison(id) ||
-        normalizeComparison(rec.titulo) === normalizeComparison(id)
-      );
-    });
+    if (isExternalUrl) {
+      externalLink = id;
+      if (!source) {
+        if (/youtube\.com|youtu\.be/i.test(id)) source = "youtube";
+        else if (/drive\.google\.com/i.test(id)) source = "drive";
+        else source = "direct";
+      }
+    } else if (isNumericLegacyId || looksLikeBotFileId) {
+      // Caminho principal: id já é o file_id da Bot API ou o ref_telegram_id
+      // numérico da rota MTProto legada — nada a resolver.
+      if (!source) source = "telegram";
+    } else {
+      // FALLBACK (raro): id não reconhecível — só aqui consultamos a planilha.
+      const [musicVideos, videos] = await Promise.all([
+        googleSheetsService.principal.readSheetObjects("Music Videos").catch(() => []),
+        googleSheetsService.principal.readSheetObjects("Videos").catch(() => []),
+      ]);
 
-    if (found) {
-      source = normalizeComparison(found.arquivo_fonte || found.fonte || "");
-      externalLink =
-        found.link || found.link_do_video || found.video_url || found.youtube_url || "";
+      const allVideos = [...musicVideos, ...videos];
+      const found = allVideos.find((rec) => {
+        const recId =
+          rec.id || rec.telegram_topic_id || rec.id_do_topico || rec.titulo || rec.nome_do_video;
+        const fileId =
+          rec.telegram_file_id || rec.file_id || rec.link || rec.link_do_video || rec.video_url;
+        return (
+          normalizeComparison(recId) === normalizeComparison(id) ||
+          normalizeComparison(fileId) === normalizeComparison(id) ||
+          normalizeComparison(rec.titulo) === normalizeComparison(id)
+        );
+      });
 
-      if (found.telegram_file_id || found.file_id) {
-        telegramFileId = found.telegram_file_id || found.file_id;
-      } else if (externalLink) {
-        if (/youtube\.com|youtu\.be/i.test(externalLink)) {
-          source = "youtube";
-        } else if (/drive\.google\.com/i.test(externalLink)) {
-          source = "drive";
+      if (found) {
+        source = normalizeComparison(found.arquivo_fonte || found.fonte || "") || source;
+        externalLink =
+          found.link || found.link_do_video || found.video_url || found.youtube_url || "";
+
+        if (found.telegram_file_id || found.file_id) {
+          telegramFileId = found.telegram_file_id || found.file_id;
+          if (!source) source = "telegram";
+        } else if (externalLink) {
+          if (/youtube\.com|youtu\.be/i.test(externalLink)) {
+            source = "youtube";
+          } else if (/drive\.google\.com/i.test(externalLink)) {
+            source = "drive";
+          }
         }
+      } else if (!source) {
+        source = "telegram";
       }
     }
+
 
     // Se for Drive / YouTube / URL externa
     if (
