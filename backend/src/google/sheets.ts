@@ -5,8 +5,7 @@ export type GoogleSheetRow = GoogleSheetCellValue[];
 export type GoogleSheetMatrix = GoogleSheetRow[];
 
 const GOOGLE_SHEETS_API_BASE = "https://sheets.googleapis.com/v4/spreadsheets";
-const SHEETS_READONLY_SCOPE =
-  "https://www.googleapis.com/auth/spreadsheets.readonly";
+const SHEETS_READONLY_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
 const SHEETS_READWRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 
 export const EMPIRE_PLAY_SHEETS = {
@@ -49,8 +48,7 @@ async function googleSheetsRequest<T>(
 
   if (!response.ok) {
     const message =
-      payload.error?.message ||
-      `Google Sheets respondeu com HTTP ${response.status}.`;
+      payload.error?.message || `Google Sheets respondeu com HTTP ${response.status}.`;
     throw new Error(message);
   }
 
@@ -66,16 +64,8 @@ interface GoogleSheetsValuesResponse {
 export interface SpreadsheetHelper {
   spreadsheetId: string;
   readValues(sheetName: string, range?: string): Promise<string[][]>;
-  appendRow(
-    sheetName: string,
-    values: GoogleSheetRow,
-    range?: string,
-  ): Promise<void>;
-  updateValues(
-    sheetName: string,
-    range: string,
-    values: GoogleSheetMatrix,
-  ): Promise<void>;
+  appendRow(sheetName: string, values: GoogleSheetRow, range?: string): Promise<void>;
+  updateValues(sheetName: string, range: string, values: GoogleSheetMatrix): Promise<void>;
 }
 
 function createSpreadsheetHelper(spreadsheetId: string): SpreadsheetHelper {
@@ -92,11 +82,7 @@ function createSpreadsheetHelper(spreadsheetId: string): SpreadsheetHelper {
       return response.values ?? [];
     },
 
-    async appendRow(
-      sheetName: string,
-      values: GoogleSheetRow,
-      range = "A:ZZ",
-    ): Promise<void> {
+    async appendRow(sheetName: string, values: GoogleSheetRow, range = "A:ZZ"): Promise<void> {
       const a1Range = encodeURIComponent(buildA1Range(sheetName, range));
       await googleSheetsRequest(
         `/${spreadsheetId}/values/${a1Range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
@@ -111,11 +97,7 @@ function createSpreadsheetHelper(spreadsheetId: string): SpreadsheetHelper {
       );
     },
 
-    async updateValues(
-      sheetName: string,
-      range: string,
-      values: GoogleSheetMatrix,
-    ): Promise<void> {
+    async updateValues(sheetName: string, range: string, values: GoogleSheetMatrix): Promise<void> {
       const a1Range = encodeURIComponent(buildA1Range(sheetName, range));
       await googleSheetsRequest(
         `/${spreadsheetId}/values/${a1Range}?valueInputOption=USER_ENTERED`,

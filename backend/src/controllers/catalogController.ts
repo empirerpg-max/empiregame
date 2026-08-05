@@ -1,32 +1,17 @@
-import { empireSheets } from "../google/sheets";
+import {
+  googleSheetsService,
+  normalizeComparison,
+  normalizeHeader,
+  normalizeText,
+  SheetRecord,
+} from "../services/googleSheetsService";
 
-export class ApiError extends Error {
-  status: number;
+export type CatalogKind = "musicas" | "music-videos" | "videos" | "albuns";
 
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-  }
-}
-
-type CatalogKind = "musicas" | "music-videos" | "videos" | "albuns";
-
-type CatalogFilters = {
+export interface CatalogFilters {
   artist?: string;
   month?: string;
   search?: string;
-};
-
-type NormalizedSheetRecord = Record<string, string>;
-
-export interface UserProfileResponse {
-  artistName: string;
-  telegramId: string;
-  playerName: string;
-  associatedArtists: string[];
-  sourceSheet: string;
-  rowNumber: number;
 }
 
 export interface CatalogItem {
@@ -43,7 +28,7 @@ export interface CatalogItem {
   releaseMonth: string | null;
   position: number | null;
   telegramTopicId: string | null;
-  fields: NormalizedSheetRecord;
+  fields: SheetRecord;
 }
 
 export interface TopPlaylistsResponse {
@@ -65,48 +50,7 @@ const TOP_PLAYLIST_SHEETS = {
   youtube: "Top_Videos_YT",
 } as const;
 
-function normalizeText(value: unknown): string {
-  return String(value ?? "").trim();
-}
-
-function normalizeComparison(value: unknown): string {
-  return normalizeText(value)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-function normalizeHeader(value: unknown): string {
-  return normalizeComparison(value).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-}
-
-function isBlankRow(row: string[]): boolean {
-  return row.every((cell) => !normalizeText(cell));
-}
-
-function sheetRowsToObjects(rows: string[][]): NormalizedSheetRecord[] {
-  if (rows.length < 2) return [];
-
-  const headers = rows[0].map((header, index) => {
-    const normalized = normalizeHeader(header);
-    return normalized || `coluna_${index + 1}`;
-  });
-
-  return rows.slice(1).filter((row) => !isBlankRow(row)).map((row) => {
-    const record: NormalizedSheetRecord = {};
-
-    headers.forEach((header, index) => {
-      record[header] = normalizeText(row[index]);
-    });
-
-    return record;
-  });
-}
-
-function getValue(
-  record: NormalizedSheetRecord,
-  aliases: string[],
-): string | null {
+function getValue(record: SheetRecord, aliases: string[]): string | null {
   for (const alias of aliases) {
     const normalizedAlias = normalizeHeader(alias);
     const value = record[normalizedAlias];
@@ -114,21 +58,7 @@ function getValue(
       return normalizeText(value);
     }
   }
-
   return null;
-}
-
-function parseArtistList(value: string | null): string[] {
-  if (!value) return [];
-
-  return Array.from(
-    new Set(
-      value
-        .split(/\r?\n|,|;|\|/g)
-        .map((item) => item.replace(/^[-*•]\s*/, "").trim())
-        .filter(Boolean),
-    ),
-  );
 }
 
 function parseDateToIso(value: string | null): string | null {
@@ -163,23 +93,20 @@ function matchesMonth(isoDate: string | null, requestedMonth?: string): boolean 
   if (!requestedMonth) return true;
   if (!isoDate) return false;
 
-  const normalizedFilter = requestedMonth.trim();
+  const filter = requestedMonth.trim();
   const [year, month] = isoDate.split("-");
   const mmYyyy = `${month}/${year}`;
   const yyyyMm = `${year}-${month}`;
 
   return (
-    normalizedFilter === mmYyyy ||
-    normalizedFilter === yyyyMm ||
-    normalizedFilter === `${month}-${year}` ||
-    normalizedFilter === month
+    filter === mmYyyy || filter === yyyyMm || filter === `${month}-${year}` || filter === month
   );
 }
 
 function buildCatalogItem(
   kind: CatalogKind | "top-playlist",
   sheetName: string,
-  record: NormalizedSheetRecord,
+  record: SheetRecord,
   index: number,
 ): CatalogItem {
   const title =
@@ -193,12 +120,8 @@ function buildCatalogItem(
       "titulo_do_album",
     ]) || "";
 
-  const artist = getValue(record, [
-    "act_principal",
-    "artista",
-    "nome_do_criador",
-    "nome_do_artista",
-  ]) || "";
+  const artist =
+    getValue(record, ["act_principal", "artista", "nome_do_criador", "nome_do_artista"]) || "";
 
   const album = getValue(record, ["album", "nome_do_album", "album_nome"]);
   const cover = getValue(record, [
@@ -208,27 +131,13 @@ function buildCatalogItem(
     "capa",
     "thumbnail_url",
   ]);
-  const link = getValue(record, [
-    "link_do_audio",
-    "link_audio",
-    "link",
-    "telegram_file_url",
-  ]);
-  const releaseDate = getValue(record, [
-    "data_de_lancamento",
-    "data_lancamento",
-    "data",
-  ]);
+  const link = getValue(record, ["link_do_audio", "link_audio", "link", "telegram_file_url"]);
+  const releaseDate = getValue(record, ["data_de_lancamento", "data_lancamento", "data"]);
   const releaseDateIso = parseDateToIso(releaseDate);
   const positionValue = getValue(record, ["posicao", "posição"]);
   const parsedPosition =
-    positionValue && !Number.isNaN(Number(positionValue))
-      ? Number(positionValue)
-      : null;
-  const telegramTopicId = getValue(record, [
-    "id_do_topico",
-    "telegram_topic_id",
-  ]);
+    positionValue && !Number.isNaN(Number(positionValue)) ? Number(positionValue) : null;
+  const telegramTopicId = getValue(record, ["id_do_topico", "telegram_topic_id"]);
 
   return {
     id: `${sheetName}:${telegramTopicId || title || index + 1}`,
@@ -287,56 +196,11 @@ function matchesFilters(item: CatalogItem, filters: CatalogFilters): boolean {
   return true;
 }
 
-async function readPrincipalSheetObjects(sheetName: string): Promise<NormalizedSheetRecord[]> {
-  const rows = await empireSheets.principal.readValues(sheetName);
-  return sheetRowsToObjects(rows);
-}
-
-export async function getUserProfile(telegramId: string): Promise<UserProfileResponse> {
-  const rows = await empireSheets.principal.readValues("Jogadores", "A:M");
-
-  if (rows.length === 0) {
-    throw new ApiError(404, "A aba Jogadores está vazia ou indisponível.");
-  }
-
-  const normalizedTelegramId = normalizeText(telegramId);
-
-  for (let index = 1; index < rows.length; index += 1) {
-    const row = rows[index] ?? [];
-    const artistName = normalizeText(row[0]);
-    const rowTelegramId = normalizeText(row[1]);
-    const playerName = normalizeText(row[2]);
-    const associatedArtistsCell = normalizeText(row[12]);
-
-    if (!rowTelegramId || rowTelegramId !== normalizedTelegramId) {
-      continue;
-    }
-
-    const associatedArtists = Array.from(
-      new Set([artistName, ...parseArtistList(associatedArtistsCell)].filter(Boolean)),
-    );
-
-    return {
-      artistName,
-      telegramId: rowTelegramId,
-      playerName,
-      associatedArtists,
-      sourceSheet: "Jogadores",
-      rowNumber: index + 1,
-    };
-  }
-
-  throw new ApiError(
-    404,
-    "Telegram ID não encontrado na aba Jogadores da planilha principal.",
-  );
-}
-
 export async function getTopPlaylists(): Promise<TopPlaylistsResponse> {
   const [spotifyRows, appleMusicRows, youtubeRows] = await Promise.all([
-    readPrincipalSheetObjects(TOP_PLAYLIST_SHEETS.spotify),
-    readPrincipalSheetObjects(TOP_PLAYLIST_SHEETS.appleMusic),
-    readPrincipalSheetObjects(TOP_PLAYLIST_SHEETS.youtube),
+    googleSheetsService.principal.readSheetObjects(TOP_PLAYLIST_SHEETS.spotify),
+    googleSheetsService.principal.readSheetObjects(TOP_PLAYLIST_SHEETS.appleMusic),
+    googleSheetsService.principal.readSheetObjects(TOP_PLAYLIST_SHEETS.youtube),
   ]);
 
   return {
@@ -359,12 +223,10 @@ export async function getTopPlaylists(): Promise<TopPlaylistsResponse> {
 }
 
 export async function getRecentReleases(limit = 30): Promise<CatalogItem[]> {
-  const records = await readPrincipalSheetObjects(CATALOG_SHEETS.musicas);
+  const records = await googleSheetsService.principal.readSheetObjects(CATALOG_SHEETS.musicas);
 
   return records
-    .map((record, index) =>
-      buildCatalogItem("musicas", CATALOG_SHEETS.musicas, record, index),
-    )
+    .map((record, index) => buildCatalogItem("musicas", CATALOG_SHEETS.musicas, record, index))
     .filter((item) => item.releaseDateIso)
     .sort(compareCatalogItems)
     .slice(0, limit);
@@ -375,10 +237,75 @@ export async function getCatalog(
   filters: CatalogFilters,
 ): Promise<CatalogItem[]> {
   const sheetName = CATALOG_SHEETS[kind];
-  const records = await readPrincipalSheetObjects(sheetName);
+  const records = await googleSheetsService.principal.readSheetObjects(sheetName);
 
   return records
     .map((record, index) => buildCatalogItem(kind, sheetName, record, index))
     .filter((item) => matchesFilters(item, filters))
     .sort(compareCatalogItems);
+}
+
+// Controller HTTP helpers
+export async function getTopPlaylistsController(): Promise<Response> {
+  try {
+    const data = await getTopPlaylists();
+    return new Response(JSON.stringify({ success: true, data }), {
+      status: 200,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao buscar top playlists.";
+    return new Response(JSON.stringify({ success: false, error: message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  }
+}
+
+export async function getLancamentosController(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "30", 10)));
+
+  try {
+    const data = await getRecentReleases(limit);
+    return new Response(JSON.stringify({ success: true, data, meta: { limit } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao buscar lançamentos.";
+    return new Response(JSON.stringify({ success: false, error: message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  }
+}
+
+export async function getCatalogKindController(
+  kind: CatalogKind,
+  request: Request,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const filters: CatalogFilters = {
+    artist: url.searchParams.get("artist") || undefined,
+    month: url.searchParams.get("mes") || undefined,
+    search: url.searchParams.get("q") || url.searchParams.get("search") || undefined,
+  };
+
+  try {
+    const data = await getCatalog(kind, filters);
+    return new Response(
+      JSON.stringify({ success: true, data, meta: { total: data.length, filters } }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+      },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `Erro ao buscar catálogo: ${kind}.`;
+    return new Response(JSON.stringify({ success: false, error: message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  }
 }

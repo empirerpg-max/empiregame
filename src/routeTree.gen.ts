@@ -16,6 +16,7 @@ import { Route as BetRouteImport } from './routes/bet'
 import { Route as BolsaRouteImport } from './routes/bolsa'
 import { Route as ChartsRouteImport } from './routes/charts'
 import { Route as DueloRouteImport } from './routes/duelo'
+import { Route as EmpirePlayRouteImport } from './routes/empire-play'
 import { Route as FilantropiaRouteImport } from './routes/filantropia'
 import { Route as GravadorasRouteImport } from './routes/gravadoras'
 import { Route as HallRouteImport } from './routes/hall'
@@ -89,6 +90,11 @@ const ChartsRoute = ChartsRouteImport.update({
 const DueloRoute = DueloRouteImport.update({
   id: '/duelo',
   path: '/duelo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmpirePlayRoute = EmpirePlayRouteImport.update({
+  id: '/empire-play',
+  path: '/empire-play',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FilantropiaRoute = FilantropiaRouteImport.update({
@@ -295,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/bolsa': typeof BolsaRoute
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
+  '/empire-play': typeof EmpirePlayRoute
   '/filantropia': typeof FilantropiaRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
@@ -343,6 +350,7 @@ export interface FileRoutesByTo {
   '/bolsa': typeof BolsaRoute
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
+  '/empire-play': typeof EmpirePlayRoute
   '/filantropia': typeof FilantropiaRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
@@ -392,6 +400,7 @@ export interface FileRoutesById {
   '/bolsa': typeof BolsaRoute
   '/charts': typeof ChartsRoute
   '/duelo': typeof DueloRoute
+  '/empire-play': typeof EmpirePlayRoute
   '/filantropia': typeof FilantropiaRoute
   '/gravadoras': typeof GravadorasRoute
   '/hall': typeof HallRoute
@@ -442,6 +451,7 @@ export interface FileRouteTypes {
     | '/bolsa'
     | '/charts'
     | '/duelo'
+    | '/empire-play'
     | '/filantropia'
     | '/gravadoras'
     | '/hall'
@@ -490,6 +500,7 @@ export interface FileRouteTypes {
     | '/bolsa'
     | '/charts'
     | '/duelo'
+    | '/empire-play'
     | '/filantropia'
     | '/gravadoras'
     | '/hall'
@@ -538,6 +549,7 @@ export interface FileRouteTypes {
     | '/bolsa'
     | '/charts'
     | '/duelo'
+    | '/empire-play'
     | '/filantropia'
     | '/gravadoras'
     | '/hall'
@@ -587,6 +599,7 @@ export interface RootRouteChildren {
   BolsaRoute: typeof BolsaRoute
   ChartsRoute: typeof ChartsRoute
   DueloRoute: typeof DueloRoute
+  EmpirePlayRoute: typeof EmpirePlayRoute
   FilantropiaRoute: typeof FilantropiaRoute
   GravadorasRoute: typeof GravadorasRoute
   HallRoute: typeof HallRoute
@@ -673,6 +686,13 @@ declare module '@tanstack/react-router' {
       path: '/duelo'
       fullPath: '/duelo'
       preLoaderRoute: typeof DueloRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/empire-play': {
+      id: '/empire-play'
+      path: '/empire-play'
+      fullPath: '/empire-play'
+      preLoaderRoute: typeof EmpirePlayRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/filantropia': {
@@ -1006,6 +1026,7 @@ const rootRouteChildren: RootRouteChildren = {
   BolsaRoute: BolsaRoute,
   ChartsRoute: ChartsRoute,
   DueloRoute: DueloRoute,
+  EmpirePlayRoute: EmpirePlayRoute,
   FilantropiaRoute: FilantropiaRoute,
   GravadorasRoute: GravadorasRoute,
   HallRoute: HallRoute,
