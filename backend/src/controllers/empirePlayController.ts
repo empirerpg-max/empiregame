@@ -246,7 +246,9 @@ function buildCleanItem(
     "telegram_file_url",
   ]);
   const { videoUrl, videoSource } = resolveVideoUrlAndSource(record);
-  const telegramTopicId = getValue(record, ["telegram_topic_id", "id_do_topico"]);
+  // Mesma prioridade do empireuploadsfinal/src/utils/mediaUtils.ts (getTelegramPostPath):
+  // ref_telegram_id > telegram_topic_id > id.
+  const telegramTopicId = getValue(record, ["ref_telegram_id", "telegram_topic_id", "id_do_topico"]);
   const releaseDate = getValue(record, [
     "data_de_lancamento",
     "data_lancamento",
