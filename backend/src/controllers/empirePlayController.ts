@@ -16,6 +16,7 @@ export interface EmpirePlayCleanItem {
   coverUrl?: string | null;
   audioUrl?: string | null;
   videoUrl?: string | null;
+  videoSource?: "youtube" | "drive" | "telegram" | null;
   releaseDate?: string | null;
   releaseDateIso?: string | null;
   releaseMonth?: string | null;
@@ -67,6 +68,43 @@ function getValue(record: SheetRecord, aliases: string[]): string | null {
       return normalizeText(value);
     }
   }
+  return null;
+}
+
+function getValueWithAlias(
+  record: SheetRecord,
+  aliases: string[],
+): { value: string; alias: string } | null {
+  for (const alias of aliases) {
+    const normalizedAlias = normalizeHeader(alias);
+    const value = record[normalizedAlias];
+    if (normalizeText(value)) {
+      return { value: normalizeText(value) as string, alias };
+    }
+  }
+  return null;
+}
+
+/**
+ * Determina a fonte real do vídeo (youtube/drive/telegram) a partir do valor
+ * bruto e de qual coluna da planilha ele veio. O mesmo campo "videoUrl" pode
+ * conter um link do YouTube, um ID do Google Drive ou um file_id da Bot API
+ * do Telegram — todos como texto puro, sem padrão comum confiável — então o
+ * nome da coluna de origem é o sinal mais forte que temos.
+ */
+function resolveVideoSource(
+  value: string,
+  matchedAlias: string,
+): "youtube" | "drive" | "telegram" | null {
+  if (/youtube\.com|youtu\.be/i.test(value)) return "youtube";
+  if (/drive\.google\.com/i.test(value)) return "drive";
+  if (/^(https?:\/\/)?t\.me\//i.test(value)) return "telegram";
+
+  const alias = matchedAlias.toLowerCase();
+  if (alias.includes("telegram")) return "telegram";
+  if (alias.includes("drive")) return "drive";
+  if (alias.includes("youtube")) return "youtube";
+
   return null;
 }
 
@@ -165,7 +203,7 @@ function buildCleanItem(
     "telegram_file_url",
     "id_do_topico",
   ]);
-  const videoUrl = getValue(record, [
+  const videoUrlAliases = [
     "id_do_arquivo",
     "youtube_url",
     "drive_url",
@@ -174,7 +212,12 @@ function buildCleanItem(
     "link_do_video",
     "link_video",
     "link",
-  ]);
+  ];
+  const videoUrlMatch = getValueWithAlias(record, videoUrlAliases);
+  const videoUrl = videoUrlMatch?.value ?? null;
+  const videoSource = videoUrlMatch
+    ? resolveVideoSource(videoUrlMatch.value, videoUrlMatch.alias)
+    : null;
   const releaseDate = getValue(record, [
     "data_de_lancamento",
     "data_lancamento",
@@ -218,6 +261,7 @@ function buildCleanItem(
   if (coverUrl) item.coverUrl = coverUrl;
   if (audioUrl) item.audioUrl = audioUrl;
   if (videoUrl) item.videoUrl = videoUrl;
+  if (videoSource) item.videoSource = videoSource;
   if (releaseDate) item.releaseDate = releaseDate;
   if (releaseDateIso) {
     item.releaseDateIso = releaseDateIso;

@@ -265,6 +265,7 @@ export function EmpirePlayMenu() {
       youtube_url: item.videoUrl || item.audioUrl || item.youtube_url || item.link,
       descricao: item.description || item.descricao || "",
       tipo_video: item.category || item.tipo_video || item.tipo || "Vídeo",
+      fonte: item.videoSource || item.fonte,
     };
   }
 
