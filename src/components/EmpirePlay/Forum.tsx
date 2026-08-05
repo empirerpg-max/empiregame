@@ -48,8 +48,8 @@ interface ForumTopicItem {
 }
 
 export interface ForumProps {
-  onPlayTrack?: (track: { title: string; artist: string; cover?: string; url?: string }) => void;
-  onPlayVideo?: (video: { title: string; artist: string; videoUrl: string }) => void;
+  onPlayTrack?: (track: PlayableTrack, playlist: PlayableTrack[]) => void;
+  onPlayVideo?: (video: PlayableVideo) => void;
 }
 
 import { VideoPlayer, PlayableVideo } from "./VideoPlayer";
@@ -112,11 +112,7 @@ export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
       tipo_video: activeSubmenu === "music-videos" ? "Music Video" : "Vídeo",
     };
     setActiveVideo(videoObj);
-    onPlayVideo?.({
-      title: topic.title,
-      artist: topic.artist,
-      videoUrl: topic.link || topic.id,
-    });
+    onPlayVideo?.(videoObj);
   };
 
   // 1. Carregar itens do catálogo conforme submenu ativo
@@ -451,12 +447,15 @@ export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
                   {selectedTopic.link && (
                     <button
                       onClick={() =>
-                        onPlayTrack?.({
-                          title: selectedTopic.title,
-                          artist: selectedTopic.artist,
-                          cover: selectedTopic.cover || undefined,
-                          url: selectedTopic.link || undefined,
-                        })
+                        onPlayTrack?.(
+                          {
+                            titulo: selectedTopic.title,
+                            artista: selectedTopic.artist,
+                            capa_url: selectedTopic.cover || undefined,
+                            url: selectedTopic.link || undefined,
+                          },
+                          [],
+                        )
                       }
                       className="absolute inset-0 m-auto size-12 sm:size-16 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center shadow-xl opacity-90 sm:opacity-0 group-hover:opacity-100 transition scale-90 group-hover:scale-100"
                     >
@@ -521,11 +520,14 @@ export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
                           <span className="font-semibold line-clamp-1">{faixa}</span>
                           <button
                             onClick={() =>
-                              onPlayTrack?.({
-                                title: faixa,
-                                artist: selectedTopic.artist,
-                                cover: selectedTopic.cover || undefined,
-                              })
+                              onPlayTrack?.(
+                                {
+                                  titulo: faixa,
+                                  artista: selectedTopic.artist,
+                                  capa_url: selectedTopic.cover || undefined,
+                                },
+                                [],
+                              )
                             }
                             className="p-1.5 rounded-lg bg-white/5 hover:bg-emerald-500 hover:text-black transition text-neutral-400"
                           >

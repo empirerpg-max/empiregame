@@ -288,7 +288,7 @@ export function AlbumList({ onPlayTrack }: AlbumListProps) {
 
                     <div className="flex items-center gap-3">
                       {track.letra && (
-                        <FileText className="size-4 text-neutral-500" title="Possui Letra" />
+                        <FileText className="size-4 text-neutral-500" aria-label="Possui Letra" />
                       )}
                       <span className="size-8 rounded-full bg-white/5 group-hover:bg-emerald-500 group-hover:text-black text-neutral-400 grid place-items-center transition-all">
                         <Play className="size-3.5 ml-0.5" />
