@@ -4,6 +4,10 @@ export const DRIVE_FOLDERS = {
   musicas: "1hd_ZJwbVsESwtGniorw0bxQmkhsKcslT",
   albuns: "1Teo9x2yBAJSmdUV23e6cO6EkyCdddZBS",
   musicVideos: "1Jk9Jk-Zd6QAoZnW3nAqFhBiJCNAnw3wR",
+  // Nenhuma pasta dedicada foi definida ainda para "Videos" (não Music
+  // Video) — reaproveita a pasta de Music Videos até que uma pasta própria
+  // seja criada e informada.
+  videos: "1Jk9Jk-Zd6QAoZnW3nAqFhBiJCNAnw3wR",
 } as const;
 
 export async function deleteFileFromDrive(fileUrl: string): Promise<boolean> {

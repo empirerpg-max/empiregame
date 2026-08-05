@@ -54,7 +54,6 @@ export interface ForumProps {
 
 import { VideoPlayer, PlayableVideo } from "./VideoPlayer";
 import { type PlayableTrack } from "./MusicPlayer";
-import { TelegramWidget } from "./TelegramWidget";
 
 function getEmbedMediaUrl(url: string | null | undefined): string {
   if (!url) return "";
@@ -76,7 +75,7 @@ function getEmbedMediaUrl(url: string | null | undefined): string {
     const match = trimmed.match(/[-\w]{25,}/);
     return match ? `https://drive.google.com/file/d/${match[0]}/preview` : trimmed;
   }
-  return `/api/stream/${encodeURIComponent(trimmed)}?fonte=telegram`;
+  return trimmed;
 }
 
 export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
@@ -156,19 +155,15 @@ export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
             item.capa ||
             item.thumb ||
             null,
-          // Para vídeos do Telegram, usa o telegram_topic_id (lido via MTProto
-          // pelo backend) em vez do file_id — mesma lógica de EmpirePlayMenu.tsx.
           link:
-            item.videoSource === "telegram" && item.telegramTopicId
-              ? item.telegramTopicId
-              : item.audioUrl ||
-                item.videoUrl ||
-                item.link ||
-                item.audio_url ||
-                item.drive_url ||
-                item.youtube_url ||
-                item.id_do_arquivo ||
-                null,
+            item.audioUrl ||
+            item.videoUrl ||
+            item.link ||
+            item.audio_url ||
+            item.drive_url ||
+            item.youtube_url ||
+            item.id_do_arquivo ||
+            null,
           videoSource: item.videoSource || null,
           releaseDate: item.releaseDate || item.data_lancamento || item.data || null,
           telegramTopicId: item.telegramTopicId || null,
@@ -413,17 +408,13 @@ export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
                 /* PLAYER DE VÍDEO / MV */
                 <div className="w-full max-w-sm sm:max-w-md mx-auto bg-black rounded-2xl overflow-hidden border border-white/10 relative shadow-xl group min-h-[250px] flex items-center justify-center">
                   {selectedTopic.link ? (
-                    /t\.me\/|telegram/i.test(selectedTopic.link) ? (
-                      <TelegramWidget postUrl={selectedTopic.link} />
-                    ) : (
-                      <iframe
-                        src={getEmbedMediaUrl(selectedTopic.link)}
-                        title={selectedTopic.title}
-                        className="w-full aspect-video border-0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                      />
-                    )
+                    <iframe
+                      src={getEmbedMediaUrl(selectedTopic.link)}
+                      title={selectedTopic.title}
+                      className="w-full aspect-video border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-neutral-950">
                       <Tv className="size-10 text-neutral-600 mb-2" />

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { X, Tv, Sparkles, AlertCircle } from "lucide-react";
 import { driveImg } from "@/lib/api";
-import { TelegramWidget } from "./TelegramWidget";
 
 export interface PlayableVideo {
   id?: string;
@@ -13,8 +12,8 @@ export interface PlayableVideo {
   poster_url?: string;
   youtube_url?: string;
   link?: string;
-  fonte?: "youtube" | "drive" | "telegram" | string;
-  metodo_exibicao?: "telegram_widget" | "iframe_drive" | "iframe_youtube" | string;
+  fonte?: "youtube" | "drive" | string;
+  metodo_exibicao?: "iframe_drive" | "iframe_youtube" | string;
   url_final_player?: string;
 }
 
@@ -31,25 +30,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
   const rawLink =
     video.url_final_player || video.link || (video as any).videoUrl || video.youtube_url || "";
 
-  // 1. Telegram — link público (t.me/canal/id) usa o widget oficial; qualquer outro
-  // valor vindo de fonte "telegram" (ex: file_id do bot) precisa passar pelo proxy
-  // /api/stream/:id (backend -> telegram-bot-api local na VPS). A API oficial
-  // (api.telegram.org / empire-media-api) recusa arquivos acima de ~20MB, então
-  // não serve para os vídeos grandes do catálogo — só o bot-api local remove
-  // esse limite.
-  const isPublicTelegramLink = /^(https?:\/\/)?t\.me\//i.test(rawLink.trim());
-  const isTelegramSource =
-    video.metodo_exibicao === "telegram_widget" ||
-    video.fonte === "telegram" ||
-    isPublicTelegramLink;
-  const isTelegramWidget = isTelegramSource && isPublicTelegramLink;
-  const isTelegramStream = isTelegramSource && !isPublicTelegramLink && !!rawLink;
-  const isTelegram = isTelegramWidget || isTelegramStream;
-  const streamUrl = isTelegramStream
-    ? `/api/stream/${encodeURIComponent(rawLink.trim())}`
-    : rawLink;
-
-  // 2. YouTube
+  // 1. YouTube
   const isYouTubeUrl = (url?: string) => {
     if (!url) return false;
     return /youtube\.com|youtu\.be/i.test(url);
@@ -69,7 +50,8 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
     return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : url;
   };
 
-  // 3. Google Drive
+  // 2. Google Drive — o iframe /preview do próprio Drive já faz streaming
+  // nativo com suporte a seek, sem precisar de nenhum proxy no backend.
   const isDriveUrl = (url?: string) => {
     if (!url) return false;
     if (/drive\.google\.com|googleusercontent\.com/i.test(url)) return true;
@@ -81,9 +63,8 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
     return match ? `https://drive.google.com/file/d/${match[0]}/preview` : url;
   };
 
-  const isYt = !isTelegram && (video.metodo_exibicao === "iframe_youtube" || isYouTubeUrl(rawLink));
-  const isDrive =
-    !isTelegram && !isYt && (video.metodo_exibicao === "iframe_drive" || isDriveUrl(rawLink));
+  const isYt = video.metodo_exibicao === "iframe_youtube" || isYouTubeUrl(rawLink);
+  const isDrive = !isYt && (video.metodo_exibicao === "iframe_drive" || isDriveUrl(rawLink));
 
   const poster =
     video.poster_url || video.capa_url
@@ -117,35 +98,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
       {/* Área Central do Player */}
       <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 max-w-5xl mx-auto w-full">
         <div className="w-full min-h-[300px] rounded-3xl overflow-hidden bg-neutral-900 border border-white/10 shadow-[0_25px_60px_rgba(0,0,0,0.9)] relative group flex items-center justify-center">
-          {isTelegramWidget ? (
-            <TelegramWidget postUrl={rawLink} />
-          ) : isTelegramStream ? (
-            <>
-              <video
-                src={streamUrl}
-                controls
-                autoPlay
-                poster={poster}
-                onError={() => setStreamError(true)}
-                className="w-full aspect-video object-contain bg-black"
-              >
-                Seu navegador não suporta reprodução de vídeo nativa.
-              </video>
-
-              {streamError && (
-                <div className="absolute inset-0 bg-neutral-950/90 flex flex-col items-center justify-center p-6 text-center">
-                  <AlertCircle className="size-12 text-red-500 mb-3 animate-bounce" />
-                  <h3 className="text-base font-black text-white uppercase tracking-tight mb-1">
-                    Não foi possível carregar o vídeo
-                  </h3>
-                  <p className="text-xs text-neutral-400 max-w-md mb-4">
-                    O servidor de mídia do Telegram pode estar indisponível no momento. Tente
-                    novamente em instantes.
-                  </p>
-                </div>
-              )}
-            </>
-          ) : isYt ? (
+          {isYt ? (
             <iframe
               src={getYouTubeEmbedUrl(rawLink)}
               title={video.titulo}
@@ -181,8 +134,8 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
                     Não foi possível carregar o vídeo
                   </h3>
                   <p className="text-xs text-neutral-400 max-w-md mb-4">
-                    Verifique se o link informado é um vídeo válido do Telegram, YouTube ou Google
-                    Drive com permissão pública.
+                    Verifique se o link informado é um vídeo válido do YouTube ou Google Drive com
+                    permissão pública.
                   </p>
                   {rawLink && (
                     <a
@@ -213,13 +166,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-neutral-300 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="size-3.5 text-red-500" />
-                {isTelegram
-                  ? "Telegram Channel Video"
-                  : isDrive
-                    ? "Google Drive HD"
-                    : isYt
-                      ? "YouTube HD"
-                      : "Direct Stream"}
+                {isDrive ? "Google Drive HD" : isYt ? "YouTube HD" : "Direct Stream"}
               </span>
             </div>
           </div>

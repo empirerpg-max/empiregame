@@ -255,18 +255,14 @@ export function EmpirePlayMenu() {
         item.capa_url ||
         item.poster_url,
       poster_url: item.coverUrl || item.thumb || item.poster_url || item.capa_url,
-      // Vídeos do Telegram são lidos via MTProto por número da mensagem no canal
-      // @empireuploads (não pelo file_id da Bot API — mensagens antigas não são
-      // reconhecidas por um servidor de Bot API local recém-configurado).
+      // Vídeos são sempre servidos direto do Google Drive ou do YouTube.
       link:
-        item.videoSource === "telegram" && item.telegramTopicId
-          ? item.telegramTopicId
-          : item.videoUrl ||
-            item.audioUrl ||
-            item.link ||
-            item.youtube_url ||
-            item.id_do_arquivo ||
-            item.link_do_video,
+        item.videoUrl ||
+        item.audioUrl ||
+        item.link ||
+        item.youtube_url ||
+        item.id_do_arquivo ||
+        item.link_do_video,
       youtube_url: item.videoUrl || item.audioUrl || item.youtube_url || item.link,
       descricao: item.description || item.descricao || "",
       tipo_video: item.category || item.tipo_video || item.tipo || "Vídeo",
@@ -321,7 +317,9 @@ export function EmpirePlayMenu() {
     if (activeTab === "music-videos" || activeTab === "videos") fetchVideosData();
   }, [activeTab]);
 
-  // Handler do Upload de Vídeo em /api/upload-video
+  // Handler do Upload de Vídeo: envia o arquivo para o Google Drive
+  // (/api/gestao/upload) e registra o link retornado no catálogo
+  // (/api/gestao/video ou /api/gestao/music-video).
   const handleVideoUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile) {
@@ -336,26 +334,59 @@ export function EmpirePlayMenu() {
     setUploading(true);
     setUploadMsg(null);
 
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    formData.append("titulo", uploadTitulo.trim());
-    formData.append("artista", uploadArtista.trim());
-    formData.append("tipo_video", uploadTipo);
-    formData.append("descricao", uploadDescricao.trim());
-    formData.append("id_usuario", user?.id || "guest");
-    formData.append("referente_musica", uploadReferente.trim());
-
     try {
-      const res = await fetch("/api/upload-video", {
-        method: "POST",
-        body: formData,
-      });
+      const isMusicVideo = uploadTipo === "Music Video";
 
-      const json = await res.json();
-      if (res.ok && json.success) {
+      const driveFormData = new FormData();
+      driveFormData.append("file", uploadFile);
+      driveFormData.append("fileName", uploadFile.name);
+      driveFormData.append("folderType", isMusicVideo ? "musicVideo" : "video");
+
+      const uploadRes = await fetch("/api/gestao/upload", {
+        method: "POST",
+        body: driveFormData,
+      });
+      const uploadJson = await uploadRes.json();
+
+      if (!uploadRes.ok || !uploadJson.success || !uploadJson.data?.fileUrl) {
+        setUploadMsg({
+          type: "error",
+          text: uploadJson.error || "Erro ao enviar o arquivo para o Google Drive.",
+        });
+        return;
+      }
+
+      const mediaUrl = uploadJson.data.fileUrl as string;
+
+      const registerRes = await fetch(isMusicVideo ? "/api/gestao/music-video" : "/api/gestao/video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          isMusicVideo
+            ? {
+                tituloMusicVideo: uploadTitulo.trim(),
+                artistaResponsavel: uploadArtista.trim(),
+                musicaVinculada: uploadReferente.trim(),
+                mediaUrl,
+                capaUrl: "",
+                nomeJogador: user?.name || user?.username || "Jogador",
+              }
+            : {
+                tituloVideo: uploadTitulo.trim(),
+                artistaResponsavel: uploadArtista.trim(),
+                categoriaVideo: uploadTipo,
+                mediaUrl,
+                capaUrl: "",
+                nomeJogador: user?.name || user?.username || "Jogador",
+              },
+        ),
+      });
+      const registerJson = await registerRes.json();
+
+      if (registerRes.ok && registerJson.success) {
         setUploadMsg({
           type: "success",
-          text: "Vídeo publicado com sucesso no Telegram Storage e registrado no catálogo!",
+          text: "Vídeo enviado para o Google Drive e registrado no catálogo!",
         });
         setUploadFile(null);
         setUploadTitulo("");
@@ -366,7 +397,7 @@ export function EmpirePlayMenu() {
       } else {
         setUploadMsg({
           type: "error",
-          text: json.error || "Erro ao realizar upload do vídeo.",
+          text: registerJson.error || "Erro ao registrar o vídeo no catálogo.",
         });
       }
     } catch (err: any) {
@@ -915,10 +946,10 @@ export function EmpirePlayMenu() {
               </div>
               <div>
                 <h3 className="text-base font-black text-white uppercase tracking-tight">
-                  Upload de Mídia de Vídeo (Telegram Storage)
+                  Upload de Mídia de Vídeo (Google Drive)
                 </h3>
                 <p className="text-xs text-neutral-400">
-                  Envie clipes e vídeos pesados diretamente para o servidor da comunidade.
+                  Envie clipes e vídeos diretamente para o Google Drive da comunidade.
                 </p>
               </div>
             </div>
@@ -1008,7 +1039,7 @@ export function EmpirePlayMenu() {
 
               <div>
                 <label className="text-[10px] font-black uppercase text-neutral-400 mb-1 block">
-                  Arquivo de Vídeo (Até 2GB) *
+                  Arquivo de Vídeo *
                 </label>
                 <input
                   type="file"
@@ -1025,7 +1056,7 @@ export function EmpirePlayMenu() {
               >
                 {uploading ? (
                   <>
-                    <Loader2 className="size-4 animate-spin" /> Enviando Mídia para Telegram...
+                    <Loader2 className="size-4 animate-spin" /> Enviando Mídia para o Drive...
                   </>
                 ) : (
                   <>

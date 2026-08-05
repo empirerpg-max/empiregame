@@ -58,7 +58,7 @@ export interface UploadPayload {
   fileName: string;
   mimeType: string;
   base64Data: string;
-  folderType: "musica" | "album" | "video";
+  folderType: "musica" | "album" | "video" | "musicVideo";
 }
 
 // Controller para Criar / Registrar Música
@@ -560,7 +560,7 @@ export async function uploadDriveController(request: Request): Promise<Response>
     let fileName = "";
     let mimeType = "image/jpeg";
     let base64Data = "";
-    let folderType: "musica" | "album" | "video" = "musica";
+    let folderType: "musica" | "album" | "video" | "musicVideo" = "musica";
 
     const contentType = request.headers.get("content-type") || "";
 
@@ -593,7 +593,14 @@ export async function uploadDriveController(request: Request): Promise<Response>
       );
     }
 
-    const folderId = folderType === "album" ? DRIVE_FOLDERS.albuns : DRIVE_FOLDERS.musicas;
+    const folderId =
+      folderType === "album"
+        ? DRIVE_FOLDERS.albuns
+        : folderType === "musicVideo"
+          ? DRIVE_FOLDERS.musicVideos
+          : folderType === "video"
+            ? DRIVE_FOLDERS.videos
+            : DRIVE_FOLDERS.musicas;
 
     const fileUrl = base64Data
       ? await uploadFileToDrive(fileName, folderId, mimeType, base64Data)
