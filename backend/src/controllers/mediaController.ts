@@ -395,9 +395,82 @@ export async function uploadVideoController(request: Request): Promise<Response>
 }
 
 /**
+ * Tenta resolver e transmitir o vídeo assumindo que `id` já é um identificador direto
+ * e válido (ID numérico de mensagem MTProto, telegram_file_id da Bot API, ou URL externa).
+ * Retorna `null` quando o caminho direto não se aplica ou falha, para o chamador cair no
+ * fallback de busca na planilha.
+ */
+async function tryDirectStream(id: string, request: Request): Promise<Response | null> {
+  const url = new URL(request.url);
+  const { botApiBaseUrl, botToken } = getBotEnv();
+
+  // URL externa (Drive/YouTube/direta) já resolvida
+  if (/^https?:\/\//i.test(id)) {
+    const treated = treatExternalUrl(id);
+    const acceptHeader = request.headers.get("accept") || "";
+    if (acceptHeader.includes("application/json") || url.searchParams.has("json")) {
+      return new Response(
+        JSON.stringify({ success: true, type: treated.type, url: treated.url }),
+        { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } },
+      );
+    }
+    return new Response(null, {
+      status: 302,
+      headers: { Location: treated.url, "Access-Control-Allow-Origin": "*" },
+    });
+  }
+
+  // ID numérico puro = mensagem do Telegram (via MTProto, canal legado)
+  if (/^\d+$/.test(id)) {
+    return proxyLegacyTelegramVideo(id, request);
+  }
+
+  // Caso contrário, tenta como telegram_file_id direto da Bot API
+  if (!botToken) return null;
+
+  try {
+    const getFileUrl = `${botApiBaseUrl}/bot${botToken}/getFile?file_id=${encodeURIComponent(id)}`;
+    const getFileRes = await fetch(getFileUrl);
+    const getFileJson = (await getFileRes.json()) as TelegramGetFileResponse;
+
+    if (!getFileRes.ok || !getFileJson.ok || !getFileJson.result?.file_path) {
+      return null;
+    }
+
+    const rawFilePath = getFileJson.result.file_path;
+    const rangeHeader = request.headers.get("range");
+    const remoteFileUrl = rawFilePath.startsWith("http")
+      ? rawFilePath
+      : `${botApiBaseUrl}/file/bot${botToken}/${rawFilePath}`;
+
+    const proxyHeaders: Record<string, string> = {};
+    if (rangeHeader) {
+      proxyHeaders["Range"] = rangeHeader;
+    }
+
+    const remoteRes = await fetch(remoteFileUrl, { headers: proxyHeaders });
+
+    const responseHeaders = new Headers();
+    responseHeaders.set("Content-Type", remoteRes.headers.get("content-type") || "video/mp4");
+    responseHeaders.set("Accept-Ranges", "bytes");
+    responseHeaders.set("Access-Control-Allow-Origin", "*");
+    if (remoteRes.headers.has("content-length")) {
+      responseHeaders.set("Content-Length", remoteRes.headers.get("content-length")!);
+    }
+    if (remoteRes.headers.has("content-range")) {
+      responseHeaders.set("Content-Range", remoteRes.headers.get("content-range")!);
+    }
+
+    return new Response(remoteRes.body, { status: remoteRes.status, headers: responseHeaders });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * GET /api/stream/:id
- * Consulta o vídeo na planilha ("Music Videos" ou "Videos") e realiza o streaming HTTP Range (206)
- * para Telegram ou redireciona/retorna URL tratada para Drive/YouTube.
+ * Realiza o streaming HTTP Range (206) direto para Telegram/Drive/YouTube a partir de um
+ * identificador já resolvido, ou redireciona/retorna URL tratada para Drive/YouTube.
  */
 export async function streamVideoController(
   request: Request,
@@ -421,11 +494,23 @@ export async function streamVideoController(
   const { botApiBaseUrl, botToken } = getBotEnv();
 
   try {
+    // O `id` recebido aqui já vem resolvido pelo catálogo do Empire Play (a lista de
+    // Music Videos/Videos já mapeia o telegram_topic_id numérico, o telegram_file_id
+    // da Bot API, ou o link externo no momento do carregamento — ver toPlayableVideo em
+    // EmpirePlayMenu.tsx). Por isso tentamos o caminho direto primeiro, sem reconsultar
+    // a planilha em todo play: isso é o que fazia o vídeo demorar pra iniciar e travar.
+    // A busca na planilha abaixo fica só como fallback pra casos legados (ex: título
+    // salvo sem os campos resolvidos).
+    const directResponse = await tryDirectStream(id, request);
+    if (directResponse) {
+      return directResponse;
+    }
+
     let telegramFileId = id;
     let source = "telegram";
     let externalLink = "";
 
-    // Consulta planilhas "Music Videos" e "Videos" para encontrar o registro correspondente
+    // Fallback: consulta planilhas "Music Videos" e "Videos" para encontrar o registro
     const [musicVideos, videos] = await Promise.all([
       googleSheetsService.principal.readSheetObjects("Music Videos").catch(() => []),
       googleSheetsService.principal.readSheetObjects("Videos").catch(() => []),
