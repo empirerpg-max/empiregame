@@ -110,13 +110,31 @@ app.get('/api/stream-telegram', async (req, res) => {
     // Canais privados (id numérico -100...) são resolvidos via bigInt; canais
     // públicos por @username.
     const isNumericChannelId = /^-?\d+$/.test(channelUsername);
-    const entity = await client.getEntity(
-      isNumericChannelId
-        ? bigInt(channelUsername)
-        : channelUsername.startsWith('@')
-          ? channelUsername
-          : `@${channelUsername}`,
-    );
+
+    let entity;
+    if (isNumericChannelId) {
+      // GramJS não resolve um canal privado só pelo ID cru numa sessão nova:
+      // ele precisa ter o access_hash em cache, que só existe depois de o
+      // client "ver" os diálogos do bot pelo menos uma vez.
+      const normalizedTarget = channelUsername.replace(/^-100/, '').replace(/^-/, '');
+      let resolved = null;
+      for await (const dialog of client.iterDialogs({ limit: 200 })) {
+        const dialogId = dialog.id ? dialog.id.toString().replace(/^-100/, '').replace(/^-/, '') : '';
+        if (dialogId === normalizedTarget) {
+          resolved = dialog.entity;
+          break;
+        }
+      }
+      if (!resolved) {
+        return res.status(404).json({
+          error: 'Canal não encontrado entre os diálogos do bot. Confirme que o bot é membro/admin desse canal.',
+        });
+      }
+      entity = resolved;
+    } else {
+      entity = await client.getEntity(channelUsername.startsWith('@') ? channelUsername : `@${channelUsername}`);
+    }
+
     const messages = await client.getMessages(entity, { ids: [messageId] });
 
     if (!messages || messages.length === 0 || !messages[0] || !messages[0].media) {
