@@ -9,8 +9,10 @@ export interface MappedTrack extends PlayableTrack {
   duracao?: string;
 }
 
-export interface DetailedAlbum extends AlbumPayload {
+export interface DetailedAlbum extends Omit<AlbumPayload, "faixas"> {
   faixas?: MappedTrack[];
+  data_lancamento?: string;
+  telegramTopicId?: string;
 }
 
 interface AlbumListProps {
@@ -18,7 +20,7 @@ interface AlbumListProps {
 }
 
 export function AlbumList({ onPlayTrack }: AlbumListProps) {
-  const [albuns, setAlbuns] = useState<AlbumPayload[] | null>(null);
+  const [albuns, setAlbuns] = useState<DetailedAlbum[] | null>(null);
   const [musicas, setMusicas] = useState<MappedTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -286,7 +288,7 @@ export function AlbumList({ onPlayTrack }: AlbumListProps) {
 
                     <div className="flex items-center gap-3">
                       {track.letra && (
-                        <FileText className="size-4 text-neutral-500" title="Possui Letra" />
+                        <FileText className="size-4 text-neutral-500" aria-label="Possui Letra" />
                       )}
                       <span className="size-8 rounded-full bg-white/5 group-hover:bg-emerald-500 group-hover:text-black text-neutral-400 grid place-items-center transition-all">
                         <Play className="size-3.5 ml-0.5" />

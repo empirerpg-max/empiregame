@@ -175,7 +175,7 @@ export async function updateReleaseController(request: Request): Promise<Respons
         await deleteFileFromDrive(oldCapaUrl);
       }
 
-      let folderId = DRIVE_FOLDERS.musicas;
+      let folderId: string = DRIVE_FOLDERS.musicas;
       if (tipoClean === "albuns") folderId = DRIVE_FOLDERS.albuns;
       if (tipoClean === "music-videos") folderId = DRIVE_FOLDERS.musicVideos;
 
