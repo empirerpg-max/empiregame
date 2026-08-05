@@ -55,9 +55,28 @@ function getBotEnv() {
   return { botApiBaseUrl, botToken, chatId };
 }
 
+/**
+ * Deriva a URL do legacy-telegram-proxy a partir de BOT_API_BASE_URL quando
+ * LEGACY_TELEGRAM_PROXY_URL não está configurado: os dois serviços rodam na
+ * mesma VPS, só em portas diferentes (bot-api local: 8082, proxy MTProto:
+ * 8083) — evita depender de mais uma variável de ambiente manual.
+ */
+function deriveLegacyProxyUrlFromBotApi(botApiBaseUrl: string): string {
+  try {
+    const parsed = new URL(botApiBaseUrl);
+    parsed.port = "8083";
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
 function getLegacyTelegramEnv() {
-  const proxyUrl = readEnv("LEGACY_TELEGRAM_PROXY_URL").replace(/\/+$/, "");
-  const channelId = readEnv("LEGACY_TELEGRAM_CHANNEL_ID");
+  const { botApiBaseUrl } = getBotEnv();
+  const proxyUrl = (
+    readEnv("LEGACY_TELEGRAM_PROXY_URL") || deriveLegacyProxyUrlFromBotApi(botApiBaseUrl)
+  ).replace(/\/+$/, "");
+  const channelId = readEnv("LEGACY_TELEGRAM_CHANNEL_ID") || "empireuploads";
   const botToken = readEnv("BOT_TOKEN") || readEnv("VITE_TELEGRAM_BOT_TOKEN");
 
   return { proxyUrl, channelId, botToken };
@@ -467,12 +486,19 @@ export async function streamVideoController(
       });
     }
 
-    // ID numérico puro = vídeo legado (mensagem MTProto), não file_id da Bot API
+    // ID numérico puro = mensagem do Telegram (via MTProto), não file_id da Bot API
     if (/^\d+$/.test(telegramFileId)) {
       const legacyResponse = await proxyLegacyTelegramVideo(telegramFileId, request);
       if (legacyResponse) {
         return legacyResponse;
       }
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "Proxy de streaming MTProto não configurado (verifique BOT_TOKEN/BOT_API_BASE_URL).",
+        }),
+        { status: 503, headers: { "Content-Type": "application/json; charset=utf-8" } },
+      );
     }
 
     // Caso contrário, tenta obter o arquivo via Telegram Bot API
