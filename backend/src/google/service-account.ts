@@ -16,9 +16,7 @@ const ONE_MINUTE_MS = 60_000;
 
 function readRuntimeEnv(name: string): string {
   const processValue =
-    typeof process !== "undefined" && process.env
-      ? process.env[name]
-      : undefined;
+    typeof process !== "undefined" && process.env ? process.env[name] : undefined;
 
   if (typeof processValue === "string" && processValue.trim()) {
     return processValue;
@@ -48,29 +46,23 @@ function pemToArrayBuffer(pem: string): ArrayBuffer {
     .replace(/\s+/g, "");
 
   const bytes = decodeBase64(normalized);
-  return bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength,
-  ) as ArrayBuffer;
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 function base64UrlEncode(input: string | Uint8Array): string {
-  const bytes =
-    typeof input === "string" ? new TextEncoder().encode(input) : input;
+  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
 
   let binary = "";
   for (let index = 0; index < bytes.length; index += 1) {
     binary += String.fromCharCode(bytes[index]);
   }
 
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function resolveServiceAccount(): GoogleServiceAccountCredentials {
-  const rawJson = readRuntimeEnv("GOOGLE_SERVICE_ACCOUNT_JSON");
+  const rawJson =
+    readRuntimeEnv("GOOGLE_SHEETS_CREDENTIALS") || readRuntimeEnv("GOOGLE_SERVICE_ACCOUNT_JSON");
   if (rawJson) {
     const parsed = JSON.parse(rawJson) as {
       client_email?: string;
@@ -81,9 +73,7 @@ function resolveServiceAccount(): GoogleServiceAccountCredentials {
     };
 
     if (!parsed.client_email || !parsed.private_key) {
-      throw new Error(
-        "GOOGLE_SERVICE_ACCOUNT_JSON não contém client_email/private_key.",
-      );
+      throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON não contém client_email/private_key.");
     }
 
     return {
@@ -96,12 +86,9 @@ function resolveServiceAccount(): GoogleServiceAccountCredentials {
   }
 
   const clientEmail = readRuntimeEnv("GOOGLE_SERVICE_ACCOUNT_CLIENT_EMAIL");
-  const privateKey = normalizePrivateKey(
-    readRuntimeEnv("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"),
-  );
+  const privateKey = normalizePrivateKey(readRuntimeEnv("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"));
   const tokenUri =
-    readRuntimeEnv("GOOGLE_SERVICE_ACCOUNT_TOKEN_URI") ||
-    "https://oauth2.googleapis.com/token";
+    readRuntimeEnv("GOOGLE_SERVICE_ACCOUNT_TOKEN_URI") || "https://oauth2.googleapis.com/token";
 
   if (!clientEmail || !privateKey) {
     throw new Error(
@@ -114,8 +101,7 @@ function resolveServiceAccount(): GoogleServiceAccountCredentials {
     privateKey,
     tokenUri,
     projectId: readRuntimeEnv("GOOGLE_SERVICE_ACCOUNT_PROJECT_ID") || undefined,
-    privateKeyId:
-      readRuntimeEnv("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_ID") || undefined,
+    privateKeyId: readRuntimeEnv("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_ID") || undefined,
   };
 }
 
