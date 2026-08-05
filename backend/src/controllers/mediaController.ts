@@ -55,6 +55,56 @@ function getBotEnv() {
   return { botApiBaseUrl, botToken, chatId };
 }
 
+function getLegacyTelegramEnv() {
+  const proxyUrl = readEnv("LEGACY_TELEGRAM_PROXY_URL").replace(/\/+$/, "");
+  const channelId = readEnv("LEGACY_TELEGRAM_CHANNEL_ID");
+  const botToken = readEnv("BOT_TOKEN") || readEnv("VITE_TELEGRAM_BOT_TOKEN");
+
+  return { proxyUrl, channelId, botToken };
+}
+
+/**
+ * Vídeos cadastrados antes da migração para a Bot API usam ID de mensagem
+ * numérico puro (ex: "28"), formato do protocolo MTProto — incompatível com
+ * o file_id opaco da Bot API. Esses vídeos são servidos por um serviço Node
+ * standalone (legacy-telegram-proxy) que roda MTProto/GramJS de verdade,
+ * fora do Cloudflare Workers (que não suporta socket TCP persistente).
+ */
+async function proxyLegacyTelegramVideo(
+  messageId: string,
+  request: Request,
+): Promise<Response | null> {
+  const { proxyUrl, channelId, botToken } = getLegacyTelegramEnv();
+
+  if (!proxyUrl || !channelId || !botToken) {
+    return null;
+  }
+
+  const postPath = `${channelId}/${messageId}`;
+  const target = `${proxyUrl}/api/stream-telegram?postPath=${encodeURIComponent(postPath)}&botToken=${encodeURIComponent(botToken)}`;
+
+  const proxyHeaders: Record<string, string> = {};
+  const rangeHeader = request.headers.get("range");
+  if (rangeHeader) {
+    proxyHeaders["Range"] = rangeHeader;
+  }
+
+  const legacyRes = await fetch(target, { headers: proxyHeaders });
+
+  const responseHeaders = new Headers();
+  responseHeaders.set("Content-Type", legacyRes.headers.get("content-type") || "video/mp4");
+  responseHeaders.set("Accept-Ranges", "bytes");
+  responseHeaders.set("Access-Control-Allow-Origin", "*");
+  if (legacyRes.headers.has("content-length")) {
+    responseHeaders.set("Content-Length", legacyRes.headers.get("content-length")!);
+  }
+  if (legacyRes.headers.has("content-range")) {
+    responseHeaders.set("Content-Range", legacyRes.headers.get("content-range")!);
+  }
+
+  return new Response(legacyRes.body, { status: legacyRes.status, headers: responseHeaders });
+}
+
 function getTodayBrDate(): string {
   const now = new Date();
   const day = String(now.getDate()).padStart(2, "0");
@@ -415,6 +465,14 @@ export async function streamVideoController(
           "Access-Control-Allow-Origin": "*",
         },
       });
+    }
+
+    // ID numérico puro = vídeo legado (mensagem MTProto), não file_id da Bot API
+    if (/^\d+$/.test(telegramFileId)) {
+      const legacyResponse = await proxyLegacyTelegramVideo(telegramFileId, request);
+      if (legacyResponse) {
+        return legacyResponse;
+      }
     }
 
     // Caso contrário, tenta obter o arquivo via Telegram Bot API
