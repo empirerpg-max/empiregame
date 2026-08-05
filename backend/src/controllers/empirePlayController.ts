@@ -87,10 +87,8 @@ function getValueWithAlias(
 
 /**
  * Determina a fonte real do vídeo (youtube/drive/telegram) a partir do valor
- * bruto e de qual coluna da planilha ele veio. O mesmo campo "videoUrl" pode
- * conter um link do YouTube, um ID do Google Drive ou um file_id da Bot API
- * do Telegram — todos como texto puro, sem padrão comum confiável — então o
- * nome da coluna de origem é o sinal mais forte que temos.
+ * bruto e de qual coluna da planilha ele veio. Usado apenas como fallback
+ * quando a linha não tem a coluna "arquivo_fonte" preenchida.
  */
 function resolveVideoSource(
   value: string,
@@ -106,6 +104,46 @@ function resolveVideoSource(
   if (alias.includes("youtube")) return "youtube";
 
   return null;
+}
+
+/**
+ * Resolve o link/token de reprodução do vídeo e sua fonte.
+ *
+ * Conforme o mapeamento oficial da planilha: a coluna "arquivo_fonte" é o
+ * sinal AUTORITATIVO de qual coluna contém o dado certo — nunca deve ser
+ * adivinhado por conteúdo. Na aba "Music Videos" cada fonte tem sua própria
+ * coluna (telegram_file_id / drive_url / youtube_url); na aba "Videos" as
+ * três fontes compartilham uma única coluna genérica ("ID do arquivo").
+ */
+function resolveVideoUrlAndSource(
+  record: SheetRecord,
+): { videoUrl: string | null; videoSource: "youtube" | "drive" | "telegram" | null } {
+  const explicitFonte = normalizeComparison(getValue(record, ["arquivo_fonte", "fonte"]) || "");
+
+  if (explicitFonte === "telegram" || explicitFonte === "drive" || explicitFonte === "youtube") {
+    const specificAliases: Record<string, string[]> = {
+      telegram: ["telegram_file_id", "id_do_arquivo"],
+      drive: ["drive_url", "id_do_arquivo"],
+      youtube: ["youtube_url", "id_do_arquivo"],
+    };
+    const value = getValue(record, specificAliases[explicitFonte]);
+    return { videoUrl: value, videoSource: value ? (explicitFonte as "youtube" | "drive" | "telegram") : null };
+  }
+
+  // Sem "arquivo_fonte" preenchido: cai para a heurística por conteúdo/coluna
+  const videoUrlAliases = [
+    "id_do_arquivo",
+    "youtube_url",
+    "drive_url",
+    "telegram_file_id",
+    "video_url",
+    "link_do_video",
+    "link_video",
+    "link",
+  ];
+  const match = getValueWithAlias(record, videoUrlAliases);
+  if (!match) return { videoUrl: null, videoSource: null };
+  return { videoUrl: match.value, videoSource: resolveVideoSource(match.value, match.alias) };
 }
 
 function parseDateToIso(value: string | null): string | null {
@@ -203,21 +241,7 @@ function buildCleanItem(
     "telegram_file_url",
     "id_do_topico",
   ]);
-  const videoUrlAliases = [
-    "id_do_arquivo",
-    "youtube_url",
-    "drive_url",
-    "telegram_file_id",
-    "video_url",
-    "link_do_video",
-    "link_video",
-    "link",
-  ];
-  const videoUrlMatch = getValueWithAlias(record, videoUrlAliases);
-  const videoUrl = videoUrlMatch?.value ?? null;
-  const videoSource = videoUrlMatch
-    ? resolveVideoSource(videoUrlMatch.value, videoUrlMatch.alias)
-    : null;
+  const { videoUrl, videoSource } = resolveVideoUrlAndSource(record);
   const releaseDate = getValue(record, [
     "data_de_lancamento",
     "data_lancamento",
@@ -239,7 +263,7 @@ function buildCleanItem(
   ]);
   const lyrics = getValue(record, ["letra", "lyrics", "letra_da_musica"]);
   const description = getValue(record, ["descricao", "descrição", "description"]);
-  const category = getValue(record, ["categoria", "tipo_video", "categoria_video"]);
+  const category = getValue(record, ["categoria", "tipo_video", "categoria_video", "tipo"]);
 
   const trackOrderValue = getValue(record, [
     "ordem",
