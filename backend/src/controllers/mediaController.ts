@@ -395,82 +395,14 @@ export async function uploadVideoController(request: Request): Promise<Response>
 }
 
 /**
- * Tenta resolver e transmitir o vídeo assumindo que `id` já é um identificador direto
- * e válido (ID numérico de mensagem MTProto, telegram_file_id da Bot API, ou URL externa).
- * Retorna `null` quando o caminho direto não se aplica ou falha, para o chamador cair no
- * fallback de busca na planilha.
- */
-async function tryDirectStream(id: string, request: Request): Promise<Response | null> {
-  const url = new URL(request.url);
-  const { botApiBaseUrl, botToken } = getBotEnv();
-
-  // URL externa (Drive/YouTube/direta) já resolvida
-  if (/^https?:\/\//i.test(id)) {
-    const treated = treatExternalUrl(id);
-    const acceptHeader = request.headers.get("accept") || "";
-    if (acceptHeader.includes("application/json") || url.searchParams.has("json")) {
-      return new Response(
-        JSON.stringify({ success: true, type: treated.type, url: treated.url }),
-        { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } },
-      );
-    }
-    return new Response(null, {
-      status: 302,
-      headers: { Location: treated.url, "Access-Control-Allow-Origin": "*" },
-    });
-  }
-
-  // ID numérico puro = mensagem do Telegram (via MTProto, canal legado)
-  if (/^\d+$/.test(id)) {
-    return proxyLegacyTelegramVideo(id, request);
-  }
-
-  // Caso contrário, tenta como telegram_file_id direto da Bot API
-  if (!botToken) return null;
-
-  try {
-    const getFileUrl = `${botApiBaseUrl}/bot${botToken}/getFile?file_id=${encodeURIComponent(id)}`;
-    const getFileRes = await fetch(getFileUrl);
-    const getFileJson = (await getFileRes.json()) as TelegramGetFileResponse;
-
-    if (!getFileRes.ok || !getFileJson.ok || !getFileJson.result?.file_path) {
-      return null;
-    }
-
-    const rawFilePath = getFileJson.result.file_path;
-    const rangeHeader = request.headers.get("range");
-    const remoteFileUrl = rawFilePath.startsWith("http")
-      ? rawFilePath
-      : `${botApiBaseUrl}/file/bot${botToken}/${rawFilePath}`;
-
-    const proxyHeaders: Record<string, string> = {};
-    if (rangeHeader) {
-      proxyHeaders["Range"] = rangeHeader;
-    }
-
-    const remoteRes = await fetch(remoteFileUrl, { headers: proxyHeaders });
-
-    const responseHeaders = new Headers();
-    responseHeaders.set("Content-Type", remoteRes.headers.get("content-type") || "video/mp4");
-    responseHeaders.set("Accept-Ranges", "bytes");
-    responseHeaders.set("Access-Control-Allow-Origin", "*");
-    if (remoteRes.headers.has("content-length")) {
-      responseHeaders.set("Content-Length", remoteRes.headers.get("content-length")!);
-    }
-    if (remoteRes.headers.has("content-range")) {
-      responseHeaders.set("Content-Range", remoteRes.headers.get("content-range")!);
-    }
-
-    return new Response(remoteRes.body, { status: remoteRes.status, headers: responseHeaders });
-  } catch {
-    return null;
-  }
-}
-
-/**
  * GET /api/stream/:id
- * Realiza o streaming HTTP Range (206) direto para Telegram/Drive/YouTube a partir de um
- * identificador já resolvido, ou redireciona/retorna URL tratada para Drive/YouTube.
+ *
+ * O `:id` já chega RESOLVIDO pelo cliente (o card do Empire Play é montado a
+ * partir das abas "Music Videos"/"Videos" e já carrega `telegram_file_id` /
+ * `ref_telegram_id` + `arquivo_fonte`). Por isso NÃO lemos o Google Sheets
+ * aqui no caminho principal — essa leitura bloqueava o primeiro byte do vídeo
+ * em todo clique de play. O Sheets só é consultado como fallback, quando o id
+ * recebido não é reconhecível (ex: link antigo salvo em localStorage).
  */
 export async function streamVideoController(
   request: Request,
@@ -494,56 +426,66 @@ export async function streamVideoController(
   const { botApiBaseUrl, botToken } = getBotEnv();
 
   try {
-    // O `id` recebido aqui já vem resolvido pelo catálogo do Empire Play (a lista de
-    // Music Videos/Videos já mapeia o telegram_topic_id numérico, o telegram_file_id
-    // da Bot API, ou o link externo no momento do carregamento — ver toPlayableVideo em
-    // EmpirePlayMenu.tsx). Por isso tentamos o caminho direto primeiro, sem reconsultar
-    // a planilha em todo play: isso é o que fazia o vídeo demorar pra iniciar e travar.
-    // A busca na planilha abaixo fica só como fallback pra casos legados (ex: título
-    // salvo sem os campos resolvidos).
-    const directResponse = await tryDirectStream(id, request);
-    if (directResponse) {
-      return directResponse;
-    }
-
     let telegramFileId = id;
-    let source = "telegram";
+    // "fonte" pode vir do cliente (já resolvida da planilha na listagem)
+    let source = normalizeComparison(url.searchParams.get("fonte") || "");
     let externalLink = "";
 
-    // Fallback: consulta planilhas "Music Videos" e "Videos" para encontrar o registro
-    const [musicVideos, videos] = await Promise.all([
-      googleSheetsService.principal.readSheetObjects("Music Videos").catch(() => []),
-      googleSheetsService.principal.readSheetObjects("Videos").catch(() => []),
-    ]);
+    const isNumericLegacyId = /^\d+$/.test(id);
+    const isExternalUrl = /^https?:\/\//i.test(id);
+    const looksLikeBotFileId = !isNumericLegacyId && !isExternalUrl && id.length >= 20;
 
-    const allVideos = [...musicVideos, ...videos];
-    const found = allVideos.find((rec) => {
-      const recId =
-        rec.id || rec.telegram_topic_id || rec.id_do_topico || rec.titulo || rec.nome_do_video;
-      const fileId =
-        rec.telegram_file_id || rec.file_id || rec.link || rec.link_do_video || rec.video_url;
-      return (
-        normalizeComparison(recId) === normalizeComparison(id) ||
-        normalizeComparison(fileId) === normalizeComparison(id) ||
-        normalizeComparison(rec.titulo) === normalizeComparison(id)
-      );
-    });
+    if (isExternalUrl) {
+      externalLink = id;
+      if (!source) {
+        if (/youtube\.com|youtu\.be/i.test(id)) source = "youtube";
+        else if (/drive\.google\.com/i.test(id)) source = "drive";
+        else source = "direct";
+      }
+    } else if (isNumericLegacyId || looksLikeBotFileId) {
+      // Caminho principal: id já é o file_id da Bot API ou o ref_telegram_id
+      // numérico da rota MTProto legada — nada a resolver.
+      if (!source) source = "telegram";
+    } else {
+      // FALLBACK (raro): id não reconhecível — só aqui consultamos a planilha.
+      const [musicVideos, videos] = await Promise.all([
+        googleSheetsService.principal.readSheetObjects("Music Videos").catch(() => []),
+        googleSheetsService.principal.readSheetObjects("Videos").catch(() => []),
+      ]);
 
-    if (found) {
-      source = normalizeComparison(found.arquivo_fonte || found.fonte || "");
-      externalLink =
-        found.link || found.link_do_video || found.video_url || found.youtube_url || "";
+      const allVideos = [...musicVideos, ...videos];
+      const found = allVideos.find((rec) => {
+        const recId =
+          rec.id || rec.telegram_topic_id || rec.id_do_topico || rec.titulo || rec.nome_do_video;
+        const fileId =
+          rec.telegram_file_id || rec.file_id || rec.link || rec.link_do_video || rec.video_url;
+        return (
+          normalizeComparison(recId) === normalizeComparison(id) ||
+          normalizeComparison(fileId) === normalizeComparison(id) ||
+          normalizeComparison(rec.titulo) === normalizeComparison(id)
+        );
+      });
 
-      if (found.telegram_file_id || found.file_id) {
-        telegramFileId = found.telegram_file_id || found.file_id;
-      } else if (externalLink) {
-        if (/youtube\.com|youtu\.be/i.test(externalLink)) {
-          source = "youtube";
-        } else if (/drive\.google\.com/i.test(externalLink)) {
-          source = "drive";
+      if (found) {
+        source = normalizeComparison(found.arquivo_fonte || found.fonte || "") || source;
+        externalLink =
+          found.link || found.link_do_video || found.video_url || found.youtube_url || "";
+
+        if (found.telegram_file_id || found.file_id) {
+          telegramFileId = found.telegram_file_id || found.file_id;
+          if (!source) source = "telegram";
+        } else if (externalLink) {
+          if (/youtube\.com|youtu\.be/i.test(externalLink)) {
+            source = "youtube";
+          } else if (/drive\.google\.com/i.test(externalLink)) {
+            source = "drive";
+          }
         }
+      } else if (!source) {
+        source = "telegram";
       }
     }
+
 
     // Se for Drive / YouTube / URL externa
     if (
