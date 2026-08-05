@@ -17,6 +17,7 @@ export interface EmpirePlayCleanItem {
   audioUrl?: string | null;
   videoUrl?: string | null;
   videoSource?: "youtube" | "drive" | "telegram" | null;
+  telegramTopicId?: string | null;
   releaseDate?: string | null;
   releaseDateIso?: string | null;
   releaseMonth?: string | null;
@@ -245,6 +246,7 @@ function buildCleanItem(
     "telegram_file_url",
   ]);
   const { videoUrl, videoSource } = resolveVideoUrlAndSource(record);
+  const telegramTopicId = getValue(record, ["telegram_topic_id", "id_do_topico"]);
   const releaseDate = getValue(record, [
     "data_de_lancamento",
     "data_lancamento",
@@ -289,6 +291,7 @@ function buildCleanItem(
   if (audioUrl) item.audioUrl = audioUrl;
   if (videoUrl) item.videoUrl = videoUrl;
   if (videoSource) item.videoSource = videoSource;
+  if (telegramTopicId) item.telegramTopicId = telegramTopicId;
   if (releaseDate) item.releaseDate = releaseDate;
   if (releaseDateIso) {
     item.releaseDateIso = releaseDateIso;

@@ -255,13 +255,18 @@ export function EmpirePlayMenu() {
         item.capa_url ||
         item.poster_url,
       poster_url: item.coverUrl || item.thumb || item.poster_url || item.capa_url,
+      // Vídeos do Telegram são lidos via MTProto por número da mensagem no canal
+      // @empireuploads (não pelo file_id da Bot API — mensagens antigas não são
+      // reconhecidas por um servidor de Bot API local recém-configurado).
       link:
-        item.videoUrl ||
-        item.audioUrl ||
-        item.link ||
-        item.youtube_url ||
-        item.id_do_arquivo ||
-        item.link_do_video,
+        item.videoSource === "telegram" && item.telegramTopicId
+          ? item.telegramTopicId
+          : item.videoUrl ||
+            item.audioUrl ||
+            item.link ||
+            item.youtube_url ||
+            item.id_do_arquivo ||
+            item.link_do_video,
       youtube_url: item.videoUrl || item.audioUrl || item.youtube_url || item.link,
       descricao: item.description || item.descricao || "",
       tipo_video: item.category || item.tipo_video || item.tipo || "Vídeo",
