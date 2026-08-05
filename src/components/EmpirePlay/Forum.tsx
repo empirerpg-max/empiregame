@@ -53,6 +53,7 @@ export interface ForumProps {
 }
 
 import { VideoPlayer, PlayableVideo } from "./VideoPlayer";
+import { type PlayableTrack } from "./MusicPlayer";
 import { TelegramWidget } from "./TelegramWidget";
 
 function getEmbedMediaUrl(url: string | null | undefined): string {
