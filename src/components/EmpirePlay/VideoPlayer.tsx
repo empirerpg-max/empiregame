@@ -32,8 +32,9 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
     video.url_final_player || video.link || (video as any).videoUrl || video.youtube_url || "";
 
   // 1. Telegram — link público (t.me/canal/id) usa o widget oficial; qualquer outro
-  // valor vindo de fonte "telegram" (ex: file_id do bot, canal privado) precisa passar
-  // pelo proxy de streaming do backend (/api/stream/:id), pois não é uma URL reproduzível.
+  // valor vindo de fonte "telegram" (ex: file_id do bot) precisa passar pelo proxy
+  // dedicado empire-media-api (fala direto com api.telegram.org, sem depender de
+  // VPS própria), pois não é uma URL reproduzível.
   const isPublicTelegramLink = /^(https?:\/\/)?t\.me\//i.test(rawLink.trim());
   const isTelegramSource =
     video.metodo_exibicao === "telegram_widget" ||
@@ -43,7 +44,7 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
   const isTelegramStream = isTelegramSource && !isPublicTelegramLink && !!rawLink;
   const isTelegram = isTelegramWidget || isTelegramStream;
   const streamUrl = isTelegramStream
-    ? `/api/stream/${encodeURIComponent(rawLink.trim())}`
+    ? `https://empire-media-api.empirerpg-forum.workers.dev/tg?file_id=${encodeURIComponent(rawLink.trim())}`
     : rawLink;
 
   // 2. YouTube
