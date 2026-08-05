@@ -41,6 +41,7 @@ interface ForumTopicItem {
   album: string | null;
   cover: string | null;
   link: string | null;
+  videoSource?: string | null;
   releaseDate: string | null;
   telegramTopicId: string | null;
   fields: Record<string, string>;
@@ -87,6 +88,9 @@ export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
   // State para comentários do tópico selecionado
   const [topicComments, setTopicComments] = useState<CommentItem[]>([]);
   const [loadingComments, setLoadingComments] = useState<boolean>(false);
+  // ID do tópico REAL da planilha (coluna "ID do tópico"), usado como chave
+  // ao gravar comentários — nunca o id sintético gerado pelo app.
+  const [resolvedTopicId, setResolvedTopicId] = useState<string>("");
 
   // State para o Modal de Comentário
   const [isCommentModalOpen, setIsCommentModalOpen] = useState<boolean>(false);
@@ -103,7 +107,8 @@ export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
       titulo: topic.title,
       artista: topic.artist,
       link: topic.link || topic.id,
-      poster_url: topic.cover,
+      fonte: topic.videoSource || undefined,
+      poster_url: topic.cover || undefined,
       tipo_video: activeSubmenu === "music-videos" ? "Music Video" : "Vídeo",
     };
     setActiveVideo(videoObj);
@@ -154,15 +159,20 @@ export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
             item.capa ||
             item.thumb ||
             null,
+          // Para vídeos do Telegram, usa o telegram_topic_id (lido via MTProto
+          // pelo backend) em vez do file_id — mesma lógica de EmpirePlayMenu.tsx.
           link:
-            item.audioUrl ||
-            item.videoUrl ||
-            item.link ||
-            item.audio_url ||
-            item.drive_url ||
-            item.youtube_url ||
-            item.id_do_arquivo ||
-            null,
+            item.videoSource === "telegram" && item.telegramTopicId
+              ? item.telegramTopicId
+              : item.audioUrl ||
+                item.videoUrl ||
+                item.link ||
+                item.audio_url ||
+                item.drive_url ||
+                item.youtube_url ||
+                item.id_do_arquivo ||
+                null,
+          videoSource: item.videoSource || null,
           releaseDate: item.releaseDate || item.data_lancamento || item.data || null,
           telegramTopicId: item.telegramTopicId || null,
           lyrics: item.lyrics || item.letra || item.fields?.letra || null,
@@ -204,6 +214,8 @@ export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
         .catch(() => null);
 
       let commentsFromApi: CommentItem[] = [];
+
+      setResolvedTopicId(resForum?.data?.media?.topicId || resForum?.data?.media?.id || topic.id || "");
 
       if (resForum && resForum.success && resForum.data && Array.isArray(resForum.data.comments)) {
         commentsFromApi = resForum.data.comments.map((c: any, idx: number) => ({
@@ -723,6 +735,7 @@ export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
           onClose={() => setIsCommentModalOpen(false)}
           tipoMedia={getMediaTypeForModal()}
           tituloMedia={selectedTopic.title}
+          topicId={resolvedTopicId || selectedTopic.id}
           onCommentSubmitted={() => {
             if (selectedTopic) fetchTopicComments(selectedTopic);
           }}
