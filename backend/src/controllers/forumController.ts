@@ -3,9 +3,36 @@ import { googleSheetsService, normalizeComparison } from "../services/googleShee
 export interface CreateCommentBody {
   tipoMedia: "musica" | "music-video" | "video" | "album";
   tituloMedia: string;
+  topicId?: string;
+  jogadorId?: string;
   nomeJogador: string;
   comentario: string;
   intervalo: string; // "45 - 60" | "61 - 75" | "76 - 90" | "91 - 100"
+}
+
+/**
+ * Monta a linha a ser gravada na aba de comentários certa — cada aba tem um
+ * schema de colunas diferente (confirmado no documento oficial do Empire
+ * Play), então NÃO dá pra usar a mesma ordem [data, titulo, jogador,
+ * comentario, nota] para todas, como o código antigo fazia (isso corrompia
+ * a planilha real a cada comentário).
+ */
+function buildCommentRow(
+  tipoMedia: CreateCommentBody["tipoMedia"],
+  params: { topicId: string; jogadorId: string; playerClean: string; comentario: string; nowStr: string },
+): string[] {
+  const { topicId, jogadorId, playerClean, comentario, nowStr } = params;
+
+  if (tipoMedia === "video") {
+    // Comentarios_Videos: telegram_topic_id, telegram_message_id, texto, autor, id_usuario, data, reacoes
+    return [topicId, "", comentario, playerClean, jogadorId, nowStr, ""];
+  }
+  if (tipoMedia === "musica") {
+    // Comentarios_Musicas: ID do tópico, ID do jogador, Nome do jogador, Comentário
+    return [topicId, jogadorId, playerClean, comentario];
+  }
+  // Comentarios_MV / Comentarios_Albuns: ID do tópico, ID do jogador, Nome do jogador, Comentário, Data
+  return [topicId, jogadorId, playerClean, comentario, nowStr];
 }
 
 export function rollRandomScore(intervaloStr: string): number {
@@ -41,7 +68,7 @@ export async function createCommentController(request: Request): Promise<Respons
   try {
     const body = (await request.json()) as CreateCommentBody;
 
-    const { tipoMedia, tituloMedia, nomeJogador, comentario, intervalo } = body;
+    const { tipoMedia, tituloMedia, topicId, jogadorId, nomeJogador, comentario, intervalo } = body;
 
     if (!tipoMedia || !tituloMedia || !nomeJogador || !comentario) {
       return new Response(
@@ -56,6 +83,8 @@ export async function createCommentController(request: Request): Promise<Respons
     const score = rollRandomScore(intervalo);
     const playerClean = nomeJogador.trim();
     const titleClean = tituloMedia.trim();
+    const topicIdClean = (topicId || "").trim();
+    const jogadorIdClean = (jogadorId || "").trim();
 
     // Configuração de abas e colunas conforme tipo da mídia
     let targetSheet = "Musicas";
@@ -84,16 +113,30 @@ export async function createCommentController(request: Request): Promise<Respons
     const rows = await googleSheetsService.principal.readValues(targetSheet);
 
     if (rows && rows.length > 0) {
-      // Procura linha pelo título
-      const titleNorm = normalizeComparison(titleClean);
+      // Busca pela Coluna B (índice 1) = "ID do tópico" / "telegram_topic_id"
+      // — mesma posição em Musicas/Videos/Music Videos/Albuns. Só cai para
+      // busca por título (substring, menos confiável) se o topicId não vier.
       let foundRowIndex = -1;
 
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        const rowText = row.join(" ");
-        if (normalizeComparison(rowText).includes(titleNorm)) {
-          foundRowIndex = i + 1; // A1 row number (1-based)
-          break;
+      if (topicIdClean) {
+        const topicNorm = normalizeComparison(topicIdClean);
+        for (let i = 1; i < rows.length; i++) {
+          if (normalizeComparison(rows[i][1] || "") === topicNorm) {
+            foundRowIndex = i + 1; // A1 row number (1-based)
+            break;
+          }
+        }
+      }
+
+      if (foundRowIndex === -1) {
+        const titleNorm = normalizeComparison(titleClean);
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          const rowText = row.join(" ");
+          if (normalizeComparison(rowText).includes(titleNorm)) {
+            foundRowIndex = i + 1; // A1 row number (1-based)
+            break;
+          }
         }
       }
 
@@ -128,13 +171,16 @@ export async function createCommentController(request: Request): Promise<Respons
     // 2. Salvar comentário na aba de comentários correspondente
     const nowStr = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
     try {
-      await googleSheetsService.principal.appendRow(commentSheet, [
-        nowStr,
-        titleClean,
-        playerClean,
-        comentario.trim(),
-        String(score),
-      ]);
+      await googleSheetsService.principal.appendRow(
+        commentSheet,
+        buildCommentRow(tipoMedia, {
+          topicId: topicIdClean,
+          jogadorId: jogadorIdClean,
+          playerClean,
+          comentario: comentario.trim(),
+          nowStr,
+        }),
+      );
     } catch (err) {
       console.warn(`[ForumController] Não foi possível salvar em ${commentSheet}:`, err);
     }
@@ -185,6 +231,7 @@ export async function createCommentController(request: Request): Promise<Respons
 export async function getCommentsController(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const tituloParam = url.searchParams.get("titulo") || "";
+  const topicIdParam = url.searchParams.get("topicId") || "";
 
   try {
     const [musicaComments, mvComments, videoComments, albumComments] = await Promise.all([
@@ -194,29 +241,48 @@ export async function getCommentsController(request: Request): Promise<Response>
       googleSheetsService.principal.readValues("Comentarios_Albuns").catch(() => []),
     ]);
 
-    const formatComments = (rows: string[][], tipo: string) => {
+    // Cada aba tem seu próprio schema de colunas (ver buildCommentRow acima) —
+    // o parse precisa respeitar isso, não dá pra usar posições genéricas.
+    const formatMusicaOrAlbumStyle = (rows: string[][], tipo: string, hasData: boolean) => {
       if (!rows || rows.length <= 1) return [];
       return rows.slice(1).map((r, idx) => ({
         id: `${tipo}_${idx + 1}`,
         tipo,
-        data: r[0] || "",
-        titulo: r[1] || "",
+        topicId: r[0] || "",
+        jogadorId: r[1] || "",
         jogador: r[2] || "",
         comentario: r[3] || "",
-        nota: r[4] || "",
+        data: hasData ? r[4] || "" : "",
+      }));
+    };
+
+    const formatVideoComments = (rows: string[][]) => {
+      if (!rows || rows.length <= 1) return [];
+      // Comentarios_Videos: telegram_topic_id, telegram_message_id, texto, autor, id_usuario, data, reacoes
+      return rows.slice(1).map((r, idx) => ({
+        id: `video_${idx + 1}`,
+        tipo: "video",
+        topicId: r[0] || "",
+        jogadorId: r[4] || "",
+        jogador: r[3] || "",
+        comentario: r[2] || "",
+        data: r[5] || "",
       }));
     };
 
     let allComments = [
-      ...formatComments(musicaComments, "musica"),
-      ...formatComments(mvComments, "music-video"),
-      ...formatComments(videoComments, "video"),
-      ...formatComments(albumComments, "album"),
+      ...formatMusicaOrAlbumStyle(musicaComments, "musica", false),
+      ...formatMusicaOrAlbumStyle(mvComments, "music-video", true),
+      ...formatVideoComments(videoComments),
+      ...formatMusicaOrAlbumStyle(albumComments, "album", true),
     ];
 
-    if (tituloParam) {
+    if (topicIdParam) {
+      const norm = normalizeComparison(topicIdParam);
+      allComments = allComments.filter((c) => normalizeComparison(c.topicId) === norm);
+    } else if (tituloParam) {
       const norm = normalizeComparison(tituloParam);
-      allComments = allComments.filter((c) => normalizeComparison(c.titulo) === norm);
+      allComments = allComments.filter((c) => normalizeComparison(c.topicId).includes(norm));
     }
 
     return new Response(

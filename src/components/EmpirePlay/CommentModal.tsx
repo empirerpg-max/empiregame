@@ -7,6 +7,7 @@ export interface CommentModalProps {
   onClose: () => void;
   tipoMedia: "musica" | "music-video" | "video" | "album";
   tituloMedia: string;
+  topicId?: string;
   onCommentSubmitted?: (data: any) => void;
 }
 
@@ -17,6 +18,7 @@ export const CommentModal: React.FC<CommentModalProps> = ({
   onClose,
   tipoMedia,
   tituloMedia,
+  topicId,
   onCommentSubmitted,
 }) => {
   const { user: telegramUser } = useTelegramUser();
@@ -75,6 +77,8 @@ export const CommentModal: React.FC<CommentModalProps> = ({
         body: JSON.stringify({
           tipoMedia,
           tituloMedia,
+          topicId,
+          jogadorId: telegramUser?.id || "",
           nomeJogador: nomeJogador.trim(),
           comentario: comentario.trim(),
           intervalo,

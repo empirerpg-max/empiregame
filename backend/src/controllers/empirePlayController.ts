@@ -18,6 +18,7 @@ export interface EmpirePlayCleanItem {
   videoUrl?: string | null;
   videoSource?: "youtube" | "drive" | "telegram" | null;
   telegramTopicId?: string | null;
+  topicId?: string | null;
   releaseDate?: string | null;
   releaseDateIso?: string | null;
   releaseMonth?: string | null;
@@ -432,7 +433,7 @@ export async function getEmpirePlayMusicasController(request: Request): Promise<
     }
 
     if (filterMonth) {
-      items = items.filter((item) => matchesMonth(item.releaseDateIso, filterMonth));
+      items = items.filter((item) => matchesMonth(item.releaseDateIso ?? null, filterMonth));
     }
 
     if (filterQuery) {
@@ -711,11 +712,15 @@ export async function getEmpirePlayForumTopicController(
     const rawMedia = mediaRecords[targetMediaIndex];
     const mediaItem = rawMedia ? buildCleanItem(sheetMedia, rawMedia, targetMediaIndex) : null;
 
-    const mediaTopicId = mediaItem
-      ? mediaItem.id ||
-        getValue(rawMedia, ["id_do_topico", "id_topico", "id", "topico_id", "topico"]) ||
-        ""
+    // ID do tópico REAL da planilha (não o id sintético gerado pelo app) — é
+    // esse valor que deve ser usado como chave nas abas Comentarios_*.
+    const realTopicId = rawMedia
+      ? getValue(rawMedia, ["id_do_topico", "id_topico", "topico_id", "topico"]) || ""
       : "";
+    const mediaTopicId = realTopicId || (mediaItem ? mediaItem.id : "");
+    if (mediaItem && realTopicId) {
+      mediaItem.topicId = realTopicId;
+    }
     const normMediaTopicId = mediaTopicId ? normalizeComparison(mediaTopicId) : "";
     const normMediaTitle = mediaItem ? normalizeComparison(mediaItem.title) : normTopicSearch;
 
