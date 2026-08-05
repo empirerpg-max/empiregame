@@ -65,15 +65,20 @@ const OPCOES_CHART = [
 ];
 
 const TIPOS_SINGLE = [
-  "Single Lead",
-  "Single Promocional",
-  "Single Comercial",
-  "B-Side",
-  "Faixa Bônus",
-  "Faixa de Álbum",
+  "LEAD SINGLE",
+  "PRÉ-ALBUM",
+  "AVULSO",
+  "PÓS-ALBUM",
+  "PÓS-ALBUM REMIX",
+  "SOUNDTRACK",
+  "PROMOCIONAL",
+  "TRACKLIST ALBUM",
+  "REMIX",
+  "PRÉ-ALBUM REMIX",
+  "LEAD SINGLE REMIX",
 ];
 
-const TIPOS_MUSICA = ["Solo", "Feat", "Remix", "Acoustic", "Cover", "Live"];
+const TIPOS_MUSICA = ["SOLO", "PARCERIA", "DUETO", "CONJUNTO"];
 
 const CATEGORIAS_VIDEO = [
   "Vídeo Especial",
@@ -109,8 +114,8 @@ export const Gestao: React.FC = () => {
   // Form Música
   const [opcaoChart, setOpcaoChart] = useState<string>(OPCOES_CHART[0].value);
   const [nomeMusica, setNomeMusica] = useState<string>("");
-  const [tipoSingle, setTipoSingle] = useState<string>("Single Lead");
-  const [tipoMusica, setTipoMusica] = useState<string>("Solo");
+  const [tipoSingle, setTipoSingle] = useState<string>("LEAD SINGLE");
+  const [tipoMusica, setTipoMusica] = useState<string>("SOLO");
   const [letraInput, setLetraInput] = useState<string>("");
 
   // Form Vídeo
@@ -216,8 +221,8 @@ export const Gestao: React.FC = () => {
         num: i,
         titulo: existing?.titulo || "",
         inedita: existing ? existing.inedita : true,
-        tipoSingle: existing?.tipoSingle || "Faixa de Álbum",
-        tipoMusica: existing?.tipoMusica || "Solo",
+        tipoSingle: existing?.tipoSingle || "TRACKLIST ALBUM",
+        tipoMusica: existing?.tipoMusica || "SOLO",
       });
     }
     setFaixasConfig(updated);
