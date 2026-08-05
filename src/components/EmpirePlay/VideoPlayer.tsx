@@ -45,8 +45,11 @@ export function VideoPlayer({ video, onClose }: VideoPlayerProps) {
   const isTelegramWidget = isTelegramSource && isPublicTelegramLink;
   const isTelegramStream = isTelegramSource && !isPublicTelegramLink && !!rawLink;
   const isTelegram = isTelegramWidget || isTelegramStream;
+  // O card já vem da listagem com o campo resolvido (telegram_file_id /
+  // ref_telegram_id) e a fonte normalizada, então o backend não precisa mais
+  // consultar a planilha antes de começar o streaming.
   const streamUrl = isTelegramStream
-    ? `/api/stream/${encodeURIComponent(rawLink.trim())}`
+    ? `/api/stream/${encodeURIComponent(rawLink.trim())}?fonte=telegram`
     : rawLink;
 
   // 2. YouTube
