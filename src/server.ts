@@ -35,6 +35,8 @@ const RUNTIME_ENV_KEYS = [
   "BOT_API_BASE_URL",
   "VITE_TELEGRAM_BOT_TOKEN",
   "VITE_TELEGRAM_CHAT_ID",
+  "LEGACY_TELEGRAM_PROXY_URL",
+  "LEGACY_TELEGRAM_CHANNEL_ID",
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
