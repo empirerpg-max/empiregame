@@ -9,8 +9,10 @@ export interface MappedTrack extends PlayableTrack {
   duracao?: string;
 }
 
-export interface DetailedAlbum extends AlbumPayload {
+export interface DetailedAlbum extends Omit<AlbumPayload, "faixas"> {
   faixas?: MappedTrack[];
+  data_lancamento?: string;
+  telegramTopicId?: string;
 }
 
 interface AlbumListProps {
@@ -18,7 +20,7 @@ interface AlbumListProps {
 }
 
 export function AlbumList({ onPlayTrack }: AlbumListProps) {
-  const [albuns, setAlbuns] = useState<AlbumPayload[] | null>(null);
+  const [albuns, setAlbuns] = useState<DetailedAlbum[] | null>(null);
   const [musicas, setMusicas] = useState<MappedTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
