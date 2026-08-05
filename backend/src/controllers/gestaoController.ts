@@ -11,7 +11,9 @@ export interface CreateSongPayload {
   tipoMusica: string;
   capaUrl: string;
   mediaUrl?: string;
+  letra?: string;
   nomeJogador: string;
+  jogadorId?: string;
   pendente?: string; // "Sim" | "Não"
 }
 
@@ -74,7 +76,9 @@ export async function createSongController(request: Request): Promise<Response> 
       tipoMusica,
       capaUrl,
       mediaUrl = "",
+      letra = "",
       nomeJogador,
+      jogadorId = "",
       pendente = "Não",
     } = body;
 
@@ -89,37 +93,90 @@ export async function createSongController(request: Request): Promise<Response> 
     }
 
     const nowStr = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-    const featsStr = participantes.filter(Boolean).join(", ");
+    const dataFormatada = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    const participantesLimpos = participantes.filter(Boolean);
     const fullTitle = tituloMusica.includes(" - ")
       ? tituloMusica
       : `${artistaPrincipal} - ${nomeMusica || tituloMusica}`;
 
-    // 1. Gravar em Musicas na planilha principal
+    // ID único do tópico gerado para essa música — usado tanto como chave do
+    // registro em Musicas (Coluna B) quanto como "Comentários para" (Coluna F).
+    const topicId = `musica_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    // 1. Gravar em Musicas na planilha principal — mapeamento exato do
+    // cabeçalho oficial (Data, ID do tópico, ID do arquivo, Capa, Letra,
+    // Comentários para, ID do Criador, Nome, TIPO DE SINGLE, TIPO DE MÚSICA,
+    // ALBUM, WEEKS, WEEKS VIDEO, ACT PRINCIPAL, ARTISTA 2-6, GÊNERO, Ordem,
+    // Metacritic por jogador, Média Metacritic, Pendente?).
     try {
       await googleSheetsService.principal.appendRow("Musicas", [
-        nowStr,
-        fullTitle,
-        artistaPrincipal,
-        featsStr,
-        tipoSingle || "Single",
-        tipoMusica || "Solo",
-        opcaoChart || "a) Registrar essa música em chart",
-        capaUrl || "",
-        mediaUrl || "",
-        pendente,
+        dataFormatada, // A - Data de lançamento
+        topicId, // B - ID do tópico
+        mediaUrl || "", // C - ID do arquivo (link do Drive ou YouTube)
+        capaUrl || "", // D - Capa da música
+        letra || "", // E - Letra
+        topicId, // F - Comentários para (referente ao tópico)
+        jogadorId || "", // G - ID do Criador
+        fullTitle, // H - Nome da música
+        tipoSingle || "LEAD SINGLE", // I - TIPO DE SINGLE
+        tipoMusica || "SOLO", // J - TIPO DE MÚSICA
+        "", // K - ALBUM
+        "", // L - WEEKS
+        "", // M - WEEKS VIDEO
+        artistaPrincipal, // N - ACT PRINCIPAL
+        participantesLimpos[0] || "", // O - ARTISTA 2
+        participantesLimpos[1] || "", // P - ARTISTA 3
+        participantesLimpos[2] || "", // Q - ARTISTA 4
+        participantesLimpos[3] || "", // R - ARTISTA 5
+        participantesLimpos[4] || "", // S - ARTISTA 6
+        "", // T - GÊNERO
+        "", // U - Ordem
+        "", // V - Metacritic por jogador
+        "", // W - Média Metacritic
+        pendente, // X - Pendente?
       ]);
     } catch (err) {
       console.warn("[createSongController] Erro ao gravar em Musicas (Principal):", err);
     }
 
-    // 2. Gravar em REGISTRO DE MÚSICA na planilha de Registros
+    // 2. Gravar em REGISTRO DE MÚSICA na planilha de Registros — só as
+    // colunas definidas no documento oficial (B, C, D, H, I-L, N, P), na
+    // primeira linha vazia (verificada pela Coluna B).
     try {
-      await googleSheetsService.registrosCharts.appendRow("REGISTRO DE MÚSICA", [
-        nowStr,
-        nomeJogador,
-        fullTitle,
-        opcaoChart || "a) Registrar essa música em chart",
-        capaUrl || "",
+      const registroRows = await googleSheetsService.registrosCharts.readValues("REGISTRO DE MÚSICA");
+      let targetRow = (registroRows?.length || 0) + 1;
+      if (registroRows && registroRows.length > 1) {
+        for (let i = 1; i < registroRows.length; i++) {
+          if (!(registroRows[i][1] || "").trim()) {
+            targetRow = i + 1;
+            break;
+          }
+        }
+      } else if (!registroRows || registroRows.length === 0) {
+        targetRow = 2;
+      }
+
+      const substituir = (opcaoChart || "").trim().startsWith("b)") ? "Sim" : "";
+
+      // B, C, D, E, F, G, H, I, J, K, L, M, N, O, P
+      await googleSheetsService.registrosCharts.updateValues("REGISTRO DE MÚSICA", `B${targetRow}:P${targetRow}`, [
+        [
+          fullTitle, // B - Título da música
+          tipoSingle || "LEAD SINGLE", // C - Tipo de Single
+          tipoMusica || "SOLO", // D - Tipo de Música
+          "", // E
+          "", // F
+          "", // G
+          artistaPrincipal, // H - Nome do Artista Principal
+          participantesLimpos[0] || "", // I - Artista 2
+          participantesLimpos[1] || "", // J - Artista 3
+          participantesLimpos[2] || "", // K - Artista 4
+          participantesLimpos[3] || "", // L - Artista 5
+          "", // M
+          substituir, // N - SUBSTITUIR NOS CHARTS?
+          "", // O
+          "Ok", // P - ENVIAR
+        ],
       ]);
     } catch (err) {
       console.warn("[createSongController] Erro ao gravar em REGISTRO DE MÚSICA:", err);
@@ -143,7 +200,7 @@ export async function createSongController(request: Request): Promise<Response> 
         nowStr,
         fullTitle,
         artistaPrincipal,
-        featsStr,
+        participantesLimpos.join(", "),
         opcaoChart || "a) Registrar essa música em chart",
         capaUrl || "",
         nomeJogador,

@@ -371,6 +371,7 @@ export const Gestao: React.FC = () => {
         mediaUrl,
         letra: letraInput.trim(),
         nomeJogador: profile?.playerName || telegramUser?.name || "Jogador",
+        jogadorId: telegramUser?.id ? String(telegramUser.id) : "",
       };
 
       const res = await fetch("/api/gestao/musica", {
