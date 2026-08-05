@@ -535,8 +535,9 @@ export async function streamVideoController(
     });
   } catch (error) {
     console.error("[streamVideo] Exceção durante transmissão de vídeo:", error);
+    const details = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ success: false, message: "Ocorreu um erro ao reproduzir o vídeo." }),
+      JSON.stringify({ success: false, message: "Ocorreu um erro ao reproduzir o vídeo.", details }),
       { status: 500, headers: { "Content-Type": "application/json; charset=utf-8" } },
     );
   }
