@@ -76,7 +76,7 @@ function getEmbedMediaUrl(url: string | null | undefined): string {
     const match = trimmed.match(/[-\w]{25,}/);
     return match ? `https://drive.google.com/file/d/${match[0]}/preview` : trimmed;
   }
-  return `/api/stream/${encodeURIComponent(trimmed)}`;
+  return `/api/stream/${encodeURIComponent(trimmed)}?fonte=telegram`;
 }
 
 export const Forum: React.FC<ForumProps> = ({ onPlayTrack, onPlayVideo }) => {
