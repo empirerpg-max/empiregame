@@ -10,7 +10,7 @@ import {
   FileText,
   Disc,
 } from "lucide-react";
-import { driveDirectAudio, driveImg } from "@/lib/api";
+import { driveImg } from "@/lib/api";
 
 export interface PlayableTrack {
   id?: string;
@@ -80,8 +80,8 @@ export function MusicPlayer({
   const [showLyrics, setShowLyrics] = useState(false);
   const [audioError, setAudioError] = useState(false);
 
-  // Blob/Streaming state para Google Drive
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  // Estado de carregamento do áudio (Drive serve via proxy do backend,
+  // que evita bloqueio de CORS do fetch direto ao drive.google.com)
   const [isBlobLoading, setIsBlobLoading] = useState(false);
 
   // Resolve candidato de link
@@ -115,62 +115,17 @@ export function MusicPlayer({
     ? `https://drive.google.com/file/d/${driveFileId}/preview`
     : null;
 
-  // Carregamento via Blob/Streaming para links de áudio do Google Drive
+  // Reseta erro ao trocar de faixa
   useEffect(() => {
-    let isMounted = true;
-    let activeObjectURL: string | null = null;
-
-    if (blobUrl) {
-      URL.revokeObjectURL(blobUrl);
-      setBlobUrl(null);
-    }
-
     setAudioError(false);
+  }, [audioSrc]);
 
-    if (!audioSrc || isYtAudio) {
-      setIsBlobLoading(false);
-      return;
-    }
-
-    if (isDriveAudio && driveFileId) {
-      setIsBlobLoading(true);
-      const directDriveUrl = driveDirectAudio(driveFileId) || audioSrc;
-
-      fetch(directDriveUrl)
-        .then((res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          return res.blob();
-        })
-        .then((blob) => {
-          if (!isMounted) return;
-          const objectUrl = URL.createObjectURL(blob);
-          activeObjectURL = objectUrl;
-          setBlobUrl(objectUrl);
-          setIsBlobLoading(false);
-        })
-        .catch((err) => {
-          console.warn(
-            "[MusicPlayer] Falha no streaming via Blob do Drive, utilizando fallback direto:",
-            err,
-          );
-          if (isMounted) {
-            setIsBlobLoading(false);
-          }
-        });
-    } else {
-      setIsBlobLoading(false);
-    }
-
-    return () => {
-      isMounted = false;
-      if (activeObjectURL) {
-        URL.revokeObjectURL(activeObjectURL);
-      }
-    };
-  }, [audioSrc, driveFileId, isDriveAudio, isYtAudio]);
-
-  // Fonte efetiva para a tag <audio>
-  const effectiveAudioSrc = blobUrl || (driveFileId ? driveDirectAudio(driveFileId) : audioSrc);
+  // Fonte efetiva para a tag <audio>: áudio do Drive vai sempre pelo proxy
+  // /api/media/audio do backend (suporta Range/206) — um fetch direto do
+  // navegador para drive.google.com é bloqueado por CORS na maioria dos
+  // casos, o que fazia a faixa nunca carregar.
+  const effectiveAudioSrc =
+    isDriveAudio && driveFileId ? `/api/media/audio?id=${driveFileId}` : audioSrc;
 
   // Atualiza e carrega a tag <audio>
   useEffect(() => {
